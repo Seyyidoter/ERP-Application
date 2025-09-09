@@ -32,6 +32,31 @@ public class ProductDAO {
         return productList;
     }
 
+    // ID'ye göre tek bir ürünü çeker
+    public static Product getProductById(int productId) throws SQLException {
+        String sql = "SELECT * FROM Stoklar WHERE Id = ?";
+        Product product = null;
+
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setInt(1, productId);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    product = new Product(
+                            rs.getInt("Id"),
+                            rs.getString("UrunAdi"),
+                            rs.getDouble("Fiyat"),
+                            rs.getInt("Stok"),
+                            rs.getString("Birim")
+                    );
+                }
+            }
+        }
+        return product;
+    }
+
     // Yeni bir ürünü veritabanına ekler
     public static void addProduct(String urunAdi, double fiyat, int stok, String birim) throws SQLException {
         String sql = "INSERT INTO Stoklar (UrunAdi, Fiyat, Stok, Birim) VALUES (?, ?, ?, ?)";
@@ -60,6 +85,20 @@ public class ProductDAO {
             stmt.setInt(3, product.getStok());
             stmt.setString(4, product.getBirim());
             stmt.setInt(5, product.getId());
+
+            stmt.executeUpdate();
+        }
+    }
+
+    // Bir ürünün stok miktarını günceller
+    public static void updateProductStock(int productId, int quantityChange) throws SQLException {
+        String sql = "UPDATE Stoklar SET Stok = Stok + ? WHERE Id = ?";
+
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setInt(1, quantityChange);
+            stmt.setInt(2, productId);
 
             stmt.executeUpdate();
         }

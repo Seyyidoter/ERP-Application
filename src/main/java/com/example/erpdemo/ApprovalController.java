@@ -1,3 +1,4 @@
+// ApprovalController.java'nın tam hali
 package com.example.erpdemo;
 
 import javafx.collections.ObservableList;
@@ -17,7 +18,7 @@ public class ApprovalController {
     @FXML private TableColumn<Request, LocalDate> dateColumn;
     @FXML private TableColumn<Request, String> statusColumn;
 
-    private int currentUserId = 1; // Varsayılan olarak Yönetici kullanıcının ID'si (örnek)
+    private int currentUserId = 1;
 
     @FXML
     public void initialize() {
@@ -43,8 +44,25 @@ public class ApprovalController {
         Request selectedRequest = pendingRequestsTable.getSelectionModel().getSelectedItem();
         if (selectedRequest != null) {
             try {
+                ObservableList<RequestItem> items = RequestDAO.getRequestItemsByRequestId(selectedRequest.getId());
+
+                // Yeterli stok kontrolü
+                for (RequestItem item : items) {
+                    Product product = ProductDAO.getProductById(item.getProductId());
+                    if (product.getStok() < item.getQuantity()) {
+                        showAlert("Uyarı", "Yeterli stok bulunmuyor: " + product.getUrunAdi() + " için " + item.getQuantity() + " adet talep edildi, stokta " + product.getStok() + " adet var.");
+                        return; // Yetersiz stok varsa işlemi durdur
+                    }
+                }
+
+                // Stok kontrolü başarılıysa, stoğu güncelle ve onayla
+                for (RequestItem item : items) {
+                    ProductDAO.updateProductStock(item.getProductId(), -item.getQuantity());
+                }
+
                 RequestDAO.updateRequestStatus(selectedRequest.getId(), "Onaylandı", currentUserId);
-                showAlert("Başarılı", "Talep başarıyla onaylandı.");
+
+                showAlert("Başarılı", "Talep başarıyla onaylandı ve stok güncellendi.");
                 loadPendingRequests();
             } catch (SQLException e) {
                 showAlert("Hata", "Talep onaylanırken bir hata oluştu: " + e.getMessage());
