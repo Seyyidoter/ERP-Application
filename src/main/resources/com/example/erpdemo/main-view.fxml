@@ -17,6 +17,7 @@
             <Region VBox.vgrow="ALWAYS"/>
             <Button text="Müşteri İşlemleri" prefWidth="200.0" onAction="#showCustomers" style="-fx-background-color: #555; -fx-text-fill: white;"/>
             <Button text="Stok İşlemleri" prefWidth="200.0" onAction="#showStock" style="-fx-background-color: #555; -fx-text-fill: white;"/>
+            <Button text="Talep/Teklif İşlemleri" prefWidth="200.0" onAction="#showRequests" style="-fx-background-color: #555; -fx-text-fill: white;"/>
             <Button text="Raporlar" prefWidth="200.0" onAction="#showReports" style="-fx-background-color: #555; -fx-text-fill: white;"/>
         </VBox>
     </left>

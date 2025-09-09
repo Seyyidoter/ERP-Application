@@ -9,6 +9,7 @@ import java.sql.SQLException;
 
 public class ProductDAO {
 
+    // Tüm ürünleri veritabanından çeker
     public static ObservableList<Product> getAllProducts() throws SQLException {
         ObservableList<Product> productList = FXCollections.observableArrayList();
         String sql = "SELECT * FROM Stoklar";
@@ -31,6 +32,7 @@ public class ProductDAO {
         return productList;
     }
 
+    // Yeni bir ürünü veritabanına ekler
     public static void addProduct(String urunAdi, double fiyat, int stok, String birim) throws SQLException {
         String sql = "INSERT INTO Stoklar (UrunAdi, Fiyat, Stok, Birim) VALUES (?, ?, ?, ?)";
 
@@ -46,6 +48,7 @@ public class ProductDAO {
         }
     }
 
+    // Mevcut bir ürünün bilgilerini günceller
     public static void updateProduct(Product product) throws SQLException {
         String sql = "UPDATE Stoklar SET UrunAdi=?, Fiyat=?, Stok=?, Birim=? WHERE Id=?";
 
@@ -62,6 +65,7 @@ public class ProductDAO {
         }
     }
 
+    // Seçili bir ürünü veritabanından siler
     public static void deleteProduct(int productId) throws SQLException {
         String sql = "DELETE FROM Stoklar WHERE Id=?";
 

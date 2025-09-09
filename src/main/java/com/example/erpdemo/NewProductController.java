@@ -36,6 +36,7 @@ public class NewProductController {
     private void handleSave() {
         try {
             if (product == null) {
+                // Yeni ürün ekleme
                 ProductDAO.addProduct(
                         nameField.getText(),
                         Double.parseDouble(priceField.getText()),
@@ -44,6 +45,7 @@ public class NewProductController {
                 );
                 showAlert("Başarılı", "Yeni ürün başarıyla eklendi.");
             } else {
+                // Ürün bilgilerini güncelleme
                 product.setUrunAdi(nameField.getText());
                 product.setFiyat(Double.parseDouble(priceField.getText()));
                 product.setStok(Integer.parseInt(stockField.getText()));
