@@ -25,9 +25,8 @@ public class DatabaseManager {
             }
         }
     }
-    // DatabaseManager.java içine ekle
 
     public static Connection getConnection() throws SQLException {
         return DriverManager.getConnection(URL, USER, PASSWORD);
-        }
     }
+}

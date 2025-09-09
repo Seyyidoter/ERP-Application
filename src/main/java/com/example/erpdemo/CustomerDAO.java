@@ -47,7 +47,6 @@ public class CustomerDAO {
             stmt.executeUpdate();
         }
     }
-    // CustomerDAO.java içine bu metotları ekle
 
     public static void updateCustomer(Customer customer) throws SQLException {
         String sql = "UPDATE Musteriler SET FirmaAdi=?, IletisimKisi=?, Telefon=?, Eposta=?, Iskonto=? WHERE Id=?";
