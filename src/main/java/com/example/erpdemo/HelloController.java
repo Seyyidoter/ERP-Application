@@ -22,31 +22,32 @@ public class HelloController {
 
     @FXML
     protected void handleLogin() {
-        String kullanici = txtUser.getText();
-        String sifre = txtPass.getText();
+        String username = txtUser.getText();
+        String password = txtPass.getText();
 
-        loadingAlert = showAlert("Giriş Yapılıyor", "Lütfen bekleyin...");
+        loadingAlert = showAlert("Giriş Yapılıyor", "Lütfen bekleyin.");
 
-        LoginTask loginTask = new LoginTask(kullanici, sifre);
+        LoginTask loginTask = new LoginTask(username, password);
 
         loginTask.setOnSucceeded(e -> {
             boolean success = loginTask.getValue();
             loadingAlert.close();
             if (success) {
-                // BAŞARILI GİRİŞ SONRASI BURASI ÇALIŞACAK
                 try {
                     FXMLLoader loader = new FXMLLoader(getClass().getResource("main-view.fxml"));
                     Parent root = loader.load();
+
+                    MainController mainController = loader.getController();
+                    mainController.setUser(UserDAO.getUserByUsername(username));
 
                     Stage stage = new Stage();
                     stage.setTitle("ERP Uygulaması");
                     stage.setScene(new Scene(root));
                     stage.show();
 
-                    // Giriş penceresini kapatır
                     ((Stage) txtUser.getScene().getWindow()).close();
 
-                } catch (IOException ioException) {
+                } catch (IOException | SQLException ioException) {
                     ioException.printStackTrace();
                 }
             } else {
@@ -69,22 +70,22 @@ public class HelloController {
         alert.setTitle(title);
         alert.setHeaderText(null);
         alert.setContentText(message);
-        alert.show();
+        alert.show(); // showAndWait yerine show() kullanıldı
         return alert;
     }
 
     private class LoginTask extends Task<Boolean> {
-        private final String kullanici;
-        private final String sifre;
+        private final String username;
+        private final String password;
 
-        public LoginTask(String kullanici, String sifre) {
-            this.kullanici = kullanici;
-            this.sifre = sifre;
+        public LoginTask(String username, String password) {
+            this.username = username;
+            this.password = password;
         }
 
         @Override
         protected Boolean call() throws SQLException {
-            return DatabaseManager.validateLogin(kullanici, sifre);
+            return DatabaseManager.validateLogin(username, password);
         }
     }
 }
