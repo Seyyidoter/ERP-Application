@@ -20,8 +20,7 @@ public class MainController {
 
     @FXML
     public void showStock() {
-        // Stok İşlemleri ekranını yükleyecek metod
-        // loadContent("stock-view.fxml");
+        loadContent("stock-view.fxml");
     }
 
     @FXML
