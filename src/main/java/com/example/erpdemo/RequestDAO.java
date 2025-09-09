@@ -24,12 +24,37 @@ public class RequestDAO {
                         rs.getInt("Id"),
                         rs.getInt("MusteriId"),
                         rs.getDate("TalepTarihi").toLocalDate(),
-                        rs.getString("Durum")
+                        rs.getString("Durum"),
+                        rs.getObject("OnaylayanKullaniciId", Integer.class), // Yeni eklenen
+                        rs.getObject("OnayTarihi", LocalDate.class) // Yeni eklenen
                 );
                 requestList.add(request);
             }
         }
         return requestList;
+    }
+
+    public static ObservableList<Request> getPendingRequests() throws SQLException {
+        ObservableList<Request> pendingList = FXCollections.observableArrayList();
+        String sql = "SELECT * FROM Talepler WHERE Durum = 'Onay Bekliyor'";
+
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql);
+             ResultSet rs = stmt.executeQuery()) {
+
+            while (rs.next()) {
+                Request request = new Request(
+                        rs.getInt("Id"),
+                        rs.getInt("MusteriId"),
+                        rs.getDate("TalepTarihi").toLocalDate(),
+                        rs.getString("Durum"),
+                        rs.getObject("OnaylayanKullaniciId", Integer.class),
+                        rs.getObject("OnayTarihi", LocalDate.class)
+                );
+                pendingList.add(request);
+            }
+        }
+        return pendingList;
     }
 
     public static int addRequest(int customerId) throws SQLException {
@@ -55,7 +80,6 @@ public class RequestDAO {
         return requestId;
     }
 
-    // YENİ EKLENEN METOT: Bir talebe ürün ekleme işlevi
     public static void addRequestItem(int requestId, int productId, int quantity, double price) throws SQLException {
         String sql = "INSERT INTO TalepKalemleri (TalepId, UrunId, Miktar, TeklifFiyati) VALUES (?, ?, ?, ?)";
         try (Connection conn = DatabaseManager.getConnection();
@@ -68,19 +92,61 @@ public class RequestDAO {
         }
     }
 
-    public static void deleteRequest(int requestId) throws SQLException {
-        String sql = "DELETE FROM TalepKalemleri WHERE TalepId=?";
+    public static ObservableList<RequestItem> getRequestItemsByRequestId(int requestId) throws SQLException {
+        ObservableList<RequestItem> items = FXCollections.observableArrayList();
+        String sql = "SELECT ti.*, s.UrunAdi, s.Fiyat FROM TalepKalemleri ti JOIN Stoklar s ON ti.UrunId = s.Id WHERE ti.TalepId = ?";
+
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
+
             stmt.setInt(1, requestId);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    RequestItem item = new RequestItem(
+                            rs.getInt("Id"),
+                            rs.getInt("TalepId"),
+                            rs.getInt("UrunId"),
+                            rs.getString("UrunAdi"),
+                            rs.getInt("Miktar"),
+                            rs.getDouble("Fiyat"),
+                            rs.getDouble("TeklifFiyati")
+                    );
+                    items.add(item);
+                }
+            }
+        }
+        return items;
+    }
+
+    public static void updateRequestStatus(int requestId, String newStatus, int approverId) throws SQLException {
+        String sql = "UPDATE Talepler SET Durum=?, OnaylayanKullaniciId=?, OnayTarihi=? WHERE Id=?";
+
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, newStatus);
+            stmt.setInt(2, approverId);
+            stmt.setDate(3, java.sql.Date.valueOf(LocalDate.now()));
+            stmt.setInt(4, requestId);
+
             stmt.executeUpdate();
         }
+    }
 
+    public static void deleteRequest(int requestId) throws SQLException {
+        String sql1 = "DELETE FROM TalepKalemleri WHERE TalepId=?";
         String sql2 = "DELETE FROM Talepler WHERE Id=?";
+
         try (Connection conn = DatabaseManager.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql2)) {
-            stmt.setInt(1, requestId);
-            stmt.executeUpdate();
+             PreparedStatement stmt1 = conn.prepareStatement(sql1);
+             PreparedStatement stmt2 = conn.prepareStatement(sql2)) {
+
+            stmt1.setInt(1, requestId);
+            stmt1.executeUpdate();
+
+            stmt2.setInt(1, requestId);
+            stmt2.executeUpdate();
         }
     }
 }

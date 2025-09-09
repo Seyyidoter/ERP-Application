@@ -1,11 +1,11 @@
 package com.example.erpdemo;
 
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import javafx.collections.FXCollections;
-import javafx.collections.ObservableList;
 
 public class CustomerDAO {
 
@@ -24,12 +24,38 @@ public class CustomerDAO {
                         rs.getString("IletisimKisi"),
                         rs.getString("Telefon"),
                         rs.getString("Eposta"),
-                        rs.getInt("Iskonto") // Buraya Iskonto sütununu ekledik
+                        rs.getInt("Iskonto")
                 );
                 customerList.add(customer);
             }
         }
         return customerList;
+    }
+
+    // Yeni bir metot: ID'ye göre tek bir müşteri çeker
+    public static Customer getCustomerById(int customerId) throws SQLException {
+        String sql = "SELECT * FROM Musteriler WHERE Id = ?";
+        Customer customer = null;
+
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setInt(1, customerId);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    customer = new Customer(
+                            rs.getInt("Id"),
+                            rs.getString("FirmaAdi"),
+                            rs.getString("IletisimKisi"),
+                            rs.getString("Telefon"),
+                            rs.getString("Eposta"),
+                            rs.getInt("Iskonto")
+                    );
+                }
+            }
+        }
+        return customer;
     }
 
     public static void addCustomer(String companyName, String contactPerson, String phone, String email, int iskonto) throws SQLException {

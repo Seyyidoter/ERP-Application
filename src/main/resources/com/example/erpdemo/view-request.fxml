@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.text.Font?>
+
+<VBox xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.example.erpdemo.ViewRequestController" spacing="10.0" style="-fx-padding: 20;">
+    <children>
+        <Label text="Talep Detayları">
+            <font>
+                <Font name="System Bold" size="24.0" />
+            </font>
+        </Label>
+        <GridPane hgap="10.0" vgap="10.0">
+            <Label text="Talep ID:" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
+            <Label fx:id="requestIdLabel" GridPane.rowIndex="0" GridPane.columnIndex="1"/>
+
+            <Label text="Müşteri Adı:" GridPane.rowIndex="1" GridPane.columnIndex="0"/>
+            <Label fx:id="customerNameLabel" GridPane.rowIndex="1" GridPane.columnIndex="1"/>
+
+            <Label text="Durum:" GridPane.rowIndex="2" GridPane.columnIndex="0"/>
+            <Label fx:id="statusLabel" GridPane.rowIndex="2" GridPane.columnIndex="1"/>
+        </GridPane>
+
+        <Label text="Talep Edilen Ürünler">
+            <font>
+                <Font name="System Bold" size="16.0" />
+            </font>
+        </Label>
+        <TableView fx:id="requestItemsTable" VBox.vgrow="ALWAYS">
+            <columns>
+                <TableColumn fx:id="productNameColumn" prefWidth="250.0" text="Ürün Adı" />
+                <TableColumn fx:id="quantityColumn" prefWidth="100.0" text="Miktar" />
+                <TableColumn fx:id="discountedPriceColumn" prefWidth="150.0" text="İskontolu Fiyat" />
+            </columns>
+        </TableView>
+
+        <HBox spacing="10.0" alignment="CENTER_RIGHT">
+            <Button text="Kapat" onAction="#handleClose"/>
+        </HBox>
+    </children>
+</VBox>

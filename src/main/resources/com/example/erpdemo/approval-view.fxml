@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.TableColumn?>
+<?import javafx.scene.control.TableView?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.text.Font?>
+
+<VBox xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.example.erpdemo.ApprovalController" spacing="10.0" style="-fx-padding: 20;">
+    <children>
+        <Label text="Onay İşlemleri">
+            <font>
+                <Font name="System Bold" size="24.0" />
+            </font>
+        </Label>
+        <TableView fx:id="pendingRequestsTable" VBox.vgrow="ALWAYS">
+            <columns>
+                <TableColumn fx:id="idColumn" prefWidth="50.0" text="Talep ID" />
+                <TableColumn fx:id="customerIdColumn" prefWidth="100.0" text="Müşteri ID" />
+                <TableColumn fx:id="dateColumn" prefWidth="150.0" text="Talep Tarihi" />
+                <TableColumn fx:id="statusColumn" prefWidth="200.0" text="Durum" />
+            </columns>
+        </TableView>
+        <HBox spacing="10.0" alignment="CENTER_RIGHT">
+            <children>
+                <Button text="Onayla" onAction="#handleApprove"/>
+                <Button text="Reddet" onAction="#handleReject"/>
+            </children>
+        </HBox>
+    </children>
+</VBox>

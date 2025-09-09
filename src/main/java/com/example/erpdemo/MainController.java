@@ -32,6 +32,11 @@ public class MainController {
         //loadContent("reports-view.fxml");
     }
 
+    @FXML
+    public void showApprovals() {
+        loadContent("approval-view.fxml");
+    }
+
     private void loadContent(String fxmlFile) {
         try {
             Parent content = FXMLLoader.load(getClass().getResource(fxmlFile));
