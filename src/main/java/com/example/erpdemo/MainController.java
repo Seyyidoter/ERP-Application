@@ -15,7 +15,7 @@ public class MainController {
     @FXML
     public void showCustomers() {
         // Müşteri İşlemleri ekranını yükleyecek metod
-        // loadContent("customer-view.fxml");
+        loadContent("customer-view.fxml");
     }
 
     @FXML
