@@ -22,11 +22,12 @@
                 <TableColumn fx:id="contactColumn" prefWidth="150.0" text="İletişim Kişisi" />
                 <TableColumn fx:id="phoneColumn" prefWidth="150.0" text="Telefon" />
                 <TableColumn fx:id="emailColumn" prefWidth="200.0" text="E-Posta" />
+                <TableColumn fx:id="iskontoColumn" prefWidth="100.0" text="İskonto (%)" />
             </columns>
         </TableView>
         <HBox spacing="10.0" alignment="CENTER_RIGHT">
             <children>
-                <Button fx:id="addButton" mnemonicParsing="false" text="Yeni Müşteri Ekle" />
+                <Button fx:id="addButton" mnemonicParsing="false" text="Yeni Müşteri Ekle" onAction="#handleAddButton" />
                 <Button fx:id="editButton" mnemonicParsing="false" text="Müşteri Düzenle" />
                 <Button fx:id="deleteButton" mnemonicParsing="false" text="Müşteri Sil" />
             </children>
