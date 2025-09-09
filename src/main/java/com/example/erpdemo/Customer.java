@@ -10,7 +10,7 @@ public class Customer {
     private final SimpleStringProperty contactPerson;
     private final SimpleStringProperty phone;
     private final SimpleStringProperty email;
-    private final SimpleIntegerProperty iskonto; // Bu kısım eksik
+    private final SimpleIntegerProperty iskonto;
 
     public Customer(int id, String companyName, String contactPerson, String phone, String email, int iskonto) {
         this.id = new SimpleIntegerProperty(id);
@@ -36,4 +36,11 @@ public class Customer {
     public SimpleStringProperty phoneProperty() { return phone; }
     public SimpleStringProperty emailProperty() { return email; }
     public SimpleIntegerProperty iskontoProperty() { return iskonto; }
+
+    // Setter metotları
+    public void setCompanyName(String companyName) { this.companyName.set(companyName); }
+    public void setContactPerson(String contactPerson) { this.contactPerson.set(contactPerson); }
+    public void setPhone(String phone) { this.phone.set(phone); }
+    public void setEmail(String email) { this.email.set(email); }
+    public void setIskonto(int iskonto) { this.iskonto.set(iskonto); }
 }

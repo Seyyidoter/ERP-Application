@@ -47,4 +47,33 @@ public class CustomerDAO {
             stmt.executeUpdate();
         }
     }
+    // CustomerDAO.java içine bu metotları ekle
+
+    public static void updateCustomer(Customer customer) throws SQLException {
+        String sql = "UPDATE Musteriler SET FirmaAdi=?, IletisimKisi=?, Telefon=?, Eposta=?, Iskonto=? WHERE Id=?";
+
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, customer.getCompanyName());
+            stmt.setString(2, customer.getContactPerson());
+            stmt.setString(3, customer.getPhone());
+            stmt.setString(4, customer.getEmail());
+            stmt.setInt(5, customer.getIskonto());
+            stmt.setInt(6, customer.getId());
+
+            stmt.executeUpdate();
+        }
+    }
+
+    public static void deleteCustomer(int customerId) throws SQLException {
+        String sql = "DELETE FROM Musteriler WHERE Id=?";
+
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setInt(1, customerId);
+            stmt.executeUpdate();
+        }
+    }
 }

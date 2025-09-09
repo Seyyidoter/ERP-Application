@@ -28,8 +28,8 @@
         <HBox spacing="10.0" alignment="CENTER_RIGHT">
             <children>
                 <Button fx:id="addButton" mnemonicParsing="false" text="Yeni Müşteri Ekle" onAction="#handleAddButton" />
-                <Button fx:id="editButton" mnemonicParsing="false" text="Müşteri Düzenle" />
-                <Button fx:id="deleteButton" mnemonicParsing="false" text="Müşteri Sil" />
+                <Button fx:id="editButton" mnemonicParsing="false" text="Müşteri Düzenle" onAction="#handleEditButton"/>
+                <Button fx:id="deleteButton" mnemonicParsing="false" text="Müşteri Sil" onAction="#handleDeleteButton"/>
             </children>
         </HBox>
     </children>
