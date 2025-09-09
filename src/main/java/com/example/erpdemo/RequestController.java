@@ -1,3 +1,4 @@
+// RequestController.java'nın tam hali
 package com.example.erpdemo;
 
 import javafx.collections.ObservableList;
@@ -71,7 +72,31 @@ public class RequestController {
 
     @FXML
     private void handleViewRequest() {
-        showAlert("Bilgi", "Bu özellik daha sonra eklenecek.");
+        Request selectedRequest = requestTable.getSelectionModel().getSelectedItem();
+        if (selectedRequest != null) {
+            try {
+                FXMLLoader loader = new FXMLLoader(getClass().getResource("view-request.fxml"));
+                Parent parent = loader.load();
+
+                ViewRequestController controller = loader.getController();
+
+                Stage stage = new Stage();
+                stage.initModality(Modality.APPLICATION_MODAL);
+                stage.setTitle("Talep Detayları");
+                stage.setScene(new Scene(parent));
+
+                controller.setDialogStage(stage);
+                controller.setRequest(selectedRequest);
+
+                stage.showAndWait();
+
+            } catch (IOException e) {
+                e.printStackTrace();
+                showAlert("Hata", "Talep detay penceresi açılamadı.");
+            }
+        } else {
+            showAlert("Uyarı", "Lütfen görüntülemek için bir talep seçin.");
+        }
     }
 
     @FXML

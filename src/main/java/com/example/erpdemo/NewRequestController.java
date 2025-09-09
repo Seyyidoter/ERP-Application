@@ -57,7 +57,16 @@ public class NewRequestController {
             double iskontoOrani = selectedCustomer.getIskonto();
             double discountedPrice = originalPrice - (originalPrice * iskontoOrani / 100);
 
-            RequestItem newItem = new RequestItem(0, 0, selectedProduct.getId(), selectedProduct.getUrunAdi(), quantity, originalPrice, discountedPrice);
+            // RequestItem nesnesini doğru 7 argümanla oluşturuyoruz
+            RequestItem newItem = new RequestItem(
+                    0, // id için geçici değer
+                    0, // requestId için geçici değer
+                    selectedProduct.getId(),
+                    selectedProduct.getUrunAdi(),
+                    quantity,
+                    originalPrice,
+                    discountedPrice
+            );
             requestItems.add(newItem);
 
             updateTotalAmount();
