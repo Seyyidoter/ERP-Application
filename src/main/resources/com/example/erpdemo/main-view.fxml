@@ -20,6 +20,7 @@
             <Button text="Talep/Teklif İşlemleri" prefWidth="200.0" onAction="#showRequests" style="-fx-background-color: #555; -fx-text-fill: white;"/>
             <Button text="Onay İşlemleri" prefWidth="200.0" onAction="#showApprovals" style="-fx-background-color: #555; -fx-text-fill: white;"/>
             <Button text="Raporlar" prefWidth="200.0" onAction="#showReports" style="-fx-background-color: #555; -fx-text-fill: white;"/>
+
         </VBox>
     </left>
 

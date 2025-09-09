@@ -25,8 +25,8 @@ public class RequestDAO {
                         rs.getInt("MusteriId"),
                         rs.getDate("TalepTarihi").toLocalDate(),
                         rs.getString("Durum"),
-                        rs.getObject("OnaylayanKullaniciId", Integer.class), // Yeni eklenen
-                        rs.getObject("OnayTarihi", LocalDate.class) // Yeni eklenen
+                        rs.getObject("OnaylayanKullaniciId", Integer.class),
+                        rs.getObject("OnayTarihi", LocalDate.class)
                 );
                 requestList.add(request);
             }
@@ -55,6 +55,29 @@ public class RequestDAO {
             }
         }
         return pendingList;
+    }
+
+    public static ObservableList<Request> getApprovedRequests() throws SQLException {
+        ObservableList<Request> approvedList = FXCollections.observableArrayList();
+        String sql = "SELECT * FROM Talepler WHERE Durum = 'Onaylandı'";
+
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql);
+             ResultSet rs = stmt.executeQuery()) {
+
+            while (rs.next()) {
+                Request request = new Request(
+                        rs.getInt("Id"),
+                        rs.getInt("MusteriId"),
+                        rs.getDate("TalepTarihi").toLocalDate(),
+                        rs.getString("Durum"),
+                        rs.getObject("OnaylayanKullaniciId", Integer.class),
+                        rs.getObject("OnayTarihi", LocalDate.class)
+                );
+                approvedList.add(request);
+            }
+        }
+        return approvedList;
     }
 
     public static int addRequest(int customerId) throws SQLException {
