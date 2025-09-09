@@ -7,7 +7,7 @@ import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.font.PDType0Font;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
-
+import javax.mail.MessagingException;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -80,5 +80,25 @@ public class ReportsController {
         alert.setHeaderText(null);
         alert.setContentText(message);
         alert.showAndWait();
+    }
+
+    // ReportsController.java içine handleEmailButton metodunu ekle
+    @FXML
+    private void handleEmailButton() {
+        try {
+            // PDF raporu zaten oluşturulmuş olmalı
+            String fileName = "ApprovedRequestsReport.pdf";
+            File reportFile = new File(fileName);
+
+            // Örnek olarak yöneticiye gönderelim
+            String toEmail = "seyyidoter3547@gmail.com"; // Buraya patronun e-postasını girin
+
+            EmailService.sendReport(toEmail, reportFile);
+            showAlert("Başarılı", "Rapor başarıyla e-posta olarak gönderildi.");
+
+        } catch (MessagingException | IOException e) {
+            showAlert("Hata", "E-posta gönderilirken bir hata oluştu: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 }

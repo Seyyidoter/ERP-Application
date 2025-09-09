@@ -4,6 +4,7 @@ module com.example.erpdemo {
     requires java.sql;
     requires org.controlsfx.controls;
     requires org.apache.pdfbox;
+    requires java.mail; // Hatalı olan kısım düzeltildi
 
     opens com.example.erpdemo to javafx.fxml;
     exports com.example.erpdemo;
