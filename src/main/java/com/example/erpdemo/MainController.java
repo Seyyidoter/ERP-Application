@@ -14,7 +14,6 @@ public class MainController {
 
     @FXML
     public void showCustomers() {
-        // Müşteri İşlemleri ekranını yükleyecek metod
         loadContent("customer-view.fxml");
     }
 
@@ -24,9 +23,13 @@ public class MainController {
     }
 
     @FXML
+    public void showRequests() {
+        loadContent("request-view.fxml");
+    }
+
+    @FXML
     public void showReports() {
-        // Raporlar ekranını yükleyecek metod
-        // loadContent("reports-view.fxml");
+        //loadContent("reports-view.fxml");
     }
 
     private void loadContent(String fxmlFile) {

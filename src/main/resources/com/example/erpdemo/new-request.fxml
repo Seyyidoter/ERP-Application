@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.text.Font?>
+
+<VBox xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.example.erpdemo.NewRequestController" spacing="10.0" style="-fx-padding: 20;">
+    <children>
+        <Label text="Yeni Talep Oluştur">
+            <font>
+                <Font name="System Bold" size="24.0" />
+            </font>
+        </Label>
+        <GridPane hgap="10.0" vgap="10.0">
+            <Label text="Müşteri Seç:" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
+            <ComboBox fx:id="customerComboBox" prefWidth="250.0" GridPane.rowIndex="0" GridPane.columnIndex="1"/>
+
+            <Label text="Ürün Seç:" GridPane.rowIndex="1" GridPane.columnIndex="0"/>
+            <ComboBox fx:id="productComboBox" prefWidth="250.0" GridPane.rowIndex="1" GridPane.columnIndex="1"/>
+
+            <Label text="Miktar:" GridPane.rowIndex="2" GridPane.columnIndex="0"/>
+            <TextField fx:id="quantityField" prefWidth="250.0" GridPane.rowIndex="2" GridPane.columnIndex="1"/>
+            <Button text="Ürünü Ekle" onAction="#handleAddProduct" GridPane.rowIndex="2" GridPane.columnIndex="2"/>
+        </GridPane>
+
+        <TableView fx:id="productTable" VBox.vgrow="ALWAYS">
+            <columns>
+                <TableColumn fx:id="productNameColumn" prefWidth="250.0" text="Ürün Adı" />
+                <TableColumn fx:id="quantityColumn" prefWidth="100.0" text="Miktar" />
+                <TableColumn fx:id="priceColumn" prefWidth="150.0" text="Birim Fiyatı" />
+                <TableColumn fx:id="discountedPriceColumn" prefWidth="150.0" text="İskontolu Fiyat" />
+            </columns>
+        </TableView>
+
+        <HBox spacing="10.0" alignment="CENTER_RIGHT">
+            <Label text="Toplam Tutar:" />
+            <Label fx:id="totalAmountLabel" text="0.00 TL" />
+            <Region HBox.hgrow="ALWAYS"/>
+            <Button text="Kaydet" onAction="#handleSaveRequest"/>
+            <Button text="İptal" onAction="#handleCancel"/>
+        </HBox>
+    </children>
+</VBox>
