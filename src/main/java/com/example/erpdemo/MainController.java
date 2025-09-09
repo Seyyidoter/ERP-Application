@@ -28,13 +28,13 @@ public class MainController {
     }
 
     @FXML
-    public void showReports() {
-        //loadContent("reports-view.fxml");
+    public void showApprovals() {
+        loadContent("approval-view.fxml");
     }
 
     @FXML
-    public void showApprovals() {
-        loadContent("approval-view.fxml");
+    public void showReports() {
+        loadContent("reports-view.fxml");
     }
 
     private void loadContent(String fxmlFile) {

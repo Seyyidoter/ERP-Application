@@ -1,4 +1,3 @@
-// RequestController.java'nın tam hali
 package com.example.erpdemo;
 
 import javafx.collections.ObservableList;
