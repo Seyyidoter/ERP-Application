@@ -6,8 +6,8 @@ import javafx.beans.property.SimpleStringProperty;
 public class User {
 
     private final SimpleIntegerProperty id;
-    private final SimpleStringProperty username; // KullaniciAdi -> username
-    private final SimpleStringProperty role; // rol -> role
+    private final SimpleStringProperty username; 
+    private final SimpleStringProperty role; 
 
     public User(int id, String username, String role) {
         this.id = new SimpleIntegerProperty(id);
