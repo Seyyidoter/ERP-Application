@@ -8,9 +8,9 @@ import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.font.PDType0Font;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URL;
 import java.sql.SQLException;
 
 public class ReportsController {
@@ -21,75 +21,70 @@ public class ReportsController {
             PDPage page = new PDPage();
             document.addPage(page);
 
-            try (PDPageContentStream contentStream = new PDPageContentStream(document, page)) {
-                // Fontu yüklüyoruz (resources/com.example.erpdemo/times.ttf)
-                InputStream fontStream = ReportsController.class.getResourceAsStream("times.ttf");
-                PDType0Font font = PDType0Font.load(document, fontStream);
+            try (PDPageContentStream cs = new PDPageContentStream(document, page)) {
 
-                contentStream.beginText();
-                contentStream.setFont(font, 12);
-                contentStream.setLeading(14.5f);
-                contentStream.newLineAtOffset(25, 750);
+                // Font (resources/com/example/erpdemo/assets/times.ttf)
+                PDType0Font font = loadFont(document);
+                if (font == null) {
+                    showInfo("Hata", "times.ttf bulunamadı (assets klasörüne koyun).");
+                    return;
+                }
 
-                contentStream.showText("Onaylanmış Talepler Raporu");
-                contentStream.newLine();
+                cs.beginText();
+                cs.setFont(font, 12);
+                cs.setLeading(14.5f);
+                cs.newLineAtOffset(25, 750);
 
-                contentStream.setFont(font, 10);
+                cs.showText("Onaylanmış Talepler Raporu"); cs.newLine();
+                cs.setFont(font, 10);
 
-                ObservableList<Request> approvedRequests = RequestDAO.getApprovedRequests();
-
-                if (approvedRequests.isEmpty()) {
-                    contentStream.showText("Onaylanmış talep bulunamadı.");
+                ObservableList<Request> rows = RequestDAO.getApprovedRequests();
+                if (rows.isEmpty()) {
+                    cs.showText("Onaylanmış talep bulunamadı.");
                 } else {
-                    for (Request request : approvedRequests) {
-                        Customer customer = CustomerDAO.getCustomerById(request.getCustomerId());
-                        String customerName = (customer != null) ? customer.getCompanyName() : "Bilinmiyor";
+                    for (Request r : rows) {
+                        Customer c = CustomerDAO.getCustomerById(r.getCustomerId());
+                        String cname = (c != null) ? c.getCompanyName() : "Bilinmiyor";
 
-                        contentStream.showText("--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------");
-                        contentStream.newLine();
-                        contentStream.showText("Talep ID: " + request.getId());
-                        contentStream.newLine();
-                        contentStream.showText("Müşteri Adı: " + customerName);
-                        contentStream.newLine();
-                        contentStream.showText("Talep Tarihi: " + request.getRequestDate());
-                        contentStream.newLine();
-                        contentStream.showText("Durum: " + request.getStatus());
-                        contentStream.newLine();
-                        contentStream.showText("--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------");
-                        contentStream.newLine();
+                        cs.showText("--------------------------------------------------------------------------"); cs.newLine();
+                        cs.showText("Talep ID: "     + r.getId());            cs.newLine();
+                        cs.showText("Müşteri Adı: "  + cname);               cs.newLine();
+                        cs.showText("Talep Tarihi: " + r.getRequestDate());  cs.newLine();
+                        cs.showText("Durum: "        + r.getStatus());       cs.newLine();
+                        cs.showText("--------------------------------------------------------------------------"); cs.newLine();
                     }
                 }
-                contentStream.endText();
+                cs.endText();
             }
 
-            String fileName = "ApprovedRequestsReport.pdf";
-            document.save(fileName);
-            showAlert("Başarılı", "Rapor başarıyla oluşturuldu: " + fileName);
+            String file = "ApprovedRequestsReport.pdf";
+            document.save(file);
+            showInfo("Başarılı", "Rapor oluşturuldu: " + file);
 
         } catch (IOException | SQLException e) {
-            showAlert("Hata", "PDF raporu oluşturulurken bir hata oluştu: " + e.getMessage());
+            showInfo("Hata", "PDF oluşturulamadı: " + e.getMessage());
             e.printStackTrace();
         }
     }
 
-    // Mail özelliği devre dışı: EmailService ve javax/jakarta.mail kullanılmıyor.
-    @FXML
-    private void handleEmailButton() {
-        // İstersen bu butonu FXML'den de kaldırabilirsin; burada bırakmak güvenli.
-        File report = new File("ApprovedRequestsReport.pdf");
-        if (!report.exists()) {
-            showAlert("Bilgi", "Önce raporu oluşturun (PDF bulunamadı).");
-            return;
+    /** assets/times.ttf için sağlam yükleyici. */
+    private PDType0Font loadFont(PDDocument doc) throws IOException {
+        // 1) Mutlak classpath
+        URL abs = ReportsController.class.getResource("/com/example/erpdemo/assets/times.ttf");
+        if (abs != null) {
+            try (InputStream in = abs.openStream()) { return PDType0Font.load(doc, in); }
         }
-        showAlert("Bilgi", "Bu derlemede e-posta gönderimi devre dışı bırakıldı.\n"
-                + "PDF dosyanız: " + report.getAbsolutePath());
+        // 2) Paket göreli
+        try (InputStream in = ReportsController.class.getResourceAsStream("assets/times.ttf")) {
+            if (in != null) return PDType0Font.load(doc, in);
+        }
+        return null; // bulunamadı
     }
 
-    private void showAlert(String title, String message) {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle(title);
-        alert.setHeaderText(null);
-        alert.setContentText(message);
-        alert.showAndWait();
+    private void showInfo(String title, String msg) {
+        Alert a = new Alert(Alert.AlertType.INFORMATION, msg);
+        a.setTitle(title);
+        a.setHeaderText(null);
+        a.showAndWait();
     }
 }

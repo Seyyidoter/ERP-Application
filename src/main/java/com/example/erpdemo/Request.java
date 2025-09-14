@@ -23,6 +23,11 @@ public class Request {
         this.approvalDate = new SimpleObjectProperty<>(approvalDate);
     }
 
+    // İsteğe bağlı ek kurucu:
+    public Request(int id, int customerId, LocalDate requestDate, String status) {
+        this(id, customerId, requestDate, status, null, null);
+    }
+
     // Getter metotları
     public int getId() { return id.get(); }
     public int getCustomerId() { return customerId.get(); }

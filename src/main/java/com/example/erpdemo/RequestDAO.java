@@ -2,174 +2,181 @@ package com.example.erpdemo;
 
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
+
+import java.sql.*;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
 public class RequestDAO {
 
-    public static ObservableList<Request> getAllRequests() throws SQLException {
-        ObservableList<Request> requestList = FXCollections.observableArrayList();
-        String sql = "SELECT * FROM Talepler";
-
-        try (Connection conn = DatabaseManager.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql);
-             ResultSet rs = stmt.executeQuery()) {
-
-            while (rs.next()) {
-                Request request = new Request(
-                        rs.getInt("Id"),
-                        rs.getInt("MusteriId"),
-                        rs.getDate("TalepTarihi").toLocalDate(),
-                        rs.getString("Durum"),
-                        rs.getObject("OnaylayanKullaniciId", Integer.class),
-                        rs.getObject("OnayTarihi", LocalDate.class)
-                );
-                requestList.add(request);
-            }
-        }
-        return requestList;
+    /** Liste ekranı */
+    public static List<Request> findAll() {
+        List<Request> list = new ArrayList<>();
+        String sql = """
+            SELECT Id, MusteriId, TalepTarihi, Durum, OnaylayanKullaniciId, OnayTarihi
+            FROM dbo.Talepler
+            ORDER BY Id DESC
+        """;
+        try (Connection c = DatabaseManager.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) list.add(mapRowToRequest(rs));
+        } catch (SQLException e) { e.printStackTrace(); }
+        return list;
     }
 
-    public static ObservableList<Request> getPendingRequests() throws SQLException {
-        ObservableList<Request> pendingList = FXCollections.observableArrayList();
-        String sql = "SELECT * FROM Talepler WHERE Durum = 'Onay Bekliyor'";
-
-        try (Connection conn = DatabaseManager.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql);
-             ResultSet rs = stmt.executeQuery()) {
-
-            while (rs.next()) {
-                Request request = new Request(
-                        rs.getInt("Id"),
-                        rs.getInt("MusteriId"),
-                        rs.getDate("TalepTarihi").toLocalDate(),
-                        rs.getString("Durum"),
-                        rs.getObject("OnaylayanKullaniciId", Integer.class),
-                        rs.getObject("OnayTarihi", LocalDate.class)
-                );
-                pendingList.add(request);
-            }
-        }
-        return pendingList;
-    }
-
-    public static ObservableList<Request> getApprovedRequests() throws SQLException {
-        ObservableList<Request> approvedList = FXCollections.observableArrayList();
-        String sql = "SELECT * FROM Talepler WHERE Durum = 'Onaylandı'";
-
-        try (Connection conn = DatabaseManager.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql);
-             ResultSet rs = stmt.executeQuery()) {
-
-            while (rs.next()) {
-                Request request = new Request(
-                        rs.getInt("Id"),
-                        rs.getInt("MusteriId"),
-                        rs.getDate("TalepTarihi").toLocalDate(),
-                        rs.getString("Durum"),
-                        rs.getObject("OnaylayanKullaniciId", Integer.class),
-                        rs.getObject("OnayTarihi", LocalDate.class)
-                );
-                approvedList.add(request);
-            }
-        }
-        return approvedList;
-    }
-
+    /** Yeni talep başlığı ekle – durum her zaman 'Onay Bekliyor' */
     public static int addRequest(int customerId) throws SQLException {
-        String sql = "INSERT INTO Talepler (MusteriId, TalepTarihi, Durum) VALUES (?, ?, ?)";
-        int requestId = -1;
-
-        try (Connection conn = DatabaseManager.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-
-            stmt.setInt(1, customerId);
-            stmt.setDate(2, java.sql.Date.valueOf(LocalDate.now()));
-            stmt.setString(3, "Onay Bekliyor");
-
-            int affectedRows = stmt.executeUpdate();
-            if (affectedRows > 0) {
-                try (ResultSet rs = stmt.getGeneratedKeys()) {
-                    if (rs.next()) {
-                        requestId = rs.getInt(1);
-                    }
+        String sql = """
+            INSERT INTO dbo.Talepler (MusteriId, TalepTarihi, Durum)
+            VALUES (?, GETDATE(), N'Onay Bekliyor');
+            SELECT SCOPE_IDENTITY();
+        """;
+        try (Connection c = DatabaseManager.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, customerId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getBigDecimal(1).intValue(); // SCOPE_IDENTITY() decimal döner
                 }
             }
         }
-        return requestId;
+        return -1;
     }
 
-    public static void addRequestItem(int requestId, int productId, int quantity, double price) throws SQLException {
-        String sql = "INSERT INTO TalepKalemleri (TalepId, UrunId, Miktar, TeklifFiyati) VALUES (?, ?, ?, ?)";
-        try (Connection conn = DatabaseManager.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setInt(1, requestId);
-            stmt.setInt(2, productId);
-            stmt.setInt(3, quantity);
-            stmt.setDouble(4, price);
-            stmt.executeUpdate();
+    /** Yeni talep kalemi ekle */
+    public static void addRequestItem(int requestId, int productId, int qty, double fiyat) throws SQLException {
+        String sql = """
+            INSERT INTO dbo.TalepKalemleri (TalepId, UrunId, Miktar, TeklifFiyati)
+            VALUES (?, ?, ?, ?)
+        """;
+        try (Connection c = DatabaseManager.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, requestId);
+            ps.setInt(2, productId);
+            ps.setInt(3, qty);
+            ps.setDouble(4, fiyat);
+            ps.executeUpdate();
         }
     }
 
+    /** Onay ekranı: bekleyenler */
+    public static ObservableList<Request> getPendingRequests() throws SQLException {
+        ObservableList<Request> list = FXCollections.observableArrayList();
+        String sql = """
+            SELECT Id, MusteriId, TalepTarihi, Durum, OnaylayanKullaniciId, OnayTarihi
+            FROM dbo.Talepler
+            WHERE Durum = N'Onay Bekliyor'
+            ORDER BY TalepTarihi DESC, Id DESC
+        """;
+        try (Connection c = DatabaseManager.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) list.add(mapRowToRequest(rs));
+        }
+        return list;
+    }
+
+    /** RAPOR: Onaylanmış talepler */
+    public static ObservableList<Request> getApprovedRequests() throws SQLException {
+        ObservableList<Request> list = FXCollections.observableArrayList();
+        String sql = """
+            SELECT Id, MusteriId, TalepTarihi, Durum, OnaylayanKullaniciId, OnayTarihi
+            FROM dbo.Talepler
+            WHERE Durum = N'Onaylandı'
+            ORDER BY TalepTarihi DESC, Id DESC
+        """;
+        try (Connection c = DatabaseManager.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) list.add(mapRowToRequest(rs));
+        }
+        return list;
+    }
+
+    /** Onay ekranı: talep kalemleri */
     public static ObservableList<RequestItem> getRequestItemsByRequestId(int requestId) throws SQLException {
         ObservableList<RequestItem> items = FXCollections.observableArrayList();
-        String sql = "SELECT ti.*, s.UrunAdi, s.Fiyat FROM TalepKalemleri ti JOIN Stoklar s ON ti.UrunId = s.Id WHERE ti.TalepId = ?";
-
-        try (Connection conn = DatabaseManager.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            stmt.setInt(1, requestId);
-
-            try (ResultSet rs = stmt.executeQuery()) {
+        String sql = """
+            SELECT k.Id,
+                   k.TalepId,
+                   k.UrunId,
+                   s.UrunAdi       AS ProductName,
+                   k.Miktar        AS Quantity,
+                   k.TeklifFiyati  AS Price
+            FROM dbo.TalepKalemleri k
+            JOIN dbo.Stoklar s ON s.Id = k.UrunId
+            WHERE k.TalepId = ?
+            ORDER BY k.Id
+        """;
+        try (Connection c = DatabaseManager.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, requestId);
+            try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    RequestItem item = new RequestItem(
+                    items.add(new RequestItem(
                             rs.getInt("Id"),
                             rs.getInt("TalepId"),
                             rs.getInt("UrunId"),
-                            rs.getString("UrunAdi"),
-                            rs.getInt("Miktar"),
-                            rs.getDouble("Fiyat"),
-                            rs.getDouble("TeklifFiyati")
-                    );
-                    items.add(item);
+                            rs.getString("ProductName"),
+                            rs.getInt("Quantity"),
+                            rs.getDouble("Price"),
+                            rs.getDouble("Price") // indirimli = fiyat (stok modülü yok)
+                    ));
                 }
             }
         }
         return items;
     }
 
-    public static void updateRequestStatus(int requestId, String newStatus, int approverId) throws SQLException {
-        String sql = "UPDATE Talepler SET Durum=?, OnaylayanKullaniciId=?, OnayTarihi=? WHERE Id=?";
-
-        try (Connection conn = DatabaseManager.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            stmt.setString(1, newStatus);
-            stmt.setInt(2, approverId);
-            stmt.setDate(3, java.sql.Date.valueOf(LocalDate.now()));
-            stmt.setInt(4, requestId);
-
-            stmt.executeUpdate();
+    /** Onay / Red */
+    public static void updateRequestStatus(int requestId, String newStatus, int userId) throws SQLException {
+        String sql = """
+            UPDATE dbo.Talepler
+               SET Durum = ?, OnaylayanKullaniciId = ?, OnayTarihi = GETDATE()
+             WHERE Id = ?
+        """;
+        try (Connection c = DatabaseManager.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, newStatus);
+            ps.setInt(2, userId);
+            ps.setInt(3, requestId);
+            ps.executeUpdate();
         }
     }
 
-    public static void deleteRequest(int requestId) throws SQLException {
-        String sql1 = "DELETE FROM TalepKalemleri WHERE TalepId=?";
-        String sql2 = "DELETE FROM Talepler WHERE Id=?";
-
-        try (Connection conn = DatabaseManager.getConnection();
-             PreparedStatement stmt1 = conn.prepareStatement(sql1);
-             PreparedStatement stmt2 = conn.prepareStatement(sql2)) {
-
-            stmt1.setInt(1, requestId);
-            stmt1.executeUpdate();
-
-            stmt2.setInt(1, requestId);
-            stmt2.executeUpdate();
+    /** Tekli silme (önce kalemler, sonra başlık) */
+    public static int deleteRequestById(int id) throws SQLException {
+        try (Connection c = DatabaseManager.getConnection()) {
+            boolean old = c.getAutoCommit();
+            c.setAutoCommit(false);
+            try (PreparedStatement ps1 = c.prepareStatement("DELETE FROM dbo.TalepKalemleri WHERE TalepId=?");
+                 PreparedStatement ps2 = c.prepareStatement("DELETE FROM dbo.Talepler       WHERE Id=?")) {
+                ps1.setInt(1, id);
+                ps1.executeUpdate();
+                ps2.setInt(1, id);
+                int affected = ps2.executeUpdate();
+                c.commit();
+                c.setAutoCommit(old);
+                return affected;
+            } catch (SQLException ex) {
+                c.rollback();
+                c.setAutoCommit(true);
+                throw ex;
+            }
         }
+    }
+
+    // --- yardımcı ---
+    private static Request mapRowToRequest(ResultSet rs) throws SQLException {
+        int id = rs.getInt("Id");
+        int customerId = rs.getInt("MusteriId");
+        LocalDate requestDate = rs.getDate("TalepTarihi").toLocalDate();
+        String status = rs.getString("Durum");
+        Integer approvedBy = (Integer) rs.getObject("OnaylayanKullaniciId");
+        Date approvedAtSql = rs.getDate("OnayTarihi");
+        LocalDate approvedAt = approvedAtSql != null ? approvedAtSql.toLocalDate() : null;
+        return new Request(id, customerId, requestDate, status, approvedBy, approvedAt);
     }
 }

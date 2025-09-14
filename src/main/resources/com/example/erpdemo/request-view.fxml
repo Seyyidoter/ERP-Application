@@ -1,33 +1,33 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<?import javafx.scene.control.Button?>
-<?import javafx.scene.control.Label?>
-<?import javafx.scene.control.TableColumn?>
-<?import javafx.scene.control.TableView?>
-<?import javafx.scene.layout.HBox?>
-<?import javafx.scene.layout.VBox?>
-<?import javafx.scene.text.Font?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
 
-<VBox xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.example.erpdemo.RequestController" spacing="10.0" style="-fx-padding: 20;">
-    <children>
-        <Label text="Talep/Teklif İşlemleri">
-            <font>
-                <Font name="System Bold" size="24.0" />
-            </font>
-        </Label>
-        <TableView fx:id="requestTable" VBox.vgrow="ALWAYS">
+<BorderPane xmlns="http://javafx.com/javafx/21"
+            xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="com.example.erpdemo.RequestController">
+
+    <padding>
+        <Insets topRightBottomLeft="12"/>
+    </padding>
+
+    <center>
+        <TableView fx:id="tblRequests" BorderPane.alignment="CENTER">
             <columns>
-                <TableColumn fx:id="idColumn" prefWidth="50.0" text="ID" />
-                <TableColumn fx:id="customerIdColumn" prefWidth="100.0" text="Müşteri ID" />
-                <TableColumn fx:id="dateColumn" prefWidth="150.0" text="Talep Tarihi" />
-                <TableColumn fx:id="statusColumn" prefWidth="200.0" text="Durum" />
+                <TableColumn fx:id="colId"       text="ID"           prefWidth="100.0"/>
+                <TableColumn fx:id="colCustomer" text="Müşteri ID"   prefWidth="140.0"/>
+                <TableColumn fx:id="colDate"     text="Talep Tarihi" prefWidth="180.0"/>
+                <TableColumn fx:id="colStatus"   text="Durum"        prefWidth="220.0"/>
             </columns>
         </TableView>
-        <HBox spacing="10.0" alignment="CENTER_RIGHT">
-            <children>
-                <Button fx:id="addButton" text="Yeni Talep Oluştur" onAction="#handleAddRequest" />
-                <Button fx:id="viewButton" text="Talebi Görüntüle" onAction="#handleViewRequest" />
-                <Button fx:id="deleteButton" text="Talebi Sil" onAction="#handleDeleteRequest" />
-            </children>
+    </center>
+
+    <bottom>
+        <HBox alignment="CENTER_RIGHT" spacing="8">
+            <padding><Insets topRightBottomLeft="8"/></padding>
+            <Button text="Yeni Talep Oluştur" onAction="#createRequest"/>
+            <Button text="Talebi Görüntüle"   onAction="#viewRequest"/>
+            <Button text="Talebi Sil"         onAction="#deleteSingleRequest"/>
         </HBox>
-    </children>
-</VBox>
+    </bottom>
+</BorderPane>

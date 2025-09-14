@@ -1,0 +1,48 @@
+.root { -fx-font-family: "Inter", "Segoe UI", system-ui; }
+
+.bg {
+    -fx-background-color: linear-gradient(to bottom right, #0e2a47, #1f4d6f);
+}
+
+.title {
+    -fx-text-fill: white;
+    -fx-font-size: 26px;
+    -fx-font-weight: 800;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.25), 18, 0.2, 0, 2);
+}
+
+.card {
+    -fx-padding: 24;
+    -fx-background-color: rgba(255,255,255,0.9);
+    -fx-background-radius: 16;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.25), 20, 0.2, 0, 6);
+    -fx-min-width: 360;
+    -fx-max-width: 520;
+}
+
+.field-label {
+    -fx-text-fill: #25445e;
+    -fx-font-size: 12px;
+    -fx-font-weight: 600;
+}
+
+.text-field, .password-field {
+    -fx-background-radius: 12;
+    -fx-border-color: #dbe5ee;
+    -fx-border-radius: 12;
+    -fx-padding: 8 12;
+    -fx-max-width: Infinity;
+}
+.text-field:focused, .password-field:focused {
+    -fx-border-color: #4b91ff;
+    -fx-effect: dropshadow(gaussian, rgba(75,145,255,0.25), 8, 0.2, 0, 0);
+}
+
+.primary-btn {
+    -fx-background-color: #2563eb;
+    -fx-text-fill: white;
+    -fx-font-weight: 700;
+    -fx-background-radius: 12;
+    -fx-padding: 10 14;
+}
+.primary-btn:hover { -fx-background-color: #1e4fd6; }

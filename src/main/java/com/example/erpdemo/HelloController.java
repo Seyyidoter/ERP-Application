@@ -5,9 +5,8 @@ import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
-import javafx.scene.control.Alert;
-import javafx.scene.control.PasswordField;
-import javafx.scene.control.TextField;
+import javafx.scene.control.*;
+import javafx.scene.image.Image;
 import javafx.stage.Stage;
 
 import java.io.IOException;
@@ -17,75 +16,67 @@ public class HelloController {
 
     @FXML private TextField txtUser;
     @FXML private PasswordField txtPass;
-
-    private Alert loadingAlert;
+    @FXML private Button btnLogin; // Enter için default button
 
     @FXML
-    protected void handleLogin() {
-        String username = txtUser.getText();
-        String password = txtPass.getText();
+    public void initialize() {
+        // Enter ile giriş
+        txtUser.setOnAction(e -> handleLogin());
+        txtPass.setOnAction(e -> handleLogin());
+        if (btnLogin != null) btnLogin.setDefaultButton(true);
+    }
 
-        loadingAlert = showAlert("Giriş Yapılıyor", "Lütfen bekleyin.");
+    @FXML
+    private void handleLogin() {
+        final String username = txtUser.getText();
+        final String password = txtPass.getText();
 
-        LoginTask loginTask = new LoginTask(username, password);
+        var task = new Task<Boolean>() {
+            @Override protected Boolean call() throws SQLException {
+                return DatabaseManager.validateLogin(username, password);
+            }
+        };
 
-        loginTask.setOnSucceeded(e -> {
-            boolean success = loginTask.getValue();
-            loadingAlert.close();
-            if (success) {
+        task.setOnSucceeded(ev -> {
+            if (Boolean.TRUE.equals(task.getValue())) {
                 try {
                     FXMLLoader loader = new FXMLLoader(getClass().getResource("main-view.fxml"));
                     Parent root = loader.load();
 
-                    MainController mainController = loader.getController();
-                    mainController.setUser(UserDAO.getUserByUsername(username));
+                    MainController mc = loader.getController();
+                    mc.setUser(UserDAO.getUserByUsername(username));
 
-                    Stage stage = new Stage();
-                    stage.setTitle("ERP Uygulaması");
-                    stage.setScene(new Scene(root));
-                    stage.show();
+                    Stage st = new Stage();
+                    st.setTitle("Omnis");
+                    st.getIcons().addAll(
+                            new Image(getClass().getResourceAsStream("/com/example/erpdemo/assets/logo-16.png")),
+                            new Image(getClass().getResourceAsStream("/com/example/erpdemo/assets/logo-32.png")),
+                            new Image(getClass().getResourceAsStream("/com/example/erpdemo/assets/logo-64.png"))
+                    );
+                    st.setScene(new Scene(root));
+                    st.setMaximized(true);
+                    st.show();
 
-                    ((Stage) txtUser.getScene().getWindow()).close();
+                    // login penceresini kapat
+                    ((Stage) btnLogin.getScene().getWindow()).close();
 
-                } catch (IOException | SQLException ioException) {
-                    ioException.printStackTrace();
+                } catch (IOException | SQLException ex) {
+                    showError("Hata", "Ana ekran açılamadı:\n" + ex.getMessage());
                 }
             } else {
-                showAlert("Hata", "Kullanıcı adı veya şifre yanlış!");
+                showError("Hata", "Kullanıcı adı veya şifre yanlış!");
             }
         });
 
-        loginTask.setOnFailed(e -> {
-            loadingAlert.close();
-            Throwable exception = loginTask.getException();
-            showAlert("Veritabanı Bağlantı Hatası", "Veritabanına bağlanılamadı. Lütfen bilgilerinizi kontrol edin.");
-            exception.printStackTrace();
-        });
+        task.setOnFailed(ev ->
+                showError("Bağlantı Hatası", "Veritabanına bağlanılamadı.")
+        );
 
-        new Thread(loginTask).start();
+        new Thread(task, "login-task").start();
     }
 
-    private Alert showAlert(String title, String message) {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle(title);
-        alert.setHeaderText(null);
-        alert.setContentText(message);
-        alert.show(); // showAndWait yerine show() kullanıldı
-        return alert;
-    }
-
-    private class LoginTask extends Task<Boolean> {
-        private final String username;
-        private final String password;
-
-        public LoginTask(String username, String password) {
-            this.username = username;
-            this.password = password;
-        }
-
-        @Override
-        protected Boolean call() throws SQLException {
-            return DatabaseManager.validateLogin(username, password);
-        }
+    private void showError(String title, String msg) {
+        Alert a = new Alert(Alert.AlertType.ERROR, msg, ButtonType.OK);
+        a.setTitle(title); a.setHeaderText(null); a.showAndWait();
     }
 }

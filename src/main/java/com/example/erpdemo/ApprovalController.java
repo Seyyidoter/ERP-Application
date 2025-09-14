@@ -1,4 +1,3 @@
-// ApprovalController.java'nın tam hali
 package com.example.erpdemo;
 
 import javafx.collections.ObservableList;
@@ -7,6 +6,7 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.cell.PropertyValueFactory;
+
 import java.sql.SQLException;
 import java.time.LocalDate;
 
@@ -26,14 +26,15 @@ public class ApprovalController {
         customerIdColumn.setCellValueFactory(new PropertyValueFactory<>("customerId"));
         dateColumn.setCellValueFactory(new PropertyValueFactory<>("requestDate"));
         statusColumn.setCellValueFactory(new PropertyValueFactory<>("status"));
-
-        loadPendingRequests();
+        refresh();
     }
 
-    private void loadPendingRequests() {
+    /** MainController.loadContent çağırdığında otomatik çalışır. */
+    public void refresh() {
         try {
-            ObservableList<Request> pendingRequests = RequestDAO.getPendingRequests();
-            pendingRequestsTable.setItems(pendingRequests);
+            ObservableList<Request> pending = RequestDAO.getPendingRequests();
+            pendingRequestsTable.setItems(pending);
+            pendingRequestsTable.refresh();
         } catch (SQLException e) {
             showAlert("Hata", "Onay bekleyen talepler yüklenirken bir hata oluştu.");
         }
@@ -41,58 +42,34 @@ public class ApprovalController {
 
     @FXML
     private void handleApprove() {
-        Request selectedRequest = pendingRequestsTable.getSelectionModel().getSelectedItem();
-        if (selectedRequest != null) {
-            try {
-                ObservableList<RequestItem> items = RequestDAO.getRequestItemsByRequestId(selectedRequest.getId());
+        Request r = pendingRequestsTable.getSelectionModel().getSelectedItem();
+        if (r == null) { showAlert("Uyarı", "Lütfen bir talep seçin."); return; }
 
-                // Yeterli stok kontrolü
-                for (RequestItem item : items) {
-                    Product product = ProductDAO.getProductById(item.getProductId());
-                    if (product.getStok() < item.getQuantity()) {
-                        showAlert("Uyarı", "Yeterli stok bulunmuyor: " + product.getUrunAdi() + " için " + item.getQuantity() + " adet talep edildi, stokta " + product.getStok() + " adet var.");
-                        return; // Yetersiz stok varsa işlemi durdur
-                    }
-                }
-
-                // Stok kontrolü başarılıysa, stoğu güncelle ve onayla
-                for (RequestItem item : items) {
-                    ProductDAO.updateProductStock(item.getProductId(), -item.getQuantity());
-                }
-
-                RequestDAO.updateRequestStatus(selectedRequest.getId(), "Onaylandı", currentUserId);
-
-                showAlert("Başarılı", "Talep başarıyla onaylandı ve stok güncellendi.");
-                loadPendingRequests();
-            } catch (SQLException e) {
-                showAlert("Hata", "Talep onaylanırken bir hata oluştu: " + e.getMessage());
-            }
-        } else {
-            showAlert("Uyarı", "Lütfen bir talep seçin.");
+        try {
+            RequestDAO.updateRequestStatus(r.getId(), "Onaylandı", currentUserId);
+            showAlert("Başarılı", "Talep onaylandı.");
+            refresh();
+        } catch (SQLException e) {
+            showAlert("Hata", "Talep onaylanırken bir hata oluştu: " + e.getMessage());
         }
     }
 
     @FXML
     private void handleReject() {
-        Request selectedRequest = pendingRequestsTable.getSelectionModel().getSelectedItem();
-        if (selectedRequest != null) {
-            try {
-                RequestDAO.updateRequestStatus(selectedRequest.getId(), "Reddedildi", currentUserId);
-                showAlert("Başarılı", "Talep başarıyla reddedildi.");
-                loadPendingRequests();
-            } catch (SQLException e) {
-                showAlert("Hata", "Talep reddedilirken bir hata oluştu: " + e.getMessage());
-            }
-        } else {
-            showAlert("Uyarı", "Lütfen bir talep seçin.");
+        Request r = pendingRequestsTable.getSelectionModel().getSelectedItem();
+        if (r == null) { showAlert("Uyarı", "Lütfen bir talep seçin."); return; }
+
+        try {
+            RequestDAO.updateRequestStatus(r.getId(), "Reddedildi", currentUserId);
+            showAlert("Başarılı", "Talep reddedildi.");
+            refresh();
+        } catch (SQLException e) {
+            showAlert("Hata", "Talep reddedilirken hata: " + e.getMessage());
         }
     }
 
-    private void showAlert(String title, String message) {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle(title);
-        alert.setHeaderText(null);
-        alert.setContentText(message);
-        alert.showAndWait();
+    private void showAlert(String t, String m) {
+        Alert a = new Alert(Alert.AlertType.INFORMATION, m);
+        a.setTitle(t); a.setHeaderText(null); a.showAndWait();
     }
 }
