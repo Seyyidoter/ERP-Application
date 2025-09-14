@@ -26,7 +26,7 @@ public class MainController {
     @FXML private Label pageTitle;
     @FXML private MenuButton userMenu;
 
-    // Dashboard (FXML'den gelen)
+    // Dashboard
     @FXML private VBox dashboardRoot;
     @FXML private Label lblTodayRequests;
     @FXML private Label lblTodayProducts;
@@ -38,27 +38,20 @@ public class MainController {
     @FXML private TableColumn<ProductDemandStat, Integer> colDemandQty;
 
     private User loggedInUser;
-    private Node dashboardViewSnapshot; // dashboardRoot referansı
+    private Node dashboardViewSnapshot;
 
     @FXML
     public void initialize() {
-        // Dashboard referansını sakla
-        if (dashboardRoot != null) {
-            dashboardViewSnapshot = dashboardRoot;
-        }
+        if (dashboardRoot != null) dashboardViewSnapshot = dashboardRoot;
 
-        // Tablo kolon bağları ve placeholder
         if (tblTodayProductDemand != null) {
             colDemandProduct.setCellValueFactory(new PropertyValueFactory<>("productName"));
             colDemandQty.setCellValueFactory(new PropertyValueFactory<>("totalQuantity"));
             tblTodayProductDemand.setPlaceholder(new Label("Bugün ürün talebi yok"));
         }
 
-        // Açılışta dashboard verileri
         loadDashboardMetrics();
         loadTodayDemandTable();
-
-        // Açılış seçimi
         goDashboard();
     }
 
@@ -78,9 +71,7 @@ public class MainController {
     @FXML
     public void goDashboard() {
         pageTitle.setText("Gösterge Paneli");
-        if (dashboardViewSnapshot != null) {
-            contentRoot.getChildren().setAll(dashboardViewSnapshot);
-        }
+        if (dashboardViewSnapshot != null) contentRoot.getChildren().setAll(dashboardViewSnapshot);
         selectNav("Gösterge Paneli");
         loadDashboardMetrics();
         loadTodayDemandTable();
@@ -89,13 +80,16 @@ public class MainController {
 
     @FXML public void goCustomers() { loadContent("customer-view.fxml", "Müşteri İşlemleri", "Müşteri İşlemleri"); }
     @FXML public void goRequests()  { loadContent("request-view.fxml",  "Talep/Teklif",      "Talep/Teklif"); }
+
+    /** YENİ: Ürün İşlemleri */
+    @FXML public void goProducts()  { loadContent("stock-view.fxml",    "Ürün İşlemleri",    "Ürün İşlemleri"); }
+
     @FXML public void goApprovals() {
         if (isAdmin()) loadContent("approval-view.fxml", "Onay İşlemleri", "Onay İşlemleri");
         else { loadInlineMessage("Bu alana erişim yetkiniz yok."); selectNav(null); }
     }
     @FXML public void goReports()   { loadContent("reports-view.fxml",  "Raporlar",          "Raporlar"); }
 
-    /** Genel içerik yükleme */
     private void loadContent(String fxmlFile, String title, String navTextToSelect) {
         pageTitle.setText(title);
         try {
@@ -106,7 +100,6 @@ public class MainController {
                 selectNav(navTextToSelect);
                 return;
             }
-
             FXMLLoader loader = new FXMLLoader(url);
             Parent view = loader.load();
 
@@ -145,8 +138,7 @@ public class MainController {
                 "Yonetici".equalsIgnoreCase(Objects.toString(loggedInUser.getRole(), ""));
     }
 
-    /* ----------- Nav yardımcıları (Button ile) ----------- */
-
+    // ---- Nav yardımcıları (Button ile) ----
     private Button findNavButtonByText(String text) {
         VBox sidebar = getSidebar();
         if (sidebar == null) return null;
@@ -155,7 +147,6 @@ public class MainController {
         }
         return null;
     }
-
     private void selectNav(String text) {
         VBox sidebar = getSidebar();
         if (sidebar == null) return;
@@ -168,7 +159,6 @@ public class MainController {
             }
         }
     }
-
     private void updateApprovalsVisibility() {
         Button approvalsBtn = findNavButtonByText("Onay İşlemleri");
         if (approvalsBtn != null) {
@@ -177,7 +167,6 @@ public class MainController {
             approvalsBtn.setManaged(visible);
         }
     }
-
     private VBox getSidebar() {
         var parent1 = contentRoot.getParent();
         if (parent1 == null) return null;
@@ -186,8 +175,7 @@ public class MainController {
         return null;
     }
 
-    /* ----------- Dashboard veri yükleme ----------- */
-
+    // ---- Dashboard veri yükleme ----
     private void loadDashboardMetrics() {
         if (lblTodayRequests == null || lblTodayProducts == null || lblTodayRevenue == null) return;
         try {
@@ -204,7 +192,6 @@ public class MainController {
             e.printStackTrace();
         }
     }
-
     private void loadTodayDemandTable() {
         if (tblTodayProductDemand == null) return;
         try {

@@ -30,6 +30,10 @@
             <Button text="Gösterge Paneli"  onAction="#goDashboard" styleClass="nav-btn" focusTraversable="false"/>
             <Button text="Müşteri İşlemleri" onAction="#goCustomers" styleClass="nav-btn" focusTraversable="false"/>
             <Button text="Talep/Teklif"      onAction="#goRequests"  styleClass="nav-btn" focusTraversable="false"/>
+
+            <!-- YENİ: Ürün İşlemleri -->
+            <Button text="Ürün İşlemleri"    onAction="#goProducts"  styleClass="nav-btn" focusTraversable="false"/>
+
             <Button text="Onay İşlemleri"    onAction="#goApprovals" styleClass="nav-btn" focusTraversable="false"/>
             <Button text="Raporlar"          onAction="#goReports"   styleClass="nav-btn" focusTraversable="false"/>
             <Region VBox.vgrow="ALWAYS"/>

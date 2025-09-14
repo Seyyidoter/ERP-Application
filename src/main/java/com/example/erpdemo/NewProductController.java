@@ -13,7 +13,6 @@ public class NewProductController {
     @FXML private Label titleLabel;
     @FXML private TextField nameField;
     @FXML private TextField priceField;
-    @FXML private TextField stockField;
     @FXML private TextField unitField;
 
     private Stage dialogStage;
@@ -28,47 +27,44 @@ public class NewProductController {
         titleLabel.setText("Ürün Düzenle");
         nameField.setText(product.getUrunAdi());
         priceField.setText(String.valueOf(product.getFiyat()));
-        stockField.setText(String.valueOf(product.getStok()));
         unitField.setText(product.getBirim());
     }
 
     @FXML
     private void handleSave() {
-        String name = nameField.getText();
-        Double price = parseDoubleOrNull(priceField.getText());
-        Integer stock = parseIntOrNull(stockField.getText());
-        String unit = unitField.getText();
-
-        if (name == null || name.isBlank()) {
-            showAlert(Alert.AlertType.WARNING, "Uyarı", "Ürün adı boş olamaz."); return;
-        }
-        if (price == null || price < 0) {
-            showAlert(Alert.AlertType.WARNING, "Uyarı", "Fiyat geçerli bir sayı olmalı (0 veya üzeri)."); return;
-        }
-        if (stock == null || stock < 0) {
-            showAlert(Alert.AlertType.WARNING, "Uyarı", "Stok geçerli bir tam sayı olmalı (0 veya üzeri)."); return;
-        }
-        if (unit == null || unit.isBlank()) {
-            showAlert(Alert.AlertType.WARNING, "Uyarı", "Birim boş olamaz."); return;
-        }
-
         try {
+            String name = nameField.getText();
+            String unit = unitField.getText();
+
+            if (name == null || name.isBlank()) {
+                showAlert("Uyarı", "Ürün adı boş olamaz."); return;
+            }
+            if (unit == null || unit.isBlank()) {
+                showAlert("Uyarı", "Birim boş olamaz."); return;
+            }
+
+            // Virgül/nokta toleransı
+            String priceText = priceField.getText().replace(",", ".");
+            double price = Double.parseDouble(priceText);
+            if (price < 0) { showAlert("Uyarı", "Fiyat negatif olamaz."); return; }
+
             if (product == null) {
-                // Yeni ürün ekleme
-                ProductDAO.addProduct(name, price, stock, unit);
-                showAlert(Alert.AlertType.INFORMATION, "Başarılı", "Yeni ürün başarıyla eklendi.");
+                // Yeni ürün: stok önemsenmiyor → 0 yazıyoruz
+                ProductDAO.addProduct(name, price, 0, unit);
+                showAlert("Başarılı", "Yeni ürün başarıyla eklendi.");
             } else {
-                // Ürün bilgilerini güncelleme
+                // Mevcut stok değerine dokunmuyoruz (Product içinde neyse o kalır)
                 product.setUrunAdi(name);
                 product.setFiyat(price);
-                product.setStok(stock);
                 product.setBirim(unit);
                 ProductDAO.updateProduct(product);
-                showAlert(Alert.AlertType.INFORMATION, "Başarılı", "Ürün bilgileri başarıyla güncellendi.");
+                showAlert("Başarılı", "Ürün bilgileri başarıyla güncellendi.");
             }
             dialogStage.close();
+        } catch (NumberFormatException e) {
+            showAlert("Hata", "Fiyat sayısal olmalı.");
         } catch (SQLException e) {
-            showAlert(Alert.AlertType.ERROR, "Hata", "İşlem sırasında bir hata oluştu: " + e.getMessage());
+            showAlert("Hata", "İşlem sırasında bir hata oluştu: " + e.getMessage());
         }
     }
 
@@ -77,15 +73,8 @@ public class NewProductController {
         dialogStage.close();
     }
 
-    private Integer parseIntOrNull(String s) {
-        try { return Integer.valueOf(s.trim()); } catch (Exception e) { return null; }
-    }
-    private Double parseDoubleOrNull(String s) {
-        try { return Double.valueOf(s.trim().replace(",", ".")); } catch (Exception e) { return null; }
-    }
-
-    private void showAlert(Alert.AlertType type, String title, String message) {
-        Alert alert = new Alert(type);
+    private void showAlert(String title, String message) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle(title);
         alert.setHeaderText(null);
         alert.setContentText(message);

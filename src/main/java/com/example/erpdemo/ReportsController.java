@@ -13,64 +13,100 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.sql.SQLException;
+import java.sql.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 
+/** Onaylanmış talepleri PDF'e, sayfa taşırmadan çok sayfalı olarak yazar (yalnızca tarih basar). */
 public class ReportsController {
 
     @FXML
     private void generateApprovedRequestsReport() {
         try (PDDocument document = new PDDocument()) {
-            PDPage page = new PDPage();
-            document.addPage(page);
 
-            try (PDPageContentStream cs = new PDPageContentStream(document, page)) {
-
-                // Font yükle
-                PDType0Font font = loadFont(document);
-                if (font == null) {
-                    showInfo("Hata", "times.ttf bulunamadı (assets klasörüne koyun).");
-                    return;
-                }
-
-                cs.beginText();
-                cs.setFont(font, 12);
-                cs.setLeading(14.5f);
-                cs.newLineAtOffset(25, 750);
-
-                cs.showText("Onaylanmış Talepler Raporu"); cs.newLine();
-                cs.setFont(font, 10);
-
-                var rows = RequestDAO.getApprovedRequests();
-                if (rows.isEmpty()) {
-                    cs.showText("Onaylanmış talep bulunamadı.");
-                } else {
-                    for (Request r : rows) {
-                        Customer c = CustomerDAO.getCustomerById(r.getCustomerId());
-                        String cname = (c != null) ? c.getCompanyName() : "Bilinmiyor";
-
-                        cs.showText("--------------------------------------------------------------------------"); cs.newLine();
-                        cs.showText("Talep ID: "     + r.getId());            cs.newLine();
-                        cs.showText("Müşteri Adı: "  + cname);               cs.newLine();
-                        cs.showText("Talep Tarihi: " + r.getRequestDate());  cs.newLine();
-                        cs.showText("Durum: "        + r.getStatus());       cs.newLine();
-                        cs.showText("--------------------------------------------------------------------------"); cs.newLine();
-                    }
-                }
-                cs.endText();
+            PDType0Font font = loadFont(document);
+            if (font == null) {
+                showInfo("Hata",
+                        "times.ttf bulunamadı.\n" +
+                                "Lütfen dosyayı resources/com/example/erpdemo/ altına koyun.");
+                return;
             }
 
-            // ======= ZAMAN DAMGALI DOSYA ADI + reports/ klasörü =======
-            // Windows uyumu için saat kısmında ':' yerine '.' kullanıyoruz
+            try (PdfWriter w = new PdfWriter(document, font)) {
+                w.startPage();
+                w.println("Onaylanmış Talepler Raporu");
+                w.println("");
+
+                var approved = RequestDAO.getApprovedRequests();
+                if (approved.isEmpty()) {
+                    w.println("Onaylanmış talep bulunamadı.");
+                } else {
+                    DateTimeFormatter dateFmt = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+                    for (Request r : approved) {
+                        String cname = "Bilinmiyor";
+                        try {
+                            Customer c = CustomerDAO.getCustomerById(r.getCustomerId());
+                            if (c != null) cname = c.getCompanyName();
+                        } catch (SQLException ignore) {}
+
+                        String dateStr = r.getRequestDate() != null ? r.getRequestDate().format(dateFmt) : "";
+
+                        w.println("--------------------------------------------------------------------------");
+                        w.println("Talep ID: " + r.getId());
+                        w.println("Müşteri Adı: " + cname);
+                        w.println("Talep Tarihi: " + dateStr); // SAAT YOK
+                        w.println("Durum: " + r.getStatus());
+                        w.println("--------------------------------------------------------------------------");
+
+                        List<ItemRow> items = fetchItemsForRequest(r.getId());
+                        if (items.isEmpty()) {
+                            w.println("Kalem bulunamadı.");
+                            w.println("");
+                            continue;
+                        }
+
+                        w.println("Ürün                         Miktar    Liste F.    İsk. Fiyat   Ara Toplam");
+                        w.println("----------------------------------------------------------------------");
+
+                        int totalQty = 0;
+                        double totalList = 0;
+                        double totalDisc = 0;
+
+                        for (ItemRow it : items) {
+                            double subList = it.quantity * it.listPrice;
+                            double subDisc = it.quantity * it.discountedPrice;
+
+                            totalQty += it.quantity;
+                            totalList += subList;
+                            totalDisc += subDisc;
+
+                            String line = String.format("%-28s %6d %12.2f %12.2f %12.2f",
+                                    trim(it.productName, 28),
+                                    it.quantity,
+                                    it.listPrice,
+                                    it.discountedPrice,
+                                    subDisc);
+                            w.println(line);
+                        }
+
+                        w.println("----------------------------------------------------------------------");
+                        w.println(String.format("Toplam Ürün Adedi: %d", totalQty));
+                        w.println(String.format("Toplam Liste Tutarı: %.2f TL", totalList));
+                        w.println(String.format("Toplam İskontolu Tutar: %.2f TL", totalDisc));
+                        w.println("");
+                    }
+                }
+            }
+
             String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH.mm.ss"));
-            String fileName = "ApprovedRequestsReport_" + ts + ".pdf";
-
             Path outDir = Paths.get("reports");
-            Files.createDirectories(outDir); // yoksa oluştur
-            Path outPath = outDir.resolve(fileName);
-
+            Files.createDirectories(outDir);
+            Path outPath = outDir.resolve("ApprovedRequestsReport_" + ts + ".pdf");
             document.save(outPath.toFile());
+
             showInfo("Başarılı", "Rapor oluşturuldu: " + outPath.toAbsolutePath());
 
         } catch (IOException | SQLException e) {
@@ -79,29 +115,111 @@ public class ReportsController {
         }
     }
 
-    /** times.ttf için sağlam yükleyici: önce assets/, sonra paket kökü */
+    /** Talep kalemlerini ürün adı + liste fiyatı + iskontolu fiyatla birlikte getirir. */
+    private List<ItemRow> fetchItemsForRequest(int requestId) {
+        String sql = """
+            SELECT s.UrunAdi, tk.Miktar, s.Fiyat AS ListeFiyati, tk.TeklifFiyati AS IskontoluFiyat
+            FROM dbo.TalepKalemleri tk
+            JOIN dbo.Stoklar s ON s.Id = tk.UrunId
+            WHERE tk.TalepId = ?
+            ORDER BY tk.Id
+            """;
+        List<ItemRow> list = new ArrayList<>();
+        try (Connection c = DatabaseManager.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, requestId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    list.add(new ItemRow(
+                            rs.getString("UrunAdi"),
+                            rs.getInt("Miktar"),
+                            rs.getDouble("ListeFiyati"),
+                            rs.getDouble("IskontoluFiyat")
+                    ));
+                }
+            }
+        } catch (SQLException ignore) {}
+        return list;
+    }
+
+    /** Fontu tam olarak şuradan yükler: /com/example/erpdemo/times.ttf */
     private PDType0Font loadFont(PDDocument doc) throws IOException {
-        // 1) /com/example/erpdemo/assets/times.ttf (önerilen yer)
-        URL abs1 = ReportsController.class.getResource("/com/example/erpdemo/assets/times.ttf");
-        if (abs1 != null) {
-            try (InputStream in = abs1.openStream()) { return PDType0Font.load(doc, in); }
-        }
-        // 2) /com/example/erpdemo/times.ttf (senin mevcut diziliminde varsa)
-        URL abs2 = ReportsController.class.getResource("/com/example/erpdemo/times.ttf");
-        if (abs2 != null) {
-            try (InputStream in = abs2.openStream()) { return PDType0Font.load(doc, in); }
-        }
-        // 3) Paket göreli (assets altı)
-        try (InputStream in = ReportsController.class.getResourceAsStream("assets/times.ttf")) {
+        URL url = ReportsController.class.getResource("/com/example/erpdemo/times.ttf");
+        if (url != null) try (InputStream in = url.openStream()) { return PDType0Font.load(doc, in); }
+        try (InputStream in = ReportsController.class.getResourceAsStream("/times.ttf")) {
             if (in != null) return PDType0Font.load(doc, in);
         }
-        return null; // bulunamadı
+        return null;
     }
 
     private void showInfo(String title, String msg) {
         Alert a = new Alert(Alert.AlertType.INFORMATION, msg);
-        a.setTitle(title);
-        a.setHeaderText(null);
-        a.showAndWait();
+        a.setTitle(title); a.setHeaderText(null); a.showAndWait();
+    }
+
+    // --------- Yardımcı sınıflar ---------
+    /** Basit çok-sayfalı metin yazarı */
+    private static final class PdfWriter implements AutoCloseable {
+        private final PDDocument doc;
+        private final PDType0Font font;
+        private PDPageContentStream cs;
+        private float leading = 14.5f;
+        private float marginLeft = 25f;
+        private float startY = 750f;
+        private float cursorY = startY;
+        private final float bottomMargin = 40f;
+
+        PdfWriter(PDDocument doc, PDType0Font font) {
+            this.doc = doc;
+            this.font = font;
+        }
+
+        void startPage() throws IOException {
+            if (cs != null) { cs.endText(); cs.close(); }
+            PDPage page = new PDPage();
+            doc.addPage(page);
+            cs = new PDPageContentStream(doc, page);
+            cs.beginText();
+            cs.setFont(font, 12);
+            cs.setLeading(leading);
+            cs.newLineAtOffset(marginLeft, startY);
+            cursorY = startY;
+        }
+
+        void println(String text) throws IOException {
+            ensureSpace(1);
+            cs.showText(text == null ? "" : text);
+            cs.newLine();
+            cursorY -= leading;
+        }
+
+        private void ensureSpace(int lines) throws IOException {
+            float needed = lines * leading;
+            if (cursorY - needed < bottomMargin) {
+                startPage();
+            }
+        }
+
+        @Override public void close() throws IOException {
+            if (cs != null) { cs.endText(); cs.close(); }
+        }
+    }
+
+    private static final class ItemRow {
+        final String productName;
+        final int quantity;
+        final double listPrice;
+        final double discountedPrice;
+        ItemRow(String productName, int quantity, double listPrice, double discountedPrice) {
+            this.productName = productName;
+            this.quantity = quantity;
+            this.listPrice = listPrice;
+            this.discountedPrice = discountedPrice;
+        }
+    }
+
+    private static String trim(String s, int max) {
+        if (s == null) return "";
+        return s.length() <= max ? s : s.substring(0, max - 1) + "…";
     }
 }
