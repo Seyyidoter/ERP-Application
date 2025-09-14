@@ -130,18 +130,36 @@ public class RequestDAO {
         return items;
     }
 
-    /** Onay / Red */
-    public static void updateRequestStatus(int requestId, String newStatus, int userId) throws SQLException {
+    /** Onayla */
+    public static void approveRequest(int requestId, int userId) throws SQLException {
         String sql = """
             UPDATE dbo.Talepler
-               SET Durum = ?, OnaylayanKullaniciId = ?, OnayTarihi = GETDATE()
+               SET Durum = N'Onaylandı',
+                   OnaylayanKullaniciId = ?,
+                   OnayTarihi = GETDATE()
              WHERE Id = ?
         """;
         try (Connection c = DatabaseManager.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setString(1, newStatus);
-            ps.setInt(2, userId);
-            ps.setInt(3, requestId);
+            ps.setInt(1, userId);
+            ps.setInt(2, requestId);
+            ps.executeUpdate();
+        }
+    }
+
+    /** Reddet (tarihi temizle) */
+    public static void rejectRequest(int requestId, int userId) throws SQLException {
+        String sql = """
+            UPDATE dbo.Talepler
+               SET Durum = N'Reddedildi',
+                   OnaylayanKullaniciId = ?,
+                   OnayTarihi = NULL
+             WHERE Id = ?
+        """;
+        try (Connection c = DatabaseManager.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, userId);
+            ps.setInt(2, requestId);
             ps.executeUpdate();
         }
     }

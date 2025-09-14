@@ -21,16 +21,21 @@ public class NewCustomerController {
         String contactPerson = contactPersonField.getText();
         String phone = phoneField.getText();
         String email = emailField.getText();
-        int discount = Integer.parseInt(discountField.getText());
+
+        Integer discount = parseIntOrNull(discountField.getText());
+        if (discount == null || discount < 0) {
+            showAlert(Alert.AlertType.WARNING, "Uyarı", "İskonto geçerli bir sayı olmalı (0 veya üzeri).");
+            return;
+        }
 
         try {
             CustomerDAO.addCustomer(companyName, contactPerson, phone, email, discount);
-            showAlert("Başarılı", "Yeni müşteri başarıyla eklendi.");
+            showAlert(Alert.AlertType.INFORMATION, "Başarılı", "Yeni müşteri başarıyla eklendi.");
             // Pencereyi kapat
             Stage stage = (Stage) companyNameField.getScene().getWindow();
             stage.close();
-        } catch (SQLException | NumberFormatException e) {
-            showAlert("Hata", "Müşteri eklenirken bir hata oluştu: " + e.getMessage());
+        } catch (SQLException e) {
+            showAlert(Alert.AlertType.ERROR, "Hata", "Müşteri eklenirken bir hata oluştu: " + e.getMessage());
         }
     }
 
@@ -41,8 +46,12 @@ public class NewCustomerController {
         stage.close();
     }
 
-    private void showAlert(String title, String message) {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+    private Integer parseIntOrNull(String s) {
+        try { return Integer.valueOf(s.trim()); } catch (Exception e) { return null; }
+    }
+
+    private void showAlert(Alert.AlertType type, String title, String message) {
+        Alert alert = new Alert(type);
         alert.setTitle(title);
         alert.setHeaderText(null);
         alert.setContentText(message);

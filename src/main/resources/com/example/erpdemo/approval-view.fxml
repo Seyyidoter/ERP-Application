@@ -24,8 +24,8 @@
         </TableView>
         <HBox spacing="10.0" alignment="CENTER_RIGHT">
             <children>
-                <Button text="Onayla" onAction="#handleApprove"/>
-                <Button text="Reddet" onAction="#handleReject"/>
+                <Button fx:id="approveBtn" text="Onayla" onAction="#handleApprove"/>
+                <Button fx:id="rejectBtn"  text="Reddet"  onAction="#handleReject"/>
             </children>
         </HBox>
     </children>

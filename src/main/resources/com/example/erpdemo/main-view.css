@@ -50,24 +50,26 @@
     -fx-background-radius: 10;
     -fx-font-weight: 600;
     -fx-cursor: hand;
+
+    /* Fokus klavye gezintisini tamamen kapat (FXML'de de false) */
+    -fx-focus-traversable: false;
 }
 .nav-btn:hover {
     -fx-background-color: rgba(255,255,255,0.08);
-    -fx-effect: none;                 /* hover parlamasını kapat */
+    -fx-effect: none;
     -fx-border-color: inherit;
 }
-.nav-btn:selected, .nav-btn.selected {
+
+/* Seçili görünüm (MainController styleClass 'selected' ekliyor) */
+.nav-btn.selected {
     -fx-background-color: rgba(37,99,235,0.22);
     -fx-text-fill: white;
     -fx-border-color: rgba(37,99,235,0.6);
     -fx-border-width: 1;
     -fx-border-radius: 10;
-    /*  !!! ŞU SATIRI BİLEREK KALDIRDIK (mavi glow yapıyordu) !!!
-       -fx-effect: dropshadow(gaussian, rgba(37,99,235,0.35), 8, 0.2, 0, 0);
-    */
 }
 
-/* ===== Focus/armed HALO tamamen kapatma (ToggleButton & Button) ===== */
+/* ===== Focus/armed HALO tamamen kapatma (garanti olsun) ===== */
 .toggle-button:focused,
 .toggle-button:focused:hover,
 .toggle-button:armed,

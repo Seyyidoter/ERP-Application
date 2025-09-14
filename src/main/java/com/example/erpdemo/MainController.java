@@ -3,10 +3,9 @@ package com.example.erpdemo;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
+import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.MenuButton;
-import javafx.scene.control.ToggleButton;
-import javafx.scene.control.ToggleGroup;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
@@ -19,28 +18,23 @@ public class MainController {
 
     @FXML private StackPane contentRoot;
     @FXML private Label pageTitle;
-    @FXML private MenuButton userMenu;   // <-- rolü burada göstereceğiz
+    @FXML private MenuButton userMenu;
 
     private User loggedInUser;
-    private ToggleGroup navGroup;
 
     @FXML
     public void initialize() {
-        contentRoot.sceneProperty().addListener((obs, o, s) -> { if (s != null) setupToggleGroup(); });
         goDashboard();
     }
 
     public void setUser(User user) {
         this.loggedInUser = user;
-
-        // Rolü sağ üst menüde göster (Yönetici / Kullanıcı vs.)
         if (user != null && user.getRole() != null && !user.getRole().isBlank()) {
             userMenu.setText(user.getRole());
         } else {
             userMenu.setText("Kullanıcı");
         }
-
-        updateApprovalsVisibility();
+        updateApprovalsVisibility(); // Button versiyonu
     }
 
     @FXML public void openHelp() { loadInlineMessage("Yardım dokümanı yakında eklenecek."); }
@@ -55,7 +49,7 @@ public class MainController {
     }
     @FXML public void goReports()   { loadContent("reports-view.fxml",  "Raporlar",          "Raporlar"); }
 
-    /** Önbellek yok: Her çağrıda FXML yeniden yüklenir; controller'da refresh() varsa çağrılır. */
+    /** FXML yükle + varsa refresh() çağır + ApprovalController'a userId aktar + fokus'u content'e ver */
     private void loadContent(String fxmlFile, String title, String navTextToSelect) {
         pageTitle.setText(title);
 
@@ -73,19 +67,26 @@ public class MainController {
 
             Object controller = loader.getController();
             try {
-                controller.getClass().getMethod("refresh").invoke(controller);
-            } catch (NoSuchMethodException ignore) { /* refresh() yoksa sorun değil */ }
+                // refresh() varsa
+                try { controller.getClass().getMethod("refresh").invoke(controller); }
+                catch (NoSuchMethodException ignore) { /* yoksa sorun değil */ }
+
+                // ApprovalController ise currentUserId aktar
+                if (controller instanceof ApprovalController ac && loggedInUser != null) {
+                    ac.setCurrentUserId(loggedInUser.getId());
+                }
+            } catch (ReflectiveOperationException ignore) { }
 
             contentRoot.getChildren().setAll(view);
             selectNav(navTextToSelect);
+
+            // NAV butonundaki fokus'u kaldır, mavi çerçeve kalmasın
+            contentRoot.requestFocus();
 
         } catch (IOException e) {
             e.printStackTrace();
             loadInlineMessage(title + " görünümü yüklenemedi (hata).");
             selectNav(navTextToSelect);
-        } catch (ReflectiveOperationException e) {
-            // refresh() yansıma çağrısında hata olsa da ekranı gösterelim
-            contentRoot.getChildren().clear();
         }
     }
 
@@ -103,38 +104,40 @@ public class MainController {
                 "Yonetici".equalsIgnoreCase(Objects.toString(loggedInUser.getRole(), ""));
     }
 
+    /* ----------- Button ile çalışan nav yardımcıları ----------- */
+
+    /** Başlığa göre sol menüdeki Button'u bul */
+    private Button findNavButtonByText(String text) {
+        VBox sidebar = getSidebar();
+        if (sidebar == null) return null;
+        for (var node : sidebar.getChildren()) {
+            if (node instanceof Button b && text != null && text.equalsIgnoreCase(b.getText())) return b;
+        }
+        return null;
+    }
+
+    /** Seçimi styleClass "selected" ile yönet */
+    private void selectNav(String text) {
+        VBox sidebar = getSidebar();
+        if (sidebar == null) return;
+        for (var node : sidebar.getChildren()) {
+            if (node instanceof Button b) {
+                b.getStyleClass().remove("selected");
+                if (text != null && text.equalsIgnoreCase(b.getText())) {
+                    if (!b.getStyleClass().contains("selected")) b.getStyleClass().add("selected");
+                }
+            }
+        }
+    }
+
+    /** "Onay İşlemleri" butonunu role göre göster/gizle */
     private void updateApprovalsVisibility() {
-        ToggleButton approvalsBtn = findNavByText("Onay İşlemleri");
+        Button approvalsBtn = findNavButtonByText("Onay İşlemleri");
         if (approvalsBtn != null) {
             boolean visible = isAdmin();
             approvalsBtn.setVisible(visible);
             approvalsBtn.setManaged(visible);
         }
-    }
-
-    private void setupToggleGroup() {
-        VBox sidebar = getSidebar();
-        if (sidebar == null) return;
-        navGroup = new ToggleGroup();
-        for (var node : sidebar.getChildren()) {
-            if (node instanceof ToggleButton tb) tb.setToggleGroup(navGroup);
-        }
-    }
-
-    private void selectNav(String text) {
-        if (navGroup == null) return;
-        if (text == null) { navGroup.selectToggle(null); return; }
-        ToggleButton tb = findNavByText(text);
-        if (tb != null) tb.setSelected(true); else navGroup.selectToggle(null);
-    }
-
-    private ToggleButton findNavByText(String text) {
-        VBox sidebar = getSidebar();
-        if (sidebar == null) return null;
-        for (var node : sidebar.getChildren()) {
-            if (node instanceof ToggleButton tb && text.equalsIgnoreCase(tb.getText())) return tb;
-        }
-        return null;
     }
 
     private VBox getSidebar() {

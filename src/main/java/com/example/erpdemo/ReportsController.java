@@ -1,6 +1,5 @@
 package com.example.erpdemo;
 
-import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.scene.control.Alert;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -11,7 +10,12 @@ import org.apache.pdfbox.pdmodel.font.PDType0Font;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.sql.SQLException;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 public class ReportsController {
 
@@ -23,7 +27,7 @@ public class ReportsController {
 
             try (PDPageContentStream cs = new PDPageContentStream(document, page)) {
 
-                // Font (resources/com/example/erpdemo/assets/times.ttf)
+                // Font yükle
                 PDType0Font font = loadFont(document);
                 if (font == null) {
                     showInfo("Hata", "times.ttf bulunamadı (assets klasörüne koyun).");
@@ -38,7 +42,7 @@ public class ReportsController {
                 cs.showText("Onaylanmış Talepler Raporu"); cs.newLine();
                 cs.setFont(font, 10);
 
-                ObservableList<Request> rows = RequestDAO.getApprovedRequests();
+                var rows = RequestDAO.getApprovedRequests();
                 if (rows.isEmpty()) {
                     cs.showText("Onaylanmış talep bulunamadı.");
                 } else {
@@ -57,9 +61,17 @@ public class ReportsController {
                 cs.endText();
             }
 
-            String file = "ApprovedRequestsReport.pdf";
-            document.save(file);
-            showInfo("Başarılı", "Rapor oluşturuldu: " + file);
+            // ======= ZAMAN DAMGALI DOSYA ADI + reports/ klasörü =======
+            // Windows uyumu için saat kısmında ':' yerine '.' kullanıyoruz
+            String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH.mm.ss"));
+            String fileName = "ApprovedRequestsReport_" + ts + ".pdf";
+
+            Path outDir = Paths.get("reports");
+            Files.createDirectories(outDir); // yoksa oluştur
+            Path outPath = outDir.resolve(fileName);
+
+            document.save(outPath.toFile());
+            showInfo("Başarılı", "Rapor oluşturuldu: " + outPath.toAbsolutePath());
 
         } catch (IOException | SQLException e) {
             showInfo("Hata", "PDF oluşturulamadı: " + e.getMessage());
@@ -67,14 +79,19 @@ public class ReportsController {
         }
     }
 
-    /** assets/times.ttf için sağlam yükleyici. */
+    /** times.ttf için sağlam yükleyici: önce assets/, sonra paket kökü */
     private PDType0Font loadFont(PDDocument doc) throws IOException {
-        // 1) Mutlak classpath
-        URL abs = ReportsController.class.getResource("/com/example/erpdemo/assets/times.ttf");
-        if (abs != null) {
-            try (InputStream in = abs.openStream()) { return PDType0Font.load(doc, in); }
+        // 1) /com/example/erpdemo/assets/times.ttf (önerilen yer)
+        URL abs1 = ReportsController.class.getResource("/com/example/erpdemo/assets/times.ttf");
+        if (abs1 != null) {
+            try (InputStream in = abs1.openStream()) { return PDType0Font.load(doc, in); }
         }
-        // 2) Paket göreli
+        // 2) /com/example/erpdemo/times.ttf (senin mevcut diziliminde varsa)
+        URL abs2 = ReportsController.class.getResource("/com/example/erpdemo/times.ttf");
+        if (abs2 != null) {
+            try (InputStream in = abs2.openStream()) { return PDType0Font.load(doc, in); }
+        }
+        // 3) Paket göreli (assets altı)
         try (InputStream in = ReportsController.class.getResourceAsStream("assets/times.ttf")) {
             if (in != null) return PDType0Font.load(doc, in);
         }

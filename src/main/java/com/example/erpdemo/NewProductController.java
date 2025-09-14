@@ -34,28 +34,41 @@ public class NewProductController {
 
     @FXML
     private void handleSave() {
+        String name = nameField.getText();
+        Double price = parseDoubleOrNull(priceField.getText());
+        Integer stock = parseIntOrNull(stockField.getText());
+        String unit = unitField.getText();
+
+        if (name == null || name.isBlank()) {
+            showAlert(Alert.AlertType.WARNING, "Uyarı", "Ürün adı boş olamaz."); return;
+        }
+        if (price == null || price < 0) {
+            showAlert(Alert.AlertType.WARNING, "Uyarı", "Fiyat geçerli bir sayı olmalı (0 veya üzeri)."); return;
+        }
+        if (stock == null || stock < 0) {
+            showAlert(Alert.AlertType.WARNING, "Uyarı", "Stok geçerli bir tam sayı olmalı (0 veya üzeri)."); return;
+        }
+        if (unit == null || unit.isBlank()) {
+            showAlert(Alert.AlertType.WARNING, "Uyarı", "Birim boş olamaz."); return;
+        }
+
         try {
             if (product == null) {
                 // Yeni ürün ekleme
-                ProductDAO.addProduct(
-                        nameField.getText(),
-                        Double.parseDouble(priceField.getText()),
-                        Integer.parseInt(stockField.getText()),
-                        unitField.getText()
-                );
-                showAlert("Başarılı", "Yeni ürün başarıyla eklendi.");
+                ProductDAO.addProduct(name, price, stock, unit);
+                showAlert(Alert.AlertType.INFORMATION, "Başarılı", "Yeni ürün başarıyla eklendi.");
             } else {
                 // Ürün bilgilerini güncelleme
-                product.setUrunAdi(nameField.getText());
-                product.setFiyat(Double.parseDouble(priceField.getText()));
-                product.setStok(Integer.parseInt(stockField.getText()));
-                product.setBirim(unitField.getText());
+                product.setUrunAdi(name);
+                product.setFiyat(price);
+                product.setStok(stock);
+                product.setBirim(unit);
                 ProductDAO.updateProduct(product);
-                showAlert("Başarılı", "Ürün bilgileri başarıyla güncellendi.");
+                showAlert(Alert.AlertType.INFORMATION, "Başarılı", "Ürün bilgileri başarıyla güncellendi.");
             }
             dialogStage.close();
-        } catch (SQLException | NumberFormatException e) {
-            showAlert("Hata", "İşlem sırasında bir hata oluştu: " + e.getMessage());
+        } catch (SQLException e) {
+            showAlert(Alert.AlertType.ERROR, "Hata", "İşlem sırasında bir hata oluştu: " + e.getMessage());
         }
     }
 
@@ -64,8 +77,15 @@ public class NewProductController {
         dialogStage.close();
     }
 
-    private void showAlert(String title, String message) {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+    private Integer parseIntOrNull(String s) {
+        try { return Integer.valueOf(s.trim()); } catch (Exception e) { return null; }
+    }
+    private Double parseDoubleOrNull(String s) {
+        try { return Double.valueOf(s.trim().replace(",", ".")); } catch (Exception e) { return null; }
+    }
+
+    private void showAlert(Alert.AlertType type, String title, String message) {
+        Alert alert = new Alert(type);
         alert.setTitle(title);
         alert.setHeaderText(null);
         alert.setContentText(message);

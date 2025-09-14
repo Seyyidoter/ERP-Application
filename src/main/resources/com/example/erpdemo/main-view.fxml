@@ -13,7 +13,7 @@
             <Label fx:id="pageTitle" text="Gösterge Paneli" styleClass="appbar-title"/>
             <Region HBox.hgrow="ALWAYS"/>
             <Button text="?" onAction="#openHelp" styleClass="icon-btn" />
-            <!-- Rolü burada göstereceğiz -->
+            <!-- Rol menüsü -->
             <MenuButton fx:id="userMenu" text="Kullanıcı" styleClass="user-menu">
                 <items>
                     <MenuItem text="Profil"/>
@@ -29,11 +29,11 @@
         <VBox styleClass="sidebar" spacing="8">
             <Separator/>
 
-            <Button text="Gösterge Paneli"    onAction="#goDashboard" styleClass="nav-btn"/>
-            <Button text="Müşteri İşlemleri"   onAction="#goCustomers" styleClass="nav-btn"/>
-            <Button text="Talep/Teklif"        onAction="#goRequests"  styleClass="nav-btn"/>
-            <Button text="Onay İşlemleri"      onAction="#goApprovals" styleClass="nav-btn"/>
-            <Button text="Raporlar"            onAction="#goReports"   styleClass="nav-btn"/>
+            <Button text="Gösterge Paneli"  onAction="#goDashboard" styleClass="nav-btn" focusTraversable="false"/>
+            <Button text="Müşteri İşlemleri" onAction="#goCustomers" styleClass="nav-btn" focusTraversable="false"/>
+            <Button text="Talep/Teklif"      onAction="#goRequests"  styleClass="nav-btn" focusTraversable="false"/>
+            <Button text="Onay İşlemleri"    onAction="#goApprovals" styleClass="nav-btn" focusTraversable="false"/>
+            <Button text="Raporlar"          onAction="#goReports"   styleClass="nav-btn" focusTraversable="false"/>
 
             <Region VBox.vgrow="ALWAYS"/>
             <Label text="v1.0.0" styleClass="sidebar-foot"/>
