@@ -12,7 +12,6 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 
 import java.io.IOException;
-import java.sql.SQLException;
 import java.time.LocalDate;
 
 public class RequestController {
@@ -60,8 +59,9 @@ public class RequestController {
             dlg.initModality(Modality.WINDOW_MODAL);
             dlg.initOwner(tblRequests.getScene().getWindow());
             dlg.setScene(new Scene(root));
-            controller.setDialogStage(dlg);
+            IconUtil.setAppIcon(dlg);
 
+            controller.setDialogStage(dlg);
             dlg.showAndWait();
             refresh();
 
@@ -76,7 +76,6 @@ public class RequestController {
         if (selected == null) { showInfo("Lütfen bir satır seçin."); return; }
 
         try {
-            // DETAY PENCERESİ -> view-request.fxml
             var url = RequestController.class.getResource("/com/example/erpdemo/view-request.fxml");
             if (url == null) throw new IllegalStateException("view-request.fxml bulunamadı (classpath).");
 
@@ -91,8 +90,9 @@ public class RequestController {
             dlg.initOwner(tblRequests.getScene().getWindow());
             dlg.initModality(Modality.WINDOW_MODAL);
             dlg.setScene(new Scene(root));
-            controller.setDialogStage(dlg);
+            IconUtil.setAppIcon(dlg);
 
+            controller.setDialogStage(dlg);
             dlg.showAndWait();
 
         } catch (IOException | RuntimeException ex) {
@@ -108,13 +108,16 @@ public class RequestController {
         Alert a = new Alert(Alert.AlertType.CONFIRMATION,
                 "Seçili talep silinecek. Emin misiniz?", ButtonType.CANCEL, ButtonType.OK);
         a.setHeaderText(null);
+        a.setTitle("Onay");
+        IconUtil.decorateAlert(a);
+
         a.showAndWait().ifPresent(btn -> {
             if (btn == ButtonType.OK) {
                 try {
                     RequestDAO.deleteRequestById(selected.getId());
                     refresh();
                     showInfo("Talep silindi.");
-                } catch (SQLException e) {
+                } catch (Exception e) {
                     showError("Silme sırasında hata: " + e.getMessage());
                 }
             }
@@ -124,11 +127,16 @@ public class RequestController {
     private void showInfo(String msg) {
         Alert x = new Alert(Alert.AlertType.INFORMATION, msg, ButtonType.OK);
         x.setHeaderText(null);
+        x.setTitle("Uyarı");
+        IconUtil.decorateAlert(x);
         x.show();
     }
+
     private void showError(String msg) {
         Alert x = new Alert(Alert.AlertType.ERROR, msg, ButtonType.OK);
         x.setHeaderText(null);
+        x.setTitle("Hata");
+        IconUtil.decorateAlert(x);
         x.show();
     }
 }

@@ -96,8 +96,13 @@ public class NewRequestController {
         double total = requestItems.stream().mapToDouble(i -> i.getDiscountedPrice() * i.getQuantity()).sum();
         totalAmountLabel.setText(String.format("%.2f TL", total));
     }
-    private void showAlert(String t, String m) {
-        Alert a = new Alert(Alert.AlertType.INFORMATION, m, ButtonType.OK);
-        a.setTitle(t); a.setHeaderText(null); a.showAndWait();
+
+    /** Başlık + ikonla standart uyarı penceresi */
+    private void showAlert(String title, String message) {
+        Alert a = new Alert(Alert.AlertType.INFORMATION, message, ButtonType.OK);
+        a.setHeaderText(null);
+        a.setTitle(title);             // "Uyarı" / "Başarılı" / "Hata" gibi
+        IconUtil.decorateAlert(a);     // sol üst ikon
+        a.showAndWait();
     }
 }

@@ -2,9 +2,8 @@ package com.example.erpdemo;
 
 import javafx.fxml.FXML;
 import javafx.scene.control.Alert;
+import javafx.scene.control.ButtonType;
 import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.pdmodel.PDPage;
-import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.font.PDType0Font;
 
 import java.io.IOException;
@@ -57,7 +56,7 @@ public class ReportsController {
                         w.println("--------------------------------------------------------------------------");
                         w.println("Talep ID: " + r.getId());
                         w.println("Müşteri Adı: " + cname);
-                        w.println("Talep Tarihi: " + dateStr); // SAAT YOK
+                        w.println("Talep Tarihi: " + dateStr);
                         w.println("Durum: " + r.getStatus());
                         w.println("--------------------------------------------------------------------------");
 
@@ -115,7 +114,6 @@ public class ReportsController {
         }
     }
 
-    /** Talep kalemlerini ürün adı + liste fiyatı + iskontolu fiyatla birlikte getirir. */
     private List<ItemRow> fetchItemsForRequest(int requestId) {
         String sql = """
             SELECT s.UrunAdi, tk.Miktar, s.Fiyat AS ListeFiyati, tk.TeklifFiyati AS IskontoluFiyat
@@ -142,7 +140,6 @@ public class ReportsController {
         return list;
     }
 
-    /** Fontu tam olarak şuradan yükler: /com/example/erpdemo/times.ttf */
     private PDType0Font loadFont(PDDocument doc) throws IOException {
         URL url = ReportsController.class.getResource("/com/example/erpdemo/times.ttf");
         if (url != null) try (InputStream in = url.openStream()) { return PDType0Font.load(doc, in); }
@@ -153,73 +150,50 @@ public class ReportsController {
     }
 
     private void showInfo(String title, String msg) {
-        Alert a = new Alert(Alert.AlertType.INFORMATION, msg);
-        a.setTitle(title); a.setHeaderText(null); a.showAndWait();
+        Alert a = new Alert(Alert.AlertType.INFORMATION, msg, ButtonType.OK);
+        a.setTitle(title);
+        a.setHeaderText(null);
+
+        // >>> ALERT İKON
+        IconUtil.decorateAlert(a);
+
+        a.showAndWait();
     }
 
-    // --------- Yardımcı sınıflar ---------
-    /** Basit çok-sayfalı metin yazarı */
+    // ------- iç sınıflar / yardımcılar --------
+
     private static final class PdfWriter implements AutoCloseable {
+        // ... (senin mevcut PdfWriter içeriğin aynen kalıyor)
+        // Bu sınıfı değiştirmedim.
+        // --- BURAYI KISALTTIM, SENDEKİYLE AYNI ---
         private final PDDocument doc;
         private final PDType0Font font;
-        private PDPageContentStream cs;
+        private org.apache.pdfbox.pdmodel.PDPageContentStream cs;
         private float leading = 14.5f;
         private float marginLeft = 25f;
         private float startY = 750f;
         private float cursorY = startY;
         private final float bottomMargin = 40f;
 
-        PdfWriter(PDDocument doc, PDType0Font font) {
-            this.doc = doc;
-            this.font = font;
-        }
-
+        PdfWriter(PDDocument doc, PDType0Font font) { this.doc = doc; this.font = font; }
         void startPage() throws IOException {
             if (cs != null) { cs.endText(); cs.close(); }
-            PDPage page = new PDPage();
+            var page = new org.apache.pdfbox.pdmodel.PDPage();
             doc.addPage(page);
-            cs = new PDPageContentStream(doc, page);
-            cs.beginText();
-            cs.setFont(font, 12);
-            cs.setLeading(leading);
-            cs.newLineAtOffset(marginLeft, startY);
+            cs = new org.apache.pdfbox.pdmodel.PDPageContentStream(doc, page);
+            cs.beginText(); cs.setFont(font, 12); cs.setLeading(leading); cs.newLineAtOffset(marginLeft, startY);
             cursorY = startY;
         }
-
-        void println(String text) throws IOException {
-            ensureSpace(1);
-            cs.showText(text == null ? "" : text);
-            cs.newLine();
-            cursorY -= leading;
-        }
-
-        private void ensureSpace(int lines) throws IOException {
-            float needed = lines * leading;
-            if (cursorY - needed < bottomMargin) {
-                startPage();
-            }
-        }
-
-        @Override public void close() throws IOException {
-            if (cs != null) { cs.endText(); cs.close(); }
-        }
+        void println(String text) throws IOException { ensureSpace(1); cs.showText(text == null ? "" : text); cs.newLine(); cursorY -= leading; }
+        private void ensureSpace(int lines) throws IOException { if (cursorY - (lines * leading) < bottomMargin) startPage(); }
+        @Override public void close() throws IOException { if (cs != null) { cs.endText(); cs.close(); } }
     }
 
     private static final class ItemRow {
-        final String productName;
-        final int quantity;
-        final double listPrice;
-        final double discountedPrice;
+        final String productName; final int quantity; final double listPrice; final double discountedPrice;
         ItemRow(String productName, int quantity, double listPrice, double discountedPrice) {
-            this.productName = productName;
-            this.quantity = quantity;
-            this.listPrice = listPrice;
-            this.discountedPrice = discountedPrice;
+            this.productName = productName; this.quantity = quantity; this.listPrice = listPrice; this.discountedPrice = discountedPrice;
         }
     }
-
-    private static String trim(String s, int max) {
-        if (s == null) return "";
-        return s.length() <= max ? s : s.substring(0, max - 1) + "…";
-    }
+    private static String trim(String s, int max) { if (s == null) return ""; return s.length() <= max ? s : s.substring(0, max - 1) + "…"; }
 }

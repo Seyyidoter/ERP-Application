@@ -20,10 +20,7 @@ public class ApprovalController {
 
     private int currentUserId = 0;
 
-    /** MainController’dan aktarılacak */
-    public void setCurrentUserId(int id) {
-        this.currentUserId = id;
-    }
+    public void setCurrentUserId(int id) { this.currentUserId = id; }
 
     @FXML
     public void initialize() {
@@ -32,7 +29,6 @@ public class ApprovalController {
         dateColumn.setCellValueFactory(new PropertyValueFactory<>("requestDate"));
         statusColumn.setCellValueFactory(new PropertyValueFactory<>("status"));
 
-        // Seçim yoksa butonlar kapalı
         approveBtn.setDisable(true);
         rejectBtn.setDisable(true);
         pendingRequestsTable.getSelectionModel().selectedItemProperty().addListener((obs, o, n) -> {
@@ -41,18 +37,16 @@ public class ApprovalController {
             rejectBtn.setDisable(!hasSel);
         });
 
-        // İstersen tarih formatlayıcı
         dateColumn.setCellFactory(col -> new TableCell<>() {
             @Override protected void updateItem(LocalDate d, boolean empty) {
                 super.updateItem(d, empty);
-                setText(empty || d == null ? null : d.toString()); // dd.MM.yyyy şeklinde istersen formatla
+                setText(empty || d == null ? null : d.toString());
             }
         });
 
         refresh();
     }
 
-    /** MainController.loadContent çağırdığında otomatik çalışır. */
     public void refresh() {
         try {
             ObservableList<Request> pending = RequestDAO.getPendingRequests();
@@ -93,8 +87,10 @@ public class ApprovalController {
         }
     }
 
-    private void showAlert(Alert.AlertType type, String t, String m) {
-        Alert a = new Alert(type, m, ButtonType.OK);
-        a.setTitle(t); a.setHeaderText(null); a.showAndWait();
+    private void showAlert(Alert.AlertType type, String title, String msg) {
+        Alert a = new Alert(type, msg, ButtonType.OK);
+        a.setTitle(title); a.setHeaderText(null);
+        IconUtil.decorateAlert(a);
+        a.showAndWait();
     }
 }

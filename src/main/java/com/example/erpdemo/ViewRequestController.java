@@ -64,10 +64,13 @@ public class ViewRequestController {
     }
 
     private void showAlert(String title, String message) {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        Alert alert = new Alert(Alert.AlertType.INFORMATION, message, ButtonType.OK);
         alert.setTitle(title);
         alert.setHeaderText(null);
-        alert.setContentText(message);
+
+        // >>> ALERT İKON
+        IconUtil.decorateAlert(alert);
+
         alert.showAndWait();
     }
 }

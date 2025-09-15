@@ -58,8 +58,11 @@ public class CustomerController {
             stage.initModality(Modality.APPLICATION_MODAL);
             stage.setTitle("Yeni Müşteri Ekle");
             stage.setScene(new Scene(parent));
-            stage.showAndWait();
 
+            // >>> İKON
+            IconUtil.setAppIcon(stage);
+
+            stage.showAndWait();
             loadCustomers();
 
         } catch (IOException e) {
@@ -67,8 +70,6 @@ public class CustomerController {
             showAlert("Hata", "Yeni müşteri penceresi açılamıyor.");
         }
     }
-
-    // CustomerController.java içinde handleAddButton'dan sonra bu kodları ekle
 
     @FXML
     private void handleEditButton() {
@@ -85,12 +86,14 @@ public class CustomerController {
                 dialogStage.initModality(Modality.APPLICATION_MODAL);
                 dialogStage.setScene(new Scene(parent));
 
+                // >>> İKON
+                IconUtil.setAppIcon(dialogStage);
+
                 controller.setDialogStage(dialogStage);
                 controller.setCustomer(selectedCustomer);
 
                 dialogStage.showAndWait();
-
-                loadCustomers(); // Pencere kapandıktan sonra tabloyu yenile
+                loadCustomers();
 
             } catch (IOException e) {
                 e.printStackTrace();
@@ -104,15 +107,20 @@ public class CustomerController {
     private void handleDeleteButton() {
         Customer selectedCustomer = customerTable.getSelectionModel().getSelectedItem();
         if (selectedCustomer != null) {
-            Alert confirm = new Alert(Alert.AlertType.CONFIRMATION, "Müşteriyi silmek istediğinizden emin misiniz?", ButtonType.YES, ButtonType.NO);
+            Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
+                    "Müşteriyi silmek istediğinizden emin misiniz?", ButtonType.YES, ButtonType.NO);
             confirm.setHeaderText(null);
+
+            // >>> ALERT İKON
+            IconUtil.decorateAlert(confirm);
+
             confirm.showAndWait();
 
             if (confirm.getResult() == ButtonType.YES) {
                 try {
                     CustomerDAO.deleteCustomer(selectedCustomer.getId());
                     showAlert("Başarılı", "Müşteri başarıyla silindi.");
-                    loadCustomers(); // Tabloyu yenile
+                    loadCustomers();
                 } catch (SQLException e) {
                     e.printStackTrace();
                     showAlert("Hata", "Müşteri silinirken bir hata oluştu: " + e.getMessage());
@@ -124,10 +132,13 @@ public class CustomerController {
     }
 
     private void showAlert(String title, String message) {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        Alert alert = new Alert(Alert.AlertType.INFORMATION, message, ButtonType.OK);
         alert.setTitle(title);
         alert.setHeaderText(null);
-        alert.setContentText(message);
+
+        // >>> ALERT İKON
+        IconUtil.decorateAlert(alert);
+
         alert.showAndWait();
     }
 }

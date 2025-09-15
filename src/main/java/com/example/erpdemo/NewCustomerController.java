@@ -2,6 +2,7 @@ package com.example.erpdemo;
 
 import javafx.fxml.FXML;
 import javafx.scene.control.Alert;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.TextField;
 import javafx.stage.Stage;
 
@@ -41,7 +42,6 @@ public class NewCustomerController {
 
     @FXML
     private void handleCancel() {
-        // Pencereyi kapatır
         Stage stage = (Stage) companyNameField.getScene().getWindow();
         stage.close();
     }
@@ -51,10 +51,13 @@ public class NewCustomerController {
     }
 
     private void showAlert(Alert.AlertType type, String title, String message) {
-        Alert alert = new Alert(type);
+        Alert alert = new Alert(type, message, ButtonType.OK);
         alert.setTitle(title);
         alert.setHeaderText(null);
-        alert.setContentText(message);
+
+        // >>> ALERT İKON
+        IconUtil.decorateAlert(alert);
+
         alert.showAndWait();
     }
 }

@@ -2,6 +2,7 @@ package com.example.erpdemo;
 
 import javafx.fxml.FXML;
 import javafx.scene.control.Alert;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 import javafx.stage.Stage;
@@ -18,9 +19,7 @@ public class NewProductController {
     private Stage dialogStage;
     private Product product;
 
-    public void setDialogStage(Stage dialogStage) {
-        this.dialogStage = dialogStage;
-    }
+    public void setDialogStage(Stage dialogStage) { this.dialogStage = dialogStage; }
 
     public void setProduct(Product product) {
         this.product = product;
@@ -43,17 +42,14 @@ public class NewProductController {
                 showAlert("Uyarı", "Birim boş olamaz."); return;
             }
 
-            // Virgül/nokta toleransı
             String priceText = priceField.getText().replace(",", ".");
             double price = Double.parseDouble(priceText);
             if (price < 0) { showAlert("Uyarı", "Fiyat negatif olamaz."); return; }
 
             if (product == null) {
-                // Yeni ürün: stok önemsenmiyor → 0 yazıyoruz
                 ProductDAO.addProduct(name, price, 0, unit);
                 showAlert("Başarılı", "Yeni ürün başarıyla eklendi.");
             } else {
-                // Mevcut stok değerine dokunmuyoruz (Product içinde neyse o kalır)
                 product.setUrunAdi(name);
                 product.setFiyat(price);
                 product.setBirim(unit);
@@ -69,15 +65,16 @@ public class NewProductController {
     }
 
     @FXML
-    private void handleCancel() {
-        dialogStage.close();
-    }
+    private void handleCancel() { dialogStage.close(); }
 
     private void showAlert(String title, String message) {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        Alert alert = new Alert(Alert.AlertType.INFORMATION, message, ButtonType.OK);
         alert.setTitle(title);
         alert.setHeaderText(null);
-        alert.setContentText(message);
+
+        // >>> ALERT İKON
+        IconUtil.decorateAlert(alert);
+
         alert.showAndWait();
     }
 }
