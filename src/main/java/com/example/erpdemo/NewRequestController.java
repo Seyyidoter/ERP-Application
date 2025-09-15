@@ -102,7 +102,7 @@ public class NewRequestController {
         Alert a = new Alert(Alert.AlertType.INFORMATION, message, ButtonType.OK);
         a.setHeaderText(null);
         a.setTitle(title);             // "Uyarı" / "Başarılı" / "Hata" gibi
-        IconUtil.decorateAlert(a);     // sol üst ikon
+        IconUtil.decorateAlert(a);
         a.showAndWait();
     }
 }

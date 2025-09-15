@@ -71,8 +71,6 @@ public class NewProductController {
         Alert alert = new Alert(Alert.AlertType.INFORMATION, message, ButtonType.OK);
         alert.setTitle(title);
         alert.setHeaderText(null);
-
-        // >>> ALERT İKON
         IconUtil.decorateAlert(alert);
 
         alert.showAndWait();

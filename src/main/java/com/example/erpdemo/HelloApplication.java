@@ -14,12 +14,10 @@ public class HelloApplication extends Application {
         Parent root = loader.load();
 
         Scene scene = new Scene(root, 600, 420);
-        // CSS'yi ayrıca da yükleyelim (FXML’de de ekli)
         var css = HelloApplication.class.getResource("hello.css");
         if (css != null) scene.getStylesheets().add(css.toExternalForm());
 
         stage.setTitle("Omnis");
-        // Mutlak classpath ile ikonlar
         stage.getIcons().addAll(
                 new Image(HelloApplication.class.getResourceAsStream("/com/example/erpdemo/assets/logo-16.png")),
                 new Image(HelloApplication.class.getResourceAsStream("/com/example/erpdemo/assets/logo-32.png")),

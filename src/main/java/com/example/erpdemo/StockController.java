@@ -54,8 +54,6 @@ public class StockController {
             stage.initModality(Modality.APPLICATION_MODAL);
             stage.setTitle("Yeni Ürün Ekle");
             stage.setScene(new Scene(parent));
-
-            // >>> İKON
             IconUtil.setAppIcon(stage);
 
             controller.setDialogStage(stage);
@@ -82,8 +80,6 @@ public class StockController {
                 dialogStage.setTitle("Ürün Düzenle");
                 dialogStage.initModality(Modality.APPLICATION_MODAL);
                 dialogStage.setScene(new Scene(parent));
-
-                // >>> İKON
                 IconUtil.setAppIcon(dialogStage);
 
                 controller.setDialogStage(dialogStage);
@@ -122,8 +118,6 @@ public class StockController {
         alert.setTitle(title);
         alert.setHeaderText(null);
         alert.setContentText(message);
-
-        // >>> ALERT İKON
         IconUtil.decorateAlert(alert);
 
         alert.showAndWait();

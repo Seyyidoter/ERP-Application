@@ -43,7 +43,6 @@ public final class IconUtil {
                 alert.getDialogPane().getScene().getWindow() != null) {
             setAppIcon(alert.getDialogPane().getScene().getWindow());
         }
-        // Bazı Look&Feel’lerde pencere shown anında hazır olur
         alert.setOnShown(e -> {
             if (alert.getDialogPane() != null &&
                     alert.getDialogPane().getScene() != null &&

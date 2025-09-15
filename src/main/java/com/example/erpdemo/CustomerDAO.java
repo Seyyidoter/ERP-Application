@@ -32,7 +32,6 @@ public class CustomerDAO {
         return customerList;
     }
 
-    // Yeni bir metot: ID'ye göre tek bir müşteri çeker
     public static Customer getCustomerById(int customerId) throws SQLException {
         String sql = "SELECT * FROM Musteriler WHERE Id = ?";
         Customer customer = null;

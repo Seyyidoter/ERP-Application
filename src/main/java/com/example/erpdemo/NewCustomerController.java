@@ -32,7 +32,6 @@ public class NewCustomerController {
         try {
             CustomerDAO.addCustomer(companyName, contactPerson, phone, email, discount);
             showAlert(Alert.AlertType.INFORMATION, "Başarılı", "Yeni müşteri başarıyla eklendi.");
-            // Pencereyi kapat
             Stage stage = (Stage) companyNameField.getScene().getWindow();
             stage.close();
         } catch (SQLException e) {
@@ -54,8 +53,6 @@ public class NewCustomerController {
         Alert alert = new Alert(type, message, ButtonType.OK);
         alert.setTitle(title);
         alert.setHeaderText(null);
-
-        // >>> ALERT İKON
         IconUtil.decorateAlert(alert);
 
         alert.showAndWait();
