@@ -10,14 +10,17 @@ import javafx.stage.Stage;
 import java.sql.SQLException;
 
 public class NewRequestController {
+
     @FXML private ComboBox<Customer> customerComboBox;
     @FXML private ComboBox<Product>  productComboBox;
     @FXML private TextField quantityField;
+
     @FXML private TableView<RequestItem> productTable;
     @FXML private TableColumn<RequestItem, String>  productNameColumn;
     @FXML private TableColumn<RequestItem, Integer> quantityColumn;
     @FXML private TableColumn<RequestItem, Double>  priceColumn;
     @FXML private TableColumn<RequestItem, Double>  discountedPriceColumn;
+
     @FXML private Label totalAmountLabel;
 
     private final ObservableList<RequestItem> requestItems = FXCollections.observableArrayList();
@@ -28,6 +31,7 @@ public class NewRequestController {
         try {
             customerComboBox.setItems(CustomerDAO.getAllCustomers());
             customerComboBox.setConverter(new CustomerStringConverter());
+
             productComboBox.setItems(ProductDAO.getAllProducts());
             productComboBox.setConverter(new ProductStringConverter());
         } catch (SQLException e) {
@@ -40,6 +44,14 @@ public class NewRequestController {
         discountedPriceColumn.setCellValueFactory(new PropertyValueFactory<>("discountedPrice"));
 
         productTable.setItems(requestItems);
+
+        discountedPriceColumn.setCellFactory(col -> new TableCell<>() {
+            @Override
+            protected void updateItem(Double value, boolean empty) {
+                super.updateItem(value, empty);
+                setText(empty || value == null ? null : String.format("%.2f", value));
+            }
+        });
     }
 
     @FXML
@@ -53,16 +65,37 @@ public class NewRequestController {
         }
 
         int qty;
-        try { qty = Integer.parseInt(quantityField.getText()); }
-        catch (NumberFormatException e) { showAlert("Hata","Miktar sayısal olmalı."); return; }
-        if (qty <= 0) { showAlert("Uyarı","Miktar 0'dan büyük olmalı."); return; }
+        try {
+            qty = Integer.parseInt(quantityField.getText().trim());
+        } catch (NumberFormatException e) {
+            showAlert("Hata", "Miktar sayısal olmalı.");
+            return;
+        }
+        if (qty <= 0) {
+            showAlert("Uyarı", "Miktar 0'dan büyük olmalı.");
+            return;
+        }
+
+        // ---- STOK KONTROLÜ ----
+        // Ürün stokundan fazla miktar talep edilemez
+        if (qty > prd.getStok()) {
+            showAlert("Uyarı", "Stok yetersiz! (Stok: " + prd.getStok() + ")");
+            return;
+        }
 
         double price = prd.getFiyat();
         double discounted = price - (price * cus.getIskonto() / 100.0);
 
         requestItems.add(new RequestItem(
-                0, 0, prd.getId(), prd.getUrunAdi(), qty, price, discounted
+                0, // id
+                0, // requestId (kaydedilince verilecek)
+                prd.getId(),
+                prd.getUrunAdi(),
+                qty,
+                price,
+                discounted
         ));
+
         quantityField.clear();
         updateTotalAmount();
     }
@@ -71,12 +104,15 @@ public class NewRequestController {
     private void handleSaveRequest() {
         Customer cus = customerComboBox.getSelectionModel().getSelectedItem();
         if (cus == null || requestItems.isEmpty()) {
-            showAlert("Uyarı","Müşteri seçin ve en az bir ürün ekleyin."); return;
+            showAlert("Uyarı", "Müşteri seçin ve en az bir ürün ekleyin.");
+            return;
         }
+
         try {
             int requestId = RequestDAO.addRequest(cus.getId());
             if (requestId != -1) {
                 for (RequestItem it : requestItems) {
+                    // Burada veritabanına yazılan fiyat "iskontolu" fiyattır
                     RequestDAO.addRequestItem(requestId, it.getProductId(), it.getQuantity(), it.getDiscountedPrice());
                 }
                 showAlert("Başarılı", "Talep kaydedildi.");
@@ -89,20 +125,28 @@ public class NewRequestController {
         }
     }
 
-    @FXML private void handleCancel() { if (dialogStage != null) dialogStage.close(); }
+    @FXML
+    private void handleCancel() {
+        if (dialogStage != null) dialogStage.close();
+        else if (productTable != null && productTable.getScene() != null) {
+            productTable.getScene().getWindow().hide();
+        }
+    }
+
     public void setDialogStage(Stage s) { this.dialogStage = s; }
 
     private void updateTotalAmount() {
-        double total = requestItems.stream().mapToDouble(i -> i.getDiscountedPrice() * i.getQuantity()).sum();
+        double total = requestItems.stream()
+                .mapToDouble(i -> i.getDiscountedPrice() * i.getQuantity())
+                .sum();
         totalAmountLabel.setText(String.format("%.2f TL", total));
     }
 
-    /** Başlık + ikonla standart uyarı penceresi */
     private void showAlert(String title, String message) {
         Alert a = new Alert(Alert.AlertType.INFORMATION, message, ButtonType.OK);
         a.setHeaderText(null);
-        a.setTitle(title);             // "Uyarı" / "Başarılı" / "Hata" gibi
-        IconUtil.decorateAlert(a);     // sol üst ikon
+        a.setTitle(title);
+        IconUtil.decorateAlert(a);
         a.showAndWait();
     }
 }

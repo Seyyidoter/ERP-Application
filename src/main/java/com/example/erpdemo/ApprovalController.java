@@ -4,6 +4,7 @@ import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
+
 import java.sql.SQLException;
 import java.time.LocalDate;
 
@@ -64,9 +65,33 @@ public class ApprovalController {
         if (currentUserId <= 0) { showAlert(Alert.AlertType.ERROR,"Hata","Kullanıcı bilgisi alınamadı."); return; }
 
         try {
+            // 1) Talep kalemlerini çek
+            ObservableList<RequestItem> items = RequestDAO.getRequestItemsByRequestId(r.getId());
+
+            // 2) Stok kontrolü
+            for (RequestItem it : items) {
+                Product p = ProductDAO.getProductById(it.getProductId());
+                if (p == null) { continue; }
+                if (it.getQuantity() > p.getStok()) {
+                    // Otomatik reddet
+                    RequestDAO.rejectRequest(r.getId(), currentUserId);
+                    showAlert(Alert.AlertType.INFORMATION, "Red",
+                            "Stok yetersiz olduğu için talep reddedildi.\n" +
+                                    "Ürün: " + p.getUrunAdi() + " | Stok: " + p.getStok() + " | Talep: " + it.getQuantity());
+                    refresh();
+                    return;
+                }
+            }
+
+            // 3) Stoklar yeterli: onayla ve stok düş
             RequestDAO.approveRequest(r.getId(), currentUserId);
-            showAlert(Alert.AlertType.INFORMATION,"Başarılı","Talep onaylandı.");
+            for (RequestItem it : items) {
+                ProductDAO.updateProductStock(it.getProductId(), -it.getQuantity());
+            }
+
+            showAlert(Alert.AlertType.INFORMATION,"Başarılı","Talep onaylandı ve stoklar düşüldü.");
             refresh();
+
         } catch (SQLException e) {
             showAlert(Alert.AlertType.ERROR,"Hata","Talep onaylanırken bir hata oluştu: " + e.getMessage());
         }

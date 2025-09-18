@@ -5,15 +5,15 @@ import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Node;
 import javafx.scene.Parent;
-import javafx.scene.control.Button;
-import javafx.scene.control.Label;
-import javafx.scene.control.MenuButton;
-import javafx.scene.control.TableColumn;
-import javafx.scene.control.TableView;
+import javafx.scene.Scene;
+import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.GridPane;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.stage.Stage;
+import javafx.scene.image.Image;
 
 import java.io.IOException;
 import java.net.URL;
@@ -65,8 +65,7 @@ public class MainController {
         updateApprovalsVisibility();
     }
 
-    @FXML public void openHelp() { loadInlineMessage("Yardım dokümanı yakında eklenecek."); }
-    @FXML public void logout()   { LogoutUtil.performLogout(contentRoot); }
+    @FXML public void logout() { LogoutUtil.performLogout(contentRoot); }
 
     @FXML
     public void goDashboard() {
@@ -80,15 +79,15 @@ public class MainController {
 
     @FXML public void goCustomers() { loadContent("customer-view.fxml", "Müşteri İşlemleri", "Müşteri İşlemleri"); }
     @FXML public void goRequests()  { loadContent("request-view.fxml",  "Talep/Teklif",      "Talep/Teklif"); }
-
-    /** YENİ: Ürün İşlemleri */
     @FXML public void goProducts()  { loadContent("stock-view.fxml",    "Ürün İşlemleri",    "Ürün İşlemleri"); }
 
-    @FXML public void goApprovals() {
+    @FXML
+    public void goApprovals() {
         if (isAdmin()) loadContent("approval-view.fxml", "Onay İşlemleri", "Onay İşlemleri");
         else { loadInlineMessage("Bu alana erişim yetkiniz yok."); selectNav(null); }
     }
-    @FXML public void goReports()   { loadContent("reports-view.fxml",  "Raporlar",          "Raporlar"); }
+
+    @FXML public void goReports() { loadContent("reports-view.fxml", "Raporlar", "Raporlar"); }
 
     private void loadContent(String fxmlFile, String title, String navTextToSelect) {
         pageTitle.setText(title);
@@ -138,7 +137,7 @@ public class MainController {
                 "Yonetici".equalsIgnoreCase(Objects.toString(loggedInUser.getRole(), ""));
     }
 
-    // ---- Nav yardımcıları (Button ile) ----
+    // ---- Nav yardımcıları ----
     private Button findNavButtonByText(String text) {
         VBox sidebar = getSidebar();
         if (sidebar == null) return null;
@@ -201,5 +200,79 @@ public class MainController {
             tblTodayProductDemand.setItems(FXCollections.observableArrayList());
             e.printStackTrace();
         }
+    }
+
+    // ================= Şifre Değiştirme =================
+    @FXML
+    private void changePassword() {
+        if (loggedInUser == null) {
+            loadInlineMessage("Oturum bilgisi alınamadı.");
+            return;
+        }
+
+        Dialog<ButtonType> dlg = new Dialog<>();
+        dlg.setTitle("Şifre Değiştir");
+        dlg.setHeaderText(null);
+
+        // === Logo ekle ===
+        Stage stage = (Stage) dlg.getDialogPane().getScene().getWindow();
+        stage.getIcons().add(
+                new Image(
+                        Objects.requireNonNull(getClass().getResourceAsStream("assets/logo-32.png"))
+                )
+        );
+
+        PasswordField currentPwd = new PasswordField();
+        PasswordField newPwd = new PasswordField();
+        PasswordField newPwd2 = new PasswordField();
+
+        currentPwd.setPromptText("Mevcut şifre");
+        newPwd.setPromptText("Yeni şifre");
+        newPwd2.setPromptText("Yeni şifre (tekrar)");
+
+        GridPane gp = new GridPane();
+        gp.setHgap(10); gp.setVgap(10);
+        gp.addRow(0, new Label("Mevcut Şifre:"), currentPwd);
+        gp.addRow(1, new Label("Yeni Şifre:"),   newPwd);
+        gp.addRow(2, new Label("Yeni Şifre (Tekrar):"), newPwd2);
+
+        dlg.getDialogPane().setContent(gp);
+
+        // Türkçe butonlar
+        ButtonType btnTamam = new ButtonType("Tamam", ButtonBar.ButtonData.OK_DONE);
+        ButtonType btnIptal = new ButtonType("İptal", ButtonBar.ButtonData.CANCEL_CLOSE);
+        dlg.getDialogPane().getButtonTypes().addAll(btnTamam, btnIptal);
+
+        dlg.setResultConverter(bt -> bt);
+        var res = dlg.showAndWait();
+        if (res.isEmpty() || res.get() != btnTamam) return;
+
+        String cur = currentPwd.getText();
+        String np1 = newPwd.getText();
+        String np2 = newPwd2.getText();
+
+        if (np1 == null || np1.isBlank() || !np1.equals(np2)) {
+            showAlert(Alert.AlertType.WARNING, "Uyarı", "Yeni şifreler boş olamaz ve birbiriyle aynı olmalıdır.");
+            return;
+        }
+
+        try {
+            boolean ok = DatabaseManager.validateLogin(loggedInUser.getUsername(), cur);
+            if (!ok) {
+                showAlert(Alert.AlertType.ERROR, "Hata", "Mevcut şifre yanlış.");
+                return;
+            }
+            UserDAO.updatePassword(loggedInUser.getId(), np1);
+            showAlert(Alert.AlertType.INFORMATION, "Başarılı", "Şifreniz güncellendi.");
+        } catch (SQLException e) {
+            showAlert(Alert.AlertType.ERROR, "Hata", "Şifre güncellenemedi: " + e.getMessage());
+        }
+    }
+
+    private void showAlert(Alert.AlertType type, String title, String msg) {
+        Alert a = new Alert(type, msg, ButtonType.OK);
+        a.setTitle(title); a.setHeaderText(null);
+        IconUtil.decorateAlert(a);
+        a.showAndWait();
     }
 }

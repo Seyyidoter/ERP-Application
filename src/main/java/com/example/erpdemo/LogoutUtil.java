@@ -22,12 +22,10 @@ public final class LogoutUtil {
 
             Stage login = new Stage();
             login.setTitle("Omnis – Giriş");
-            // ikonların yoksa şu satırı kaldırabilirsin
             login.getIcons().add(new Image(LogoutUtil.class.getResourceAsStream("/com/example/erpdemo/assets/logo-32.png")));
             login.setScene(new Scene(root));
             login.show();
 
-            // mevcut ana pencereyi kapat
             current.close();
         } catch (IOException ex) {
             Alert a = new Alert(Alert.AlertType.ERROR, "Giriş ekranı açılamadı:\n" + ex.getMessage());

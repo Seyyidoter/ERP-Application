@@ -153,8 +153,6 @@ public class ReportsController {
         Alert a = new Alert(Alert.AlertType.INFORMATION, msg, ButtonType.OK);
         a.setTitle(title);
         a.setHeaderText(null);
-
-        // >>> ALERT İKON
         IconUtil.decorateAlert(a);
 
         a.showAndWait();
@@ -163,9 +161,6 @@ public class ReportsController {
     // ------- iç sınıflar / yardımcılar --------
 
     private static final class PdfWriter implements AutoCloseable {
-        // ... (senin mevcut PdfWriter içeriğin aynen kalıyor)
-        // Bu sınıfı değiştirmedim.
-        // --- BURAYI KISALTTIM, SENDEKİYLE AYNI ---
         private final PDDocument doc;
         private final PDType0Font font;
         private org.apache.pdfbox.pdmodel.PDPageContentStream cs;

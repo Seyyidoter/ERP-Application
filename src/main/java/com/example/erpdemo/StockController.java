@@ -5,14 +5,11 @@ import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
-import javafx.scene.control.Alert;
-import javafx.scene.control.TableColumn;
-import javafx.scene.control.TableView;
+import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 
-import java.io.IOException;
 import java.sql.SQLException;
 
 public class StockController {
@@ -21,6 +18,7 @@ public class StockController {
     @FXML private TableColumn<Product, Integer> idColumn;
     @FXML private TableColumn<Product, String>  nameColumn;
     @FXML private TableColumn<Product, Double>  priceColumn;
+    @FXML private TableColumn<Product, Integer> stockColumn;
     @FXML private TableColumn<Product, String>  unitColumn;
 
     @FXML
@@ -28,6 +26,7 @@ public class StockController {
         idColumn.setCellValueFactory(new PropertyValueFactory<>("id"));
         nameColumn.setCellValueFactory(new PropertyValueFactory<>("urunAdi"));
         priceColumn.setCellValueFactory(new PropertyValueFactory<>("fiyat"));
+        stockColumn.setCellValueFactory(new PropertyValueFactory<>("stok"));
         unitColumn.setCellValueFactory(new PropertyValueFactory<>("birim"));
         loadProducts();
     }
@@ -47,22 +46,18 @@ public class StockController {
         try {
             FXMLLoader loader = new FXMLLoader(getClass().getResource("new-product.fxml"));
             Parent parent = loader.load();
-
             NewProductController controller = loader.getController();
 
             Stage stage = new Stage();
             stage.initModality(Modality.APPLICATION_MODAL);
             stage.setTitle("Yeni Ürün Ekle");
             stage.setScene(new Scene(parent));
-
-            // >>> İKON
             IconUtil.setAppIcon(stage);
 
             controller.setDialogStage(stage);
             stage.showAndWait();
-
             loadProducts();
-        } catch (IOException e) {
+        } catch (Exception e) {
             e.printStackTrace();
             showAlert("Hata", "Yeni ürün penceresi açılamadı.");
         }
@@ -75,15 +70,12 @@ public class StockController {
             try {
                 FXMLLoader loader = new FXMLLoader(getClass().getResource("new-product.fxml"));
                 Parent parent = loader.load();
-
                 NewProductController controller = loader.getController();
 
                 Stage dialogStage = new Stage();
                 dialogStage.setTitle("Ürün Düzenle");
                 dialogStage.initModality(Modality.APPLICATION_MODAL);
                 dialogStage.setScene(new Scene(parent));
-
-                // >>> İKON
                 IconUtil.setAppIcon(dialogStage);
 
                 controller.setDialogStage(dialogStage);
@@ -91,7 +83,7 @@ public class StockController {
 
                 dialogStage.showAndWait();
                 loadProducts();
-            } catch (IOException e) {
+            } catch (Exception e) {
                 e.printStackTrace();
                 showAlert("Hata", "Ürün düzenleme penceresi açılamadı.");
             }
@@ -118,14 +110,10 @@ public class StockController {
     }
 
     private void showAlert(String title, String message) {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        Alert alert = new Alert(Alert.AlertType.INFORMATION, message, ButtonType.OK);
         alert.setTitle(title);
         alert.setHeaderText(null);
-        alert.setContentText(message);
-
-        // >>> ALERT İKON
         IconUtil.decorateAlert(alert);
-
         alert.showAndWait();
     }
 }

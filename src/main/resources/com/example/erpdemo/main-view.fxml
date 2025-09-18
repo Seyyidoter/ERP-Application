@@ -7,16 +7,14 @@
             fx:controller="com.example.erpdemo.MainController"
             stylesheets="@main-view.css">
 
-    <!-- ÜST: App Bar -->
+    <!-- ÜST: App Bar (Yardım butonu kaldırıldı) -->
     <top>
         <HBox styleClass="appbar" alignment="CENTER_LEFT" spacing="14">
             <Label fx:id="pageTitle" text="Gösterge Paneli" styleClass="appbar-title"/>
             <Region HBox.hgrow="ALWAYS"/>
-            <Button text="?" onAction="#openHelp" styleClass="icon-btn" />
             <MenuButton fx:id="userMenu" text="Kullanıcı" styleClass="user-menu">
                 <items>
-                    <MenuItem text="Profil"/>
-                    <MenuItem text="Ayarlar"/>
+                    <MenuItem text="Şifre Değiştir" onAction="#changePassword"/>
                     <MenuItem text="Çıkış" onAction="#logout"/>
                 </items>
             </MenuButton>
@@ -30,10 +28,7 @@
             <Button text="Gösterge Paneli"  onAction="#goDashboard" styleClass="nav-btn" focusTraversable="false"/>
             <Button text="Müşteri İşlemleri" onAction="#goCustomers" styleClass="nav-btn" focusTraversable="false"/>
             <Button text="Talep/Teklif"      onAction="#goRequests"  styleClass="nav-btn" focusTraversable="false"/>
-
-            <!-- YENİ: Ürün İşlemleri -->
             <Button text="Ürün İşlemleri"    onAction="#goProducts"  styleClass="nav-btn" focusTraversable="false"/>
-
             <Button text="Onay İşlemleri"    onAction="#goApprovals" styleClass="nav-btn" focusTraversable="false"/>
             <Button text="Raporlar"          onAction="#goReports"   styleClass="nav-btn" focusTraversable="false"/>
             <Region VBox.vgrow="ALWAYS"/>

@@ -58,10 +58,7 @@ public class CustomerController {
             stage.initModality(Modality.APPLICATION_MODAL);
             stage.setTitle("Yeni Müşteri Ekle");
             stage.setScene(new Scene(parent));
-
-            // >>> İKON
             IconUtil.setAppIcon(stage);
-
             stage.showAndWait();
             loadCustomers();
 
@@ -85,8 +82,6 @@ public class CustomerController {
                 dialogStage.setTitle("Müşteri Düzenle");
                 dialogStage.initModality(Modality.APPLICATION_MODAL);
                 dialogStage.setScene(new Scene(parent));
-
-                // >>> İKON
                 IconUtil.setAppIcon(dialogStage);
 
                 controller.setDialogStage(dialogStage);
@@ -111,7 +106,6 @@ public class CustomerController {
                     "Müşteriyi silmek istediğinizden emin misiniz?", ButtonType.YES, ButtonType.NO);
             confirm.setHeaderText(null);
 
-            // >>> ALERT İKON
             IconUtil.decorateAlert(confirm);
 
             confirm.showAndWait();
@@ -136,7 +130,6 @@ public class CustomerController {
         alert.setTitle(title);
         alert.setHeaderText(null);
 
-        // >>> ALERT İKON
         IconUtil.decorateAlert(alert);
 
         alert.showAndWait();

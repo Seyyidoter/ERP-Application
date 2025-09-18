@@ -3,7 +3,6 @@ package com.example.erpdemo;
 import javafx.fxml.FXML;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
-import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 import javafx.stage.Stage;
 
@@ -11,9 +10,10 @@ import java.sql.SQLException;
 
 public class NewProductController {
 
-    @FXML private Label titleLabel;
+    @FXML private javafx.scene.control.Label titleLabel;
     @FXML private TextField nameField;
     @FXML private TextField priceField;
+    @FXML private TextField stockField;
     @FXML private TextField unitField;
 
     private Stage dialogStage;
@@ -26,6 +26,7 @@ public class NewProductController {
         titleLabel.setText("Ürün Düzenle");
         nameField.setText(product.getUrunAdi());
         priceField.setText(String.valueOf(product.getFiyat()));
+        stockField.setText(String.valueOf(product.getStok()));
         unitField.setText(product.getBirim());
     }
 
@@ -35,23 +36,28 @@ public class NewProductController {
             String name = nameField.getText();
             String unit = unitField.getText();
 
-            if (name == null || name.isBlank()) {
-                showAlert("Uyarı", "Ürün adı boş olamaz."); return;
-            }
-            if (unit == null || unit.isBlank()) {
-                showAlert("Uyarı", "Birim boş olamaz."); return;
-            }
+            if (name == null || name.isBlank()) { showAlert("Uyarı", "Ürün adı boş olamaz."); return; }
+            if (unit == null || unit.isBlank()) { showAlert("Uyarı", "Birim boş olamaz."); return; }
 
             String priceText = priceField.getText().replace(",", ".");
             double price = Double.parseDouble(priceText);
             if (price < 0) { showAlert("Uyarı", "Fiyat negatif olamaz."); return; }
 
+            int stock;
+            try {
+                stock = Integer.parseInt(stockField.getText().trim());
+            } catch (NumberFormatException ex) {
+                showAlert("Hata", "Stok sayısal bir tam sayı olmalı."); return;
+            }
+            if (stock < 0) { showAlert("Uyarı", "Stok negatif olamaz."); return; }
+
             if (product == null) {
-                ProductDAO.addProduct(name, price, 0, unit);
+                ProductDAO.addProduct(name, price, stock, unit);
                 showAlert("Başarılı", "Yeni ürün başarıyla eklendi.");
             } else {
                 product.setUrunAdi(name);
                 product.setFiyat(price);
+                product.setStok(stock);
                 product.setBirim(unit);
                 ProductDAO.updateProduct(product);
                 showAlert("Başarılı", "Ürün bilgileri başarıyla güncellendi.");
@@ -71,10 +77,7 @@ public class NewProductController {
         Alert alert = new Alert(Alert.AlertType.INFORMATION, message, ButtonType.OK);
         alert.setTitle(title);
         alert.setHeaderText(null);
-
-        // >>> ALERT İKON
         IconUtil.decorateAlert(alert);
-
         alert.showAndWait();
     }
 }
