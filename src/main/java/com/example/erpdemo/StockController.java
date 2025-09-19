@@ -2,12 +2,8 @@ package com.example.erpdemo;
 
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
-import javafx.fxml.FXMLLoader;
-import javafx.scene.Parent;
-import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
-import javafx.stage.Modality;
 import javafx.stage.Stage;
 
 import java.sql.SQLException;
@@ -28,6 +24,18 @@ public class StockController {
         priceColumn.setCellValueFactory(new PropertyValueFactory<>("fiyat"));
         stockColumn.setCellValueFactory(new PropertyValueFactory<>("stok"));
         unitColumn.setCellValueFactory(new PropertyValueFactory<>("birim"));
+
+        // --- UI dokunuşu: para/sayı biçimlendirme + hizalama ---
+        priceColumn.setCellFactory(col -> new TableCell<>() {
+            @Override protected void updateItem(Double v, boolean empty) {
+                super.updateItem(v, empty);
+                setText(empty || v == null ? null : String.format("%.2f", v));
+                setStyle(empty ? "" : "-fx-alignment: CENTER-RIGHT;");
+            }
+        });
+        unitColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
+        stockColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
+
         loadProducts();
     }
 
@@ -44,14 +52,14 @@ public class StockController {
     @FXML
     private void handleAddButton() {
         try {
-            FXMLLoader loader = new FXMLLoader(getClass().getResource("new-product.fxml"));
-            Parent parent = loader.load();
+            javafx.fxml.FXMLLoader loader = new javafx.fxml.FXMLLoader(getClass().getResource("new-product.fxml"));
+            javafx.scene.Parent parent = loader.load();
             NewProductController controller = loader.getController();
 
             Stage stage = new Stage();
-            stage.initModality(Modality.APPLICATION_MODAL);
+            stage.initModality(javafx.stage.Modality.APPLICATION_MODAL);
             stage.setTitle("Yeni Ürün Ekle");
-            stage.setScene(new Scene(parent));
+            stage.setScene(new javafx.scene.Scene(parent));
             IconUtil.setAppIcon(stage);
 
             controller.setDialogStage(stage);
@@ -68,14 +76,14 @@ public class StockController {
         Product selectedProduct = productTable.getSelectionModel().getSelectedItem();
         if (selectedProduct != null) {
             try {
-                FXMLLoader loader = new FXMLLoader(getClass().getResource("new-product.fxml"));
-                Parent parent = loader.load();
+                javafx.fxml.FXMLLoader loader = new javafx.fxml.FXMLLoader(getClass().getResource("new-product.fxml"));
+                javafx.scene.Parent parent = loader.load();
                 NewProductController controller = loader.getController();
 
                 Stage dialogStage = new Stage();
                 dialogStage.setTitle("Ürün Düzenle");
-                dialogStage.initModality(Modality.APPLICATION_MODAL);
-                dialogStage.setScene(new Scene(parent));
+                dialogStage.initModality(javafx.stage.Modality.APPLICATION_MODAL);
+                dialogStage.setScene(new javafx.scene.Scene(parent));
                 IconUtil.setAppIcon(dialogStage);
 
                 controller.setDialogStage(dialogStage);
@@ -102,7 +110,13 @@ public class StockController {
                 loadProducts();
             } catch (SQLException e) {
                 e.printStackTrace();
-                showAlert("Hata", "Ürün silinirken bir hata oluştu: " + e.getMessage());
+                // --- UI dokunuşu: FK hatasında kullanıcı dostu mesaj ---
+                String msg = e.getMessage();
+                if (msg != null && msg.toLowerCase().contains("foreign key")) {
+                    showAlert("Hata", "Kayıt başka veriler tarafından kullanılıyor (FK). Önce ilişkili kayıtları silin.");
+                } else {
+                    showAlert("Hata", "Ürün silinirken bir hata oluştu: " + e.getMessage());
+                }
             }
         } else {
             showAlert("Uyarı", "Lütfen silmek için bir ürün seçin.");

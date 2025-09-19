@@ -52,6 +52,9 @@ public class NewRequestController {
                 setText(empty || value == null ? null : String.format("%.2f", value));
             }
         });
+
+        // --- UI dokunuşu: miktar sütunu sağa hizalı ---
+        quantityColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
     }
 
     @FXML
@@ -77,7 +80,6 @@ public class NewRequestController {
         }
 
         // ---- STOK KONTROLÜ ----
-        // Ürün stokundan fazla miktar talep edilemez
         if (qty > prd.getStok()) {
             showAlert("Uyarı", "Stok yetersiz! (Stok: " + prd.getStok() + ")");
             return;
@@ -112,7 +114,7 @@ public class NewRequestController {
             int requestId = RequestDAO.addRequest(cus.getId());
             if (requestId != -1) {
                 for (RequestItem it : requestItems) {
-                    // Burada veritabanına yazılan fiyat "iskontolu" fiyattır
+                    // veritabanına yazılan fiyat "iskontolu" fiyattır
                     RequestDAO.addRequestItem(requestId, it.getProductId(), it.getQuantity(), it.getDiscountedPrice());
                 }
                 showAlert("Başarılı", "Talep kaydedildi.");

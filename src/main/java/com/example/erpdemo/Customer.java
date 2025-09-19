@@ -1,5 +1,6 @@
 package com.example.erpdemo;
 
+import javafx.beans.property.SimpleDoubleProperty;
 import javafx.beans.property.SimpleIntegerProperty;
 import javafx.beans.property.SimpleStringProperty;
 
@@ -11,36 +12,47 @@ public class Customer {
     private final SimpleStringProperty phone;
     private final SimpleStringProperty email;
     private final SimpleIntegerProperty iskonto;
+    private final SimpleDoubleProperty bakiye; // ← yeni
 
-    public Customer(int id, String companyName, String contactPerson, String phone, String email, int iskonto) {
+    // Yeni: bakiye dahil kurucu
+    public Customer(int id, String companyName, String contactPerson, String phone, String email, int iskonto, double bakiye) {
         this.id = new SimpleIntegerProperty(id);
         this.companyName = new SimpleStringProperty(companyName);
         this.contactPerson = new SimpleStringProperty(contactPerson);
         this.phone = new SimpleStringProperty(phone);
         this.email = new SimpleStringProperty(email);
         this.iskonto = new SimpleIntegerProperty(iskonto);
+        this.bakiye = new SimpleDoubleProperty(bakiye);
     }
 
-    // Getter metotları
+    // Geriye uyumluluk: bakiye verilmezse 0 kabul et
+    public Customer(int id, String companyName, String contactPerson, String phone, String email, int iskonto) {
+        this(id, companyName, contactPerson, phone, email, iskonto, 0.0);
+    }
+
+    // Getter'lar
     public int getId() { return id.get(); }
     public String getCompanyName() { return companyName.get(); }
     public String getContactPerson() { return contactPerson.get(); }
     public String getPhone() { return phone.get(); }
     public String getEmail() { return email.get(); }
     public int getIskonto() { return iskonto.get(); }
+    public double getBakiye() { return bakiye.get(); }
 
-    // Gerekli property metotları (JavaFX için)
+    // Property'ler (JavaFX)
     public SimpleIntegerProperty idProperty() { return id; }
     public SimpleStringProperty companyNameProperty() { return companyName; }
     public SimpleStringProperty contactPersonProperty() { return contactPerson; }
     public SimpleStringProperty phoneProperty() { return phone; }
     public SimpleStringProperty emailProperty() { return email; }
     public SimpleIntegerProperty iskontoProperty() { return iskonto; }
+    public SimpleDoubleProperty bakiyeProperty() { return bakiye; }
 
-    // Setter metotları
+    // Setter'lar
     public void setCompanyName(String companyName) { this.companyName.set(companyName); }
     public void setContactPerson(String contactPerson) { this.contactPerson.set(contactPerson); }
     public void setPhone(String phone) { this.phone.set(phone); }
     public void setEmail(String email) { this.email.set(email); }
     public void setIskonto(int iskonto) { this.iskonto.set(iskonto); }
+    public void setBakiye(double bakiye) { this.bakiye.set(bakiye); }
 }

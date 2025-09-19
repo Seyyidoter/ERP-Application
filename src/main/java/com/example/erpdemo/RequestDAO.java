@@ -45,7 +45,7 @@ public class RequestDAO {
         return -1;
     }
 
-    /** Yeni talep kalemi ekle */
+    /** Yeni talep kalemi ekle (fiyat = iskontolu fiyat) */
     public static void addRequestItem(int requestId, int productId, int qty, double fiyat) throws SQLException {
         String sql = """
             INSERT INTO dbo.TalepKalemleri (TalepId, UrunId, Miktar, TeklifFiyati)
@@ -122,7 +122,7 @@ public class RequestDAO {
                             rs.getString("ProductName"),
                             rs.getInt("Quantity"),
                             rs.getDouble("Price"),
-                            rs.getDouble("Price") // indirimli = fiyat (stok modülü yok)
+                            rs.getDouble("Price") // indirimli = fiyat
                     ));
                 }
             }
@@ -182,6 +182,22 @@ public class RequestDAO {
                 c.rollback();
                 c.setAutoCommit(true);
                 throw ex;
+            }
+        }
+    }
+
+    /** Toplam tutar (iskontolu): SUM(Miktar * TeklifFiyati) */
+    public static double getRequestTotal(int requestId) throws SQLException {
+        String sql = """
+            SELECT COALESCE(SUM(Miktar * TeklifFiyati), 0)
+            FROM dbo.TalepKalemleri
+            WHERE TalepId = ?
+        """;
+        try (Connection c = DatabaseManager.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, requestId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getDouble(1) : 0.0;
             }
         }
     }

@@ -89,7 +89,15 @@ public class ApprovalController {
                 ProductDAO.updateProductStock(it.getProductId(), -it.getQuantity());
             }
 
-            showAlert(Alert.AlertType.INFORMATION,"Başarılı","Talep onaylandı ve stoklar düşüldü.");
+            // 4) Toplam tutarı müşterinin bakiyesine UYGULA (borç artışı → bakiye düşer)
+            double total = RequestDAO.getRequestTotal(r.getId()); // SUM(Miktar * TeklifFiyati)
+            if (total != 0) {
+                CustomerDAO.adjustBalance(r.getCustomerId(), -total);
+            }
+
+            showAlert(Alert.AlertType.INFORMATION,"Başarılı",
+                    "Talep onaylandı, stoklar düşüldü ve müşteri bakiyesi güncellendi.\n" +
+                            String.format("Toplam: %.2f TL", total));
             refresh();
 
         } catch (SQLException e) {

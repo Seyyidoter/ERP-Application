@@ -8,28 +8,37 @@
 <?import javafx.scene.layout.VBox?>
 <?import javafx.scene.text.Font?>
 
-<VBox xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.example.erpdemo.CustomerController" spacing="10.0" style="-fx-padding: 20;">
+<VBox xmlns="http://javafx.com/javafx/21"
+      xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="com.example.erpdemo.CustomerController"
+      spacing="10.0" style="-fx-padding: 20;">
+
     <children>
         <Label text="Müşteri İşlemleri" VBox.vgrow="SOMETIMES">
             <font>
-                <Font name="System Bold" size="24.0" />
+                <Font name="System Bold" size="24.0"/>
             </font>
         </Label>
+
         <TableView fx:id="customerTable" VBox.vgrow="ALWAYS">
             <columns>
-                <TableColumn fx:id="idColumn" prefWidth="50.0" text="ID" />
-                <TableColumn fx:id="nameColumn" prefWidth="200.0" text="Firma Adı" />
-                <TableColumn fx:id="contactColumn" prefWidth="150.0" text="İletişim Kişisi" />
-                <TableColumn fx:id="phoneColumn" prefWidth="150.0" text="Telefon" />
-                <TableColumn fx:id="emailColumn" prefWidth="200.0" text="E-Posta" />
-                <TableColumn fx:id="iskontoColumn" prefWidth="100.0" text="İskonto (%)" />
+                <TableColumn fx:id="idColumn"       prefWidth="60.0"  text="ID"/>
+                <TableColumn fx:id="nameColumn"     prefWidth="220.0" text="Firma Adı"/>
+                <TableColumn fx:id="contactColumn"  prefWidth="160.0" text="İletişim Kişisi"/>
+                <TableColumn fx:id="phoneColumn"    prefWidth="140.0" text="Telefon"/>
+                <TableColumn fx:id="emailColumn"    prefWidth="220.0" text="E-Posta"/>
+                <TableColumn fx:id="iskontoColumn"  prefWidth="110.0" text="İskonto (%)"/>
+                <TableColumn fx:id="balanceColumn"  prefWidth="120.0" text="Bakiye"/>
             </columns>
         </TableView>
+
         <HBox spacing="10.0" alignment="CENTER_RIGHT">
             <children>
-                <Button fx:id="addButton" mnemonicParsing="false" text="Yeni Müşteri Ekle" onAction="#handleAddButton" />
-                <Button fx:id="editButton" mnemonicParsing="false" text="Müşteri Düzenle" onAction="#handleEditButton"/>
-                <Button fx:id="deleteButton" mnemonicParsing="false" text="Müşteri Sil" onAction="#handleDeleteButton"/>
+                <Button fx:id="addButton"    text="Yeni Müşteri Ekle" onAction="#handleAddButton"/>
+                <Button fx:id="editButton"   text="Müşteri Düzenle"   onAction="#handleEditButton"/>
+                <Button fx:id="deleteButton" text="Müşteri Sil"       onAction="#handleDeleteButton"/>
+                <!-- Yeni buton -->
+                <Button fx:id="paymentButton" text="Ödeme Al"         onAction="#handleTakePayment"/>
             </children>
         </HBox>
     </children>

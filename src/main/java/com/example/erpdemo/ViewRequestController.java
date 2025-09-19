@@ -35,6 +35,9 @@ public class ViewRequestController {
             }
         });
 
+        // --- UI dokunuşu: miktar sütunu sağa hizalı ---
+        quantityColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
+
         requestItemsTable.setPlaceholder(new Label("Kalem bulunmuyor"));
     }
 
@@ -68,7 +71,6 @@ public class ViewRequestController {
         alert.setTitle(title);
         alert.setHeaderText(null);
         IconUtil.decorateAlert(alert);
-
         alert.showAndWait();
     }
 }
