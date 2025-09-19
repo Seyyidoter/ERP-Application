@@ -238,7 +238,6 @@ public class MainController {
 
         dlg.getDialogPane().setContent(gp);
 
-        // Türkçe butonlar
         ButtonType btnTamam = new ButtonType("Tamam", ButtonBar.ButtonData.OK_DONE);
         ButtonType btnIptal = new ButtonType("İptal", ButtonBar.ButtonData.CANCEL_CLOSE);
         dlg.getDialogPane().getButtonTypes().addAll(btnTamam, btnIptal);

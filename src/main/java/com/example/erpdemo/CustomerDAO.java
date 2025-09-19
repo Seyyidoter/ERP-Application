@@ -31,16 +31,12 @@ public class CustomerDAO {
 
     public static Customer getCustomerById(int customerId) throws SQLException {
         String sql = "SELECT * FROM Musteriler WHERE Id = ?";
-        Customer customer = null;
-
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
-
             stmt.setInt(1, customerId);
-
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    customer = new Customer(
+                    return new Customer(
                             rs.getInt("Id"),
                             rs.getString("FirmaAdi"),
                             rs.getString("IletisimKisi"),
@@ -52,11 +48,12 @@ public class CustomerDAO {
                 }
             }
         }
-        return customer;
+        return null;
     }
 
     public static void addCustomer(String companyName, String contactPerson, String phone, String email, int iskonto) throws SQLException {
-        String sql = "INSERT INTO Musteriler (FirmaAdi, IletisimKisi, Telefon, Eposta, Iskonto) VALUES (?, ?, ?, ?, ?)";
+        // Bakiye kolonu varsa varsayılanı 0 olsun; yoksa bu alanı bırak.
+        String sql = "INSERT INTO Musteriler (FirmaAdi, IletisimKisi, Telefon, Eposta, Iskonto, Bakiye) VALUES (?, ?, ?, ?, ?, 0)";
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, companyName);
@@ -100,5 +97,9 @@ public class CustomerDAO {
             ps.setInt(2, customerId);
             ps.executeUpdate();
         }
+    }
+
+    public static void changeBalance(int customerId, double delta) throws SQLException {
+        adjustBalance(customerId, delta);
     }
 }

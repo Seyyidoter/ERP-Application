@@ -202,7 +202,7 @@ public class RequestDAO {
         }
     }
 
-    // --- yardımcı ---
+    // --- Yardımcı ---
     private static Request mapRowToRequest(ResultSet rs) throws SQLException {
         int id = rs.getInt("Id");
         int customerId = rs.getInt("MusteriId");

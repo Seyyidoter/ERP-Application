@@ -7,9 +7,24 @@ import javafx.scene.Scene;
 import javafx.scene.image.Image;
 import javafx.stage.Stage;
 
+import java.util.Locale;
+
 public class HelloApplication extends Application {
+
+    /** Uygulamanın ana sahnesi (PDF kaydet vb. yerlerde lazım) */
+    private static Stage primaryStage;
+
+    /** Basit oturum bilgisi: onaylayan kullanıcı id (şimdilik 1) */
+    private static int loggedInUserId = 1;
+
+    public static Stage getPrimaryStage() { return primaryStage; }
+    public static int getLoggedInUserId() { return loggedInUserId; }
+    public static void setLoggedInUserId(int id) { loggedInUserId = id; }
+
     @Override
     public void start(Stage stage) throws Exception {
+        Locale.setDefault(new Locale("tr","TR"));
+
         FXMLLoader loader = new FXMLLoader(HelloApplication.class.getResource("hello-view.fxml"));
         Parent root = loader.load();
 
@@ -28,6 +43,8 @@ public class HelloApplication extends Application {
         stage.setMinHeight(380);
         stage.setScene(scene);
         stage.centerOnScreen();
+
+        primaryStage = stage;
         stage.show();
     }
 

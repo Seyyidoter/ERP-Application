@@ -57,7 +57,7 @@ public class HelloController {
                     st.setMaximized(true);
                     st.show();
 
-                    // login penceresini kapat
+                    // Login penceresini kapat
                     ((Stage) btnLogin.getScene().getWindow()).close();
 
                 } catch (IOException | SQLException ex) {

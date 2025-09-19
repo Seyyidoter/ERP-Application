@@ -12,9 +12,9 @@ public class Customer {
     private final SimpleStringProperty phone;
     private final SimpleStringProperty email;
     private final SimpleIntegerProperty iskonto;
-    private final SimpleDoubleProperty bakiye; // ← yeni
+    private final SimpleDoubleProperty bakiye; // asıl alan
 
-    // Yeni: bakiye dahil kurucu
+    // Bakiye dahil kurucu
     public Customer(int id, String companyName, String contactPerson, String phone, String email, int iskonto, double bakiye) {
         this.id = new SimpleIntegerProperty(id);
         this.companyName = new SimpleStringProperty(companyName);
@@ -25,34 +25,37 @@ public class Customer {
         this.bakiye = new SimpleDoubleProperty(bakiye);
     }
 
-    // Geriye uyumluluk: bakiye verilmezse 0 kabul et
+    // Geri uyumluluk
     public Customer(int id, String companyName, String contactPerson, String phone, String email, int iskonto) {
         this(id, companyName, contactPerson, phone, email, iskonto, 0.0);
     }
 
-    // Getter'lar
+    // --- Getter'lar ---
     public int getId() { return id.get(); }
     public String getCompanyName() { return companyName.get(); }
     public String getContactPerson() { return contactPerson.get(); }
     public String getPhone() { return phone.get(); }
     public String getEmail() { return email.get(); }
     public int getIskonto() { return iskonto.get(); }
-    public double getBakiye() { return bakiye.get(); }
 
-    // Property'ler (JavaFX)
+    public double getBalance() { return bakiye.get(); }
+
+    // --- Property'ler ---
     public SimpleIntegerProperty idProperty() { return id; }
     public SimpleStringProperty companyNameProperty() { return companyName; }
     public SimpleStringProperty contactPersonProperty() { return contactPerson; }
     public SimpleStringProperty phoneProperty() { return phone; }
     public SimpleStringProperty emailProperty() { return email; }
     public SimpleIntegerProperty iskontoProperty() { return iskonto; }
-    public SimpleDoubleProperty bakiyeProperty() { return bakiye; }
 
-    // Setter'lar
+    public SimpleDoubleProperty balanceProperty() { return bakiye; }
+
+    // --- Setter'lar ---
     public void setCompanyName(String companyName) { this.companyName.set(companyName); }
     public void setContactPerson(String contactPerson) { this.contactPerson.set(contactPerson); }
     public void setPhone(String phone) { this.phone.set(phone); }
     public void setEmail(String email) { this.email.set(email); }
     public void setIskonto(int iskonto) { this.iskonto.set(iskonto); }
-    public void setBakiye(double bakiye) { this.bakiye.set(bakiye); }
+
+    public void setBalance(double balance) { this.bakiye.set(balance); } // alias
 }

@@ -35,13 +35,13 @@ public final class IconUtil {
     /** Alert/Confirmation gibi dialogların ikonunu ayarlar. */
     public static void decorateAlert(Alert alert) {
         if (alert == null) return;
-        // mevcutsa hemen ekle
+        // Mevcutsa hemen ekle
         if (alert.getDialogPane() != null &&
                 alert.getDialogPane().getScene() != null &&
                 alert.getDialogPane().getScene().getWindow() != null) {
             setAppIcon(alert.getDialogPane().getScene().getWindow());
         }
-        // açıldığında da garantiye al
+        // Açıldığında da garantiye al
         alert.setOnShown(e -> {
             if (alert.getDialogPane() != null &&
                     alert.getDialogPane().getScene() != null &&
@@ -54,13 +54,13 @@ public final class IconUtil {
     /** TextInputDialog, ChoiceDialog ve genel Dialog<?> için ikon ayarı. */
     public static void decorateDialog(Dialog<?> dialog) {
         if (dialog == null) return;
-        // mevcutsa hemen
+        // Mevcutsa hemen
         if (dialog.getDialogPane() != null &&
                 dialog.getDialogPane().getScene() != null &&
                 dialog.getDialogPane().getScene().getWindow() != null) {
             setAppIcon(dialog.getDialogPane().getScene().getWindow());
         }
-        // açıldığında da
+        // Açıldığında da
         dialog.setOnShown(e -> {
             if (dialog.getDialogPane() != null &&
                     dialog.getDialogPane().getScene() != null &&

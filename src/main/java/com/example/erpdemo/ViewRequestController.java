@@ -1,76 +1,125 @@
 package com.example.erpdemo;
 
-import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
-import javafx.scene.control.*;
-import javafx.scene.control.cell.PropertyValueFactory;
-import javafx.stage.Stage;
+import javafx.scene.control.Button;
+import javafx.scene.control.Label;
+import javafx.scene.control.TableColumn;
+import javafx.scene.control.TableView;
 
-import java.sql.SQLException;
+import java.sql.*;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
+/** Talep detay penceresi. */
 public class ViewRequestController {
 
     @FXML private Label requestIdLabel;
     @FXML private Label customerNameLabel;
     @FXML private Label statusLabel;
+    @FXML private Label dateLabel;
 
-    @FXML private TableView<RequestItem> requestItemsTable;
-    @FXML private TableColumn<RequestItem, String>  productNameColumn;
-    @FXML private TableColumn<RequestItem, Integer> quantityColumn;
-    @FXML private TableColumn<RequestItem, Double>  discountedPriceColumn;
+    @FXML private TableView<ItemRow> requestItemsTable;
+    @FXML private TableColumn<ItemRow, String>  productNameColumn;
+    @FXML private TableColumn<ItemRow, Integer> quantityColumn;
+    @FXML private TableColumn<ItemRow, Double>  discountedPriceColumn;
 
-    private Stage dialogStage;
+    @FXML private Button closeBtn;
+
+    private int requestId;
 
     @FXML
     public void initialize() {
-        productNameColumn.setCellValueFactory(new PropertyValueFactory<>("productName"));
-        quantityColumn.setCellValueFactory(new PropertyValueFactory<>("quantity"));
-        discountedPriceColumn.setCellValueFactory(new PropertyValueFactory<>("discountedPrice"));
+        productNameColumn.setCellValueFactory(c -> c.getValue().productNameProperty());
+        quantityColumn.setCellValueFactory(c -> c.getValue().quantityProperty().asObject());
+        discountedPriceColumn.setCellValueFactory(c -> c.getValue().discountedPriceProperty().asObject());
 
-        discountedPriceColumn.setCellFactory(col -> new TableCell<>() {
-            @Override
-            protected void updateItem(Double value, boolean empty) {
-                super.updateItem(value, empty);
-                setText(empty || value == null ? null : String.format("%.2f", value));
-            }
-        });
-
-        // --- UI dokunuşu: miktar sütunu sağa hizalı ---
         quantityColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
-
-        requestItemsTable.setPlaceholder(new Label("Kalem bulunmuyor"));
+        discountedPriceColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
     }
 
-    public void setDialogStage(Stage dialogStage) { this.dialogStage = dialogStage; }
+    public void setRequestId(int requestId) {
+        this.requestId = requestId;
+        loadData();
+    }
 
-    public void setRequest(Request request) {
-        if (request == null) return;
-
-        requestIdLabel.setText(String.valueOf(request.getId()));
-        statusLabel.setText(request.getStatus() != null ? request.getStatus() : "—");
-
+    private void loadData() {
         try {
-            Customer customer = CustomerDAO.getCustomerById(request.getCustomerId());
-            customerNameLabel.setText(customer != null ? customer.getCompanyName() : "—");
+            Header h = fetchHeader(requestId);              // başlık
+            List<ItemRow> items = fetchItems(requestId);    // kalemler
 
-            ObservableList<RequestItem> items = RequestDAO.getRequestItemsByRequestId(request.getId());
-            requestItemsTable.setItems(items);
-        } catch (SQLException e) {
-            showAlert("Hata", "Talep detayları yüklenirken bir hata oluştu:\n" + e.getMessage());
+            requestIdLabel.setText(String.valueOf(requestId));
+            customerNameLabel.setText(h.customerName());
+            statusLabel.setText(h.status());
+            dateLabel.setText(DateUtil.fmt(h.requestDate()));
+
+            requestItemsTable.getItems().setAll(items);
+        } catch (SQLException ex) {
+            statusLabel.setText("Hata: " + ex.getMessage());
         }
     }
 
-    @FXML
-    private void handleClose() {
-        if (dialogStage != null) dialogStage.close();
-        else requestItemsTable.getScene().getWindow().hide();
+    /** DAO’da hazır olmadığı için başlığı buradan çekiyoruz. */
+    private Header fetchHeader(int id) throws SQLException {
+        String sql = """
+            SELECT t.Id,
+                   m.FirmaAdi     AS CustomerName,
+                   t.TalepTarihi  AS RequestDate,
+                   t.Durum        AS Status
+            FROM dbo.Talepler t
+            JOIN dbo.Musteriler m ON m.Id = t.MusteriId
+            WHERE t.Id = ?
+        """;
+        try (Connection c = DatabaseManager.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, id);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) throw new SQLException("Talep bulunamadı: #" + id);
+                LocalDate d = rs.getDate("RequestDate").toLocalDate();
+                return new Header(id, rs.getString("CustomerName"), d, rs.getString("Status"));
+            }
+        }
     }
 
-    private void showAlert(String title, String message) {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION, message, ButtonType.OK);
-        alert.setTitle(title);
-        alert.setHeaderText(null);
-        IconUtil.decorateAlert(alert);
-        alert.showAndWait();
+    private List<ItemRow> fetchItems(int id) throws SQLException {
+        var daoItems = RequestDAO.getRequestItemsByRequestId(id);
+        List<ItemRow> list = new ArrayList<>();
+        for (RequestItem it : daoItems) {
+            list.add(new ItemRow(it.getProductName(), it.getQuantity(), it.getDiscountedPrice()));
+        }
+        return list;
+    }
+
+    @FXML
+    private void handleClose() { closeBtn.getScene().getWindow().hide(); }
+
+    /** Başlık bilgisi */
+    public record Header(int id, String customerName, LocalDate requestDate, String status) {}
+
+    /** Basit item satırı */
+    public static class ItemRow extends SimpleRowBase {
+        public ItemRow(String p, int q, double dp) { super(p,q,dp); }
+    }
+
+    public static class SimpleRowBase extends javafx.beans.binding.StringExpression {
+        private final javafx.beans.property.SimpleStringProperty productName = new javafx.beans.property.SimpleStringProperty();
+        private final javafx.beans.property.SimpleIntegerProperty quantity = new javafx.beans.property.SimpleIntegerProperty();
+        private final javafx.beans.property.SimpleDoubleProperty discountedPrice = new javafx.beans.property.SimpleDoubleProperty();
+
+        public SimpleRowBase() {}
+        public SimpleRowBase(String p, int q, double dp) {
+            productName.set(p); quantity.set(q); discountedPrice.set(dp);
+        }
+
+        public javafx.beans.property.SimpleStringProperty productNameProperty(){ return productName; }
+        public javafx.beans.property.SimpleIntegerProperty quantityProperty(){ return quantity; }
+        public javafx.beans.property.SimpleDoubleProperty discountedPriceProperty(){ return discountedPrice; }
+
+        @Override public String get() { return productName.get(); }
+        @Override public void addListener(javafx.beans.value.ChangeListener<? super String> listener) {}
+        @Override public void removeListener(javafx.beans.value.ChangeListener<? super String> listener) {}
+        @Override public void addListener(javafx.beans.InvalidationListener listener) {}
+        @Override public void removeListener(javafx.beans.InvalidationListener listener) {}
+        @Override public String getValue() { return get(); }
     }
 }

@@ -8,27 +8,32 @@
 <?import javafx.scene.text.Font?>
 
 <VBox xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
-      fx:controller="com.example.erpdemo.StockController" spacing="10.0" style="-fx-padding: 20;">
+      fx:controller="com.example.erpdemo.StockController"
+      spacing="10.0" style="-fx-padding: 20;">
     <children>
         <Label text="Ürün İşlemleri">
             <font>
-                <Font name="System Bold" size="24.0" />
+                <Font name="System Bold" size="24.0"/>
             </font>
         </Label>
+
         <TableView fx:id="productTable" VBox.vgrow="ALWAYS">
             <columns>
-                <TableColumn fx:id="idColumn"    prefWidth="60.0"  text="ID" />
-                <TableColumn fx:id="nameColumn"  prefWidth="260.0" text="Ürün Adı" />
-                <TableColumn fx:id="priceColumn" prefWidth="140.0" text="Fiyat" />
-                <TableColumn fx:id="stockColumn" prefWidth="120.0" text="Stok" />
-                <TableColumn fx:id="unitColumn"  prefWidth="140.0" text="Birim" />
+                <TableColumn fx:id="idColumn"    prefWidth="60.0"  text="ID"/>
+                <TableColumn fx:id="nameColumn"  prefWidth="260.0" text="Ürün Adı"/>
+                <TableColumn fx:id="priceColumn" prefWidth="140.0" text="Fiyat"/>
+                <TableColumn fx:id="stockColumn" prefWidth="120.0" text="Stok"/>
+                <TableColumn fx:id="unitColumn"  prefWidth="140.0" text="Birim"/>
             </columns>
         </TableView>
+
         <HBox spacing="10.0" alignment="CENTER_RIGHT">
             <children>
-                <Button fx:id="addButton"    text="Yeni Ürün Ekle" onAction="#handleAddButton" />
-                <Button fx:id="editButton"   text="Ürün Düzenle"  onAction="#handleEditButton" />
-                <Button fx:id="deleteButton" text="Ürün Sil"      onAction="#handleDeleteButton" />
+                <Button fx:id="addButton"            text="Yeni Ürün Ekle" onAction="#handleAddButton"/>
+                <Button fx:id="editButton"           text="Ürün Düzenle"  onAction="#handleEditButton"/>
+                <Button fx:id="deleteButton"         text="Ürün Sil"      onAction="#handleDeleteButton"/>
+                <!-- yeni: ürün sipariş geçmişi -->
+                <Button fx:id="productHistoryButton" text="Geçmiş"        onAction="#handleProductHistory"/>
             </children>
         </HBox>
     </children>

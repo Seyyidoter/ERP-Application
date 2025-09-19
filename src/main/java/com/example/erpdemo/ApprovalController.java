@@ -1,5 +1,6 @@
 package com.example.erpdemo;
 
+import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
@@ -8,20 +9,22 @@ import javafx.scene.control.cell.PropertyValueFactory;
 import java.sql.SQLException;
 import java.time.LocalDate;
 
+/**
+ * Onay ekranı: bekleyen talepleri listeler, Onayla/Reddet işlemlerini yapar.
+ * Onaylanınca talep toplamı kadar müşterinin bakiyesi DÜŞÜRÜLÜR (borç artar).
+ */
 public class ApprovalController {
 
-    @FXML private TableView<Request> pendingRequestsTable;
-    @FXML private TableColumn<Request, Integer> idColumn;
-    @FXML private TableColumn<Request, Integer> customerIdColumn;
-    @FXML private TableColumn<Request, LocalDate> dateColumn;
-    @FXML private TableColumn<Request, String> statusColumn;
+    @FXML private TableView<RequestRow> pendingRequestsTable;
+    @FXML private TableColumn<RequestRow, Integer> idColumn;
+    @FXML private TableColumn<RequestRow, Integer> customerIdColumn;
+    @FXML private TableColumn<RequestRow, LocalDate> dateColumn;
+    @FXML private TableColumn<RequestRow, String> statusColumn;
 
     @FXML private Button approveBtn;
     @FXML private Button rejectBtn;
 
-    private int currentUserId = 0;
-
-    public void setCurrentUserId(int id) { this.currentUserId = id; }
+    private final ObservableList<RequestRow> rows = FXCollections.observableArrayList();
 
     @FXML
     public void initialize() {
@@ -30,100 +33,86 @@ public class ApprovalController {
         dateColumn.setCellValueFactory(new PropertyValueFactory<>("requestDate"));
         statusColumn.setCellValueFactory(new PropertyValueFactory<>("status"));
 
+        DateUtil.setDateColumnDMY(dateColumn);
+
         approveBtn.setDisable(true);
         rejectBtn.setDisable(true);
-        pendingRequestsTable.getSelectionModel().selectedItemProperty().addListener((obs, o, n) -> {
-            boolean hasSel = n != null;
-            approveBtn.setDisable(!hasSel);
-            rejectBtn.setDisable(!hasSel);
-        });
 
-        dateColumn.setCellFactory(col -> new TableCell<>() {
-            @Override protected void updateItem(LocalDate d, boolean empty) {
-                super.updateItem(d, empty);
-                setText(empty || d == null ? null : d.toString());
-            }
+        pendingRequestsTable.setItems(rows);
+        pendingRequestsTable.getSelectionModel().selectedItemProperty().addListener((obs, o, n) -> {
+            boolean has = n != null;
+            approveBtn.setDisable(!has);
+            rejectBtn.setDisable(!has);
         });
 
         refresh();
     }
 
-    public void refresh() {
-        try {
-            ObservableList<Request> pending = RequestDAO.getPendingRequests();
-            pendingRequestsTable.setItems(pending);
-            pendingRequestsTable.refresh();
-        } catch (SQLException e) {
-            showAlert(Alert.AlertType.ERROR, "Hata", "Onay bekleyen talepler yüklenirken bir hata oluştu.");
-        }
-    }
-
     @FXML
     private void handleApprove() {
-        Request r = pendingRequestsTable.getSelectionModel().getSelectedItem();
-        if (r == null) { showAlert(Alert.AlertType.WARNING,"Uyarı","Lütfen bir talep seçin."); return; }
-        if (currentUserId <= 0) { showAlert(Alert.AlertType.ERROR,"Hata","Kullanıcı bilgisi alınamadı."); return; }
+        RequestRow sel = pendingRequestsTable.getSelectionModel().getSelectedItem();
+        if (sel == null) return;
 
         try {
-            // 1) Talep kalemlerini çek
-            ObservableList<RequestItem> items = RequestDAO.getRequestItemsByRequestId(r.getId());
+            // 1) Talebi onayla
+            RequestDAO.approveRequest(sel.getId(), HelloApplication.getLoggedInUserId());
 
-            // 2) Stok kontrolü
-            for (RequestItem it : items) {
-                Product p = ProductDAO.getProductById(it.getProductId());
-                if (p == null) { continue; }
-                if (it.getQuantity() > p.getStok()) {
-                    // Otomatik reddet
-                    RequestDAO.rejectRequest(r.getId(), currentUserId);
-                    showAlert(Alert.AlertType.INFORMATION, "Red",
-                            "Stok yetersiz olduğu için talep reddedildi.\n" +
-                                    "Ürün: " + p.getUrunAdi() + " | Stok: " + p.getStok() + " | Talep: " + it.getQuantity());
-                    refresh();
-                    return;
-                }
-            }
+            // 2) Toplamı al ve bakiyeyi düşür (borç artar)
+            double total = RequestDAO.getRequestTotal(sel.getId());
+            CustomerDAO.adjustBalance(sel.getCustomerId(), -total);
 
-            // 3) Stoklar yeterli: onayla ve stok düş
-            RequestDAO.approveRequest(r.getId(), currentUserId);
-            for (RequestItem it : items) {
-                ProductDAO.updateProductStock(it.getProductId(), -it.getQuantity());
-            }
-
-            // 4) Toplam tutarı müşterinin bakiyesine UYGULA (borç artışı → bakiye düşer)
-            double total = RequestDAO.getRequestTotal(r.getId()); // SUM(Miktar * TeklifFiyati)
-            if (total != 0) {
-                CustomerDAO.adjustBalance(r.getCustomerId(), -total);
-            }
-
-            showAlert(Alert.AlertType.INFORMATION,"Başarılı",
-                    "Talep onaylandı, stoklar düşüldü ve müşteri bakiyesi güncellendi.\n" +
-                            String.format("Toplam: %.2f TL", total));
+            info("Başarılı", "Talep onaylandı. Müşteri bakiyesine yansıtıldı.");
             refresh();
-
-        } catch (SQLException e) {
-            showAlert(Alert.AlertType.ERROR,"Hata","Talep onaylanırken bir hata oluştu: " + e.getMessage());
+        } catch (SQLException ex) {
+            error("Hata", "Onay işlemi başarısız: " + ex.getMessage());
         }
     }
 
     @FXML
     private void handleReject() {
-        Request r = pendingRequestsTable.getSelectionModel().getSelectedItem();
-        if (r == null) { showAlert(Alert.AlertType.WARNING,"Uyarı","Lütfen bir talep seçin."); return; }
-        if (currentUserId <= 0) { showAlert(Alert.AlertType.ERROR,"Hata","Kullanıcı bilgisi alınamadı."); return; }
+        RequestRow sel = pendingRequestsTable.getSelectionModel().getSelectedItem();
+        if (sel == null) return;
 
         try {
-            RequestDAO.rejectRequest(r.getId(), currentUserId);
-            showAlert(Alert.AlertType.INFORMATION,"Başarılı","Talep reddedildi.");
+            RequestDAO.rejectRequest(sel.getId(), HelloApplication.getLoggedInUserId());
+            info("Bilgi", "Talep reddedildi.");
             refresh();
-        } catch (SQLException e) {
-            showAlert(Alert.AlertType.ERROR,"Hata","Talep reddedilirken hata: " + e.getMessage());
+        } catch (SQLException ex) {
+            error("Hata", "Reddetme işlemi başarısız: " + ex.getMessage());
         }
     }
 
-    private void showAlert(Alert.AlertType type, String title, String msg) {
-        Alert a = new Alert(type, msg, ButtonType.OK);
-        a.setTitle(title); a.setHeaderText(null);
-        IconUtil.decorateAlert(a);
-        a.showAndWait();
+    private void refresh() {
+        try {
+            rows.clear();
+            for (Request r : RequestDAO.getPendingRequests()) {
+                rows.add(new RequestRow(r.getId(), r.getCustomerId(), r.getRequestDate(), r.getStatus()));
+            }
+        } catch (SQLException ex) {
+            error("Hata", "Veriler yüklenemedi: " + ex.getMessage());
+        }
+    }
+
+    private void info(String t, String m){ Alert a=new Alert(Alert.AlertType.INFORMATION,m,ButtonType.OK);a.setHeaderText(null);a.setTitle(t);IconUtil.decorateAlert(a);a.showAndWait();}
+    private void error(String t, String m){ Alert a=new Alert(Alert.AlertType.ERROR,m,ButtonType.OK);a.setHeaderText(null);a.setTitle(t);IconUtil.decorateAlert(a);a.showAndWait();}
+
+    /** Tablo satırı modeli */
+    public static class RequestRow {
+        private final int id;
+        private final int customerId;
+        private final LocalDate requestDate;
+        private final String status;
+
+        public RequestRow(int id, int customerId, LocalDate requestDate, String status) {
+            this.id = id; this.customerId = customerId; this.requestDate = requestDate; this.status = status;
+        }
+        public int getId() { return id; }
+        public int getCustomerId() { return customerId; }
+        public LocalDate getRequestDate() { return requestDate; }
+        public String getStatus() { return status; }
+    }
+
+    public void setCurrentUserId(int userId) {
+        HelloApplication.setLoggedInUserId(userId);
     }
 }

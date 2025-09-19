@@ -1,11 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <?import javafx.geometry.Insets?>
-<?import javafx.scene.control.Button?>
-<?import javafx.scene.control.Label?>
-<?import javafx.scene.control.TableColumn?>
-<?import javafx.scene.control.TableView?>
-<?import javafx.scene.layout.HBox?>
-<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
 <?import javafx.scene.text.Font?>
 
 <VBox xmlns="http://javafx.com/javafx/21"
@@ -13,33 +9,45 @@
       fx:controller="com.example.erpdemo.CustomerController"
       spacing="10.0" style="-fx-padding: 20;">
 
-    <children>
-        <Label text="Müşteri İşlemleri" VBox.vgrow="SOMETIMES">
-            <font>
-                <Font name="System Bold" size="24.0"/>
-            </font>
-        </Label>
+    <!-- Başlık -->
+    <Label text="Müşteri İşlemleri">
+        <font>
+            <Font name="System Bold" size="24.0" />
+        </font>
+    </Label>
 
-        <TableView fx:id="customerTable" VBox.vgrow="ALWAYS">
-            <columns>
-                <TableColumn fx:id="idColumn"       prefWidth="60.0"  text="ID"/>
-                <TableColumn fx:id="nameColumn"     prefWidth="220.0" text="Firma Adı"/>
-                <TableColumn fx:id="contactColumn"  prefWidth="160.0" text="İletişim Kişisi"/>
-                <TableColumn fx:id="phoneColumn"    prefWidth="140.0" text="Telefon"/>
-                <TableColumn fx:id="emailColumn"    prefWidth="220.0" text="E-Posta"/>
-                <TableColumn fx:id="iskontoColumn"  prefWidth="110.0" text="İskonto (%)"/>
-                <TableColumn fx:id="balanceColumn"  prefWidth="120.0" text="Bakiye"/>
-            </columns>
-        </TableView>
+    <!-- Filtre satırı -->
+    <HBox spacing="8">
+        <children>
+            <TextField fx:id="searchField"
+                       promptText="Ara (firma, kişi, telefon, e-posta, iskonto, bakiye)"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <Button text="Temizle" onAction="#handleClearSearch"/>
+        </children>
+    </HBox>
 
-        <HBox spacing="10.0" alignment="CENTER_RIGHT">
-            <children>
-                <Button fx:id="addButton"    text="Yeni Müşteri Ekle" onAction="#handleAddButton"/>
-                <Button fx:id="editButton"   text="Müşteri Düzenle"   onAction="#handleEditButton"/>
-                <Button fx:id="deleteButton" text="Müşteri Sil"       onAction="#handleDeleteButton"/>
-                <!-- Yeni buton -->
-                <Button fx:id="paymentButton" text="Ödeme Al"         onAction="#handleTakePayment"/>
-            </children>
-        </HBox>
-    </children>
+    <!-- Tablo -->
+    <TableView fx:id="customerTable" VBox.vgrow="ALWAYS">
+        <columns>
+            <TableColumn fx:id="idColumn"       prefWidth="60.0"  text="ID" />
+            <TableColumn fx:id="nameColumn"     prefWidth="220.0" text="Firma Adı" />
+            <TableColumn fx:id="contactColumn"  prefWidth="160.0" text="İletişim Kişisi" />
+            <TableColumn fx:id="phoneColumn"    prefWidth="140.0" text="Telefon" />
+            <TableColumn fx:id="emailColumn"    prefWidth="220.0" text="E-Posta" />
+            <TableColumn fx:id="iskontoColumn"  prefWidth="110.0" text="İskonto (%)" />
+            <TableColumn fx:id="balanceColumn"  prefWidth="120.0" text="Bakiye" />
+        </columns>
+    </TableView>
+
+    <!-- Aksiyon butonları -->
+    <HBox spacing="10.0" alignment="CENTER_RIGHT">
+        <children>
+            <Button fx:id="addButton"    text="Yeni Müşteri Ekle" onAction="#handleAddButton" />
+            <Button fx:id="editButton"   text="Müşteri Düzenle"   onAction="#handleEditButton"/>
+            <Button fx:id="deleteButton" text="Müşteri Sil"       onAction="#handleDeleteButton"/>
+            <Separator orientation="VERTICAL"/>
+            <Button text="Ödeme Al"      onAction="#handleTakePayment"/>
+            <Button text="Geçmiş"        onAction="#handleCustomerHistory"/>
+        </children>
+    </HBox>
 </VBox>

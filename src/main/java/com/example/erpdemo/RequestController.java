@@ -7,136 +7,129 @@ import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
-import javafx.scene.input.KeyCode;
+import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 
 import java.io.IOException;
+import java.sql.SQLException;
 import java.time.LocalDate;
 
+/** Talep/Teklif liste ekranı + yeni oluştur / görüntüle / sil. */
 public class RequestController {
 
-    @FXML private TableView<Request> tblRequests;
-    @FXML private TableColumn<Request, Integer> colId;
-    @FXML private TableColumn<Request, Integer> colCustomer;
-    @FXML private TableColumn<Request, LocalDate> colDate;
-    @FXML private TableColumn<Request, String>  colStatus;
+    @FXML private TableView<Row> tblRequests;
+    @FXML private TableColumn<Row, Integer> colId;
+    @FXML private TableColumn<Row, Integer> colCustomer;
+    @FXML private TableColumn<Row, LocalDate> colDate;
+    @FXML private TableColumn<Row, String> colStatus;
 
-    private final ObservableList<Request> data = FXCollections.observableArrayList();
+    private final ObservableList<Row> rows = FXCollections.observableArrayList();
 
     @FXML
     public void initialize() {
-        colId.setCellValueFactory(c -> c.getValue().idProperty().asObject());
-        colCustomer.setCellValueFactory(c -> c.getValue().customerIdProperty().asObject());
-        colDate.setCellValueFactory(c -> c.getValue().requestDateProperty());
-        colStatus.setCellValueFactory(c -> c.getValue().statusProperty());
+        colId.setCellValueFactory(new PropertyValueFactory<>("id"));
+        colCustomer.setCellValueFactory(new PropertyValueFactory<>("customerId"));
+        colDate.setCellValueFactory(new PropertyValueFactory<>("requestDate"));
+        colStatus.setCellValueFactory(new PropertyValueFactory<>("status"));
 
-        tblRequests.getSelectionModel().setSelectionMode(SelectionMode.SINGLE);
-        tblRequests.setOnKeyPressed(ev -> { if (ev.getCode() == KeyCode.DELETE) deleteSingleRequest(); });
+        DateUtil.setDateColumnDMY(colDate);
 
+        tblRequests.setItems(rows);
         refresh();
-    }
-
-    public void refresh() {
-        data.setAll(RequestDAO.findAll());
-        tblRequests.setItems(data);
-        tblRequests.refresh();
     }
 
     @FXML
     private void createRequest() {
         try {
-            var url = RequestController.class.getResource("/com/example/erpdemo/new-request.fxml");
-            if (url == null) throw new IllegalStateException("new-request.fxml bulunamadı (classpath).");
-
-            FXMLLoader loader = new FXMLLoader(url);
-            Parent root = loader.load();
-
-            NewRequestController controller = loader.getController();
+            FXMLLoader fxml = new FXMLLoader(getClass().getResource("new-request.fxml"));
+            Parent view = fxml.load();
 
             Stage dlg = new Stage();
             dlg.setTitle("Yeni Talep");
             dlg.initModality(Modality.WINDOW_MODAL);
             dlg.initOwner(tblRequests.getScene().getWindow());
-            dlg.setScene(new Scene(root));
+            dlg.setScene(new Scene(view));
             IconUtil.setAppIcon(dlg);
-
-            controller.setDialogStage(dlg);
             dlg.showAndWait();
-            refresh();
 
-        } catch (IOException | RuntimeException ex) {
-            showError("Yeni talep penceresi açılamadı:\n" + ex.getMessage());
+            refresh();
+        } catch (IOException ex) {
+            error("Hata", "Pencere açılamadı: " + ex.getMessage());
         }
     }
 
     @FXML
     private void viewRequest() {
-        Request selected = tblRequests.getSelectionModel().getSelectedItem();
-        if (selected == null) { showInfo("Lütfen bir satır seçin."); return; }
-
+        Row sel = tblRequests.getSelectionModel().getSelectedItem();
+        if (sel == null) { warn("Uyarı", "Lütfen bir talep seçin."); return; }
         try {
-            var url = RequestController.class.getResource("/com/example/erpdemo/view-request.fxml");
-            if (url == null) throw new IllegalStateException("view-request.fxml bulunamadı (classpath).");
+            FXMLLoader fxml = new FXMLLoader(getClass().getResource("view-request.fxml"));
+            Parent view = fxml.load();
 
-            FXMLLoader loader = new FXMLLoader(url);
-            Parent root = loader.load();
-
-            ViewRequestController controller = loader.getController();
-            controller.setRequest(selected);
+            ViewRequestController c = fxml.getController();
+            c.setRequestId(sel.getId());
 
             Stage dlg = new Stage();
-            dlg.setTitle("Talep Detayı");
-            dlg.initOwner(tblRequests.getScene().getWindow());
+            dlg.setTitle("Talep Detayı – #" + sel.getId());
             dlg.initModality(Modality.WINDOW_MODAL);
-            dlg.setScene(new Scene(root));
+            dlg.initOwner(tblRequests.getScene().getWindow());
+            dlg.setScene(new Scene(view));
             IconUtil.setAppIcon(dlg);
-
-            controller.setDialogStage(dlg);
             dlg.showAndWait();
-
-        } catch (IOException | RuntimeException ex) {
-            showError("Talep detayı açılamadı:\n" + ex.getMessage());
+        } catch (IOException ex) {
+            error("Hata", "Pencere açılamadı: " + ex.getMessage());
         }
     }
 
     @FXML
     private void deleteSingleRequest() {
-        Request selected = tblRequests.getSelectionModel().getSelectedItem();
-        if (selected == null) { showInfo("Lütfen bir satır seçin."); return; }
+        Row sel = tblRequests.getSelectionModel().getSelectedItem();
+        if (sel == null) { warn("Uyarı", "Silmek için bir talep seçin."); return; }
 
-        Alert a = new Alert(Alert.AlertType.CONFIRMATION,
-                "Seçili talep silinecek. Emin misiniz?", ButtonType.CANCEL, ButtonType.OK);
-        a.setHeaderText(null);
-        a.setTitle("Onay");
-        IconUtil.decorateAlert(a);
+        Alert q = new Alert(Alert.AlertType.CONFIRMATION,
+                "Talep #" + sel.getId() + " silinsin mi?", ButtonType.YES, ButtonType.NO);
+        q.setHeaderText(null); q.setTitle("Onay");
+        IconUtil.decorateAlert(q);
+        q.showAndWait();
 
-        a.showAndWait().ifPresent(btn -> {
-            if (btn == ButtonType.OK) {
-                try {
-                    RequestDAO.deleteRequestById(selected.getId());
-                    refresh();
-                    showInfo("Talep silindi.");
-                } catch (Exception e) {
-                    showError("Silme sırasında hata: " + e.getMessage());
-                }
+        if (q.getResult() != ButtonType.YES) return;
+
+        try {
+            RequestDAO.deleteRequestById(sel.getId());
+            info("Bilgi", "Talep silindi.");
+            refresh();
+        } catch (SQLException ex) {
+            error("Hata", "Silme işlemi başarısız: " + ex.getMessage());
+        }
+    }
+
+    private void refresh() {
+        try {
+            rows.clear();
+            for (Request r : RequestDAO.findAll()) {
+                rows.add(new Row(r.getId(), r.getCustomerId(), r.getRequestDate(), r.getStatus()));
             }
-        });
+        } catch (Exception ex) {
+            error("Hata", "Veriler yüklenemedi: " + ex.getMessage());
+        }
     }
 
-    private void showInfo(String msg) {
-        Alert x = new Alert(Alert.AlertType.INFORMATION, msg, ButtonType.OK);
-        x.setHeaderText(null);
-        x.setTitle("Uyarı");
-        IconUtil.decorateAlert(x);
-        x.show();
-    }
+    private void info(String t, String m){ Alert a=new Alert(Alert.AlertType.INFORMATION,m,ButtonType.OK);a.setHeaderText(null);a.setTitle(t);IconUtil.decorateAlert(a);a.showAndWait();}
+    private void warn(String t, String m){ Alert a=new Alert(Alert.AlertType.WARNING,m,ButtonType.OK);a.setHeaderText(null);a.setTitle(t);IconUtil.decorateAlert(a);a.showAndWait();}
+    private void error(String t, String m){ Alert a=new Alert(Alert.AlertType.ERROR,m,ButtonType.OK);a.setHeaderText(null);a.setTitle(t);IconUtil.decorateAlert(a);a.showAndWait();}
 
-    private void showError(String msg) {
-        Alert x = new Alert(Alert.AlertType.ERROR, msg, ButtonType.OK);
-        x.setHeaderText(null);
-        x.setTitle("Hata");
-        IconUtil.decorateAlert(x);
-        x.show();
+    /** Liste satırı modeli. */
+    public static class Row {
+        private final int id, customerId;
+        private final LocalDate requestDate;
+        private final String status;
+        public Row(int id, int customerId, LocalDate requestDate, String status){
+            this.id=id; this.customerId=customerId; this.requestDate=requestDate; this.status=status;
+        }
+        public int getId(){ return id; }
+        public int getCustomerId(){ return customerId; }
+        public LocalDate getRequestDate(){ return requestDate; }
+        public String getStatus(){ return status; }
     }
 }
