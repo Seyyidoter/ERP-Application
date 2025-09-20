@@ -14,6 +14,8 @@ import javafx.stage.Stage;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.time.LocalDate;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /** Talep/Teklif liste ekranı + yeni oluştur / görüntüle / sil. */
 public class RequestController {
@@ -57,14 +59,23 @@ public class RequestController {
 
             refresh();
         } catch (IOException ex) {
-            error("Hata", "Pencere açılamadı: " + ex.getMessage());
+            Alert a = new Alert(Alert.AlertType.ERROR, "Pencere açılamadı: " + ex.getMessage(), ButtonType.OK);
+            a.setHeaderText(null); a.setTitle("Hata");
+            IconUtil.decorateAlert(a);
+            a.showAndWait();
         }
     }
 
     @FXML
     private void viewRequest() {
         Row sel = tblRequests.getSelectionModel().getSelectedItem();
-        if (sel == null) { warn("Uyarı", "Lütfen bir talep seçin."); return; }
+        if (sel == null) {
+            Alert a = new Alert(Alert.AlertType.WARNING, "Lütfen bir talep seçin.", ButtonType.OK);
+            a.setHeaderText(null); a.setTitle("Uyarı");
+            IconUtil.decorateAlert(a);
+            a.showAndWait();
+            return;
+        }
         try {
             FXMLLoader fxml = new FXMLLoader(getClass().getResource("view-request.fxml"));
             Parent view = fxml.load();
@@ -80,14 +91,23 @@ public class RequestController {
             IconUtil.setAppIcon(dlg);
             dlg.showAndWait();
         } catch (IOException ex) {
-            error("Hata", "Pencere açılamadı: " + ex.getMessage());
+            Alert a = new Alert(Alert.AlertType.ERROR, "Pencere açılamadı: " + ex.getMessage(), ButtonType.OK);
+            a.setHeaderText(null); a.setTitle("Hata");
+            IconUtil.decorateAlert(a);
+            a.showAndWait();
         }
     }
 
     @FXML
     private void deleteSingleRequest() {
         Row sel = tblRequests.getSelectionModel().getSelectedItem();
-        if (sel == null) { warn("Uyarı", "Silmek için bir talep seçin."); return; }
+        if (sel == null) {
+            Alert a = new Alert(Alert.AlertType.WARNING, "Silmek için bir talep seçin.", ButtonType.OK);
+            a.setHeaderText(null); a.setTitle("Uyarı");
+            IconUtil.decorateAlert(a);
+            a.showAndWait();
+            return;
+        }
 
         Alert q = new Alert(Alert.AlertType.CONFIRMATION,
                 "Talep #" + sel.getId() + " silinsin mi?", ButtonType.YES, ButtonType.NO);
@@ -99,39 +119,49 @@ public class RequestController {
 
         try {
             RequestDAO.deleteRequestById(sel.getId());
-            info("Bilgi", "Talep silindi.");
+            Alert a = new Alert(Alert.AlertType.INFORMATION, "Talep silindi.", ButtonType.OK);
+            a.setHeaderText(null); a.setTitle("Bilgi");
+            IconUtil.decorateAlert(a);
+            a.showAndWait();
             refresh();
         } catch (SQLException ex) {
-            error("Hata", "Silme işlemi başarısız: " + ex.getMessage());
+            Alert a = new Alert(Alert.AlertType.ERROR, "Silme işlemi başarısız: " + ex.getMessage(), ButtonType.OK);
+            a.setHeaderText(null); a.setTitle("Hata");
+            IconUtil.decorateAlert(a);
+            a.showAndWait();
         }
     }
 
     private void refresh() {
         try {
             rows.clear();
-            for (Request r : RequestDAO.findAll()) {
-                String customerName = "";
-                try {
-                    Customer c = CustomerDAO.getCustomerById(r.getCustomerId());
-                    if (c != null) customerName = c.getCompanyName(); // Firma adı alanın
-                } catch (SQLException ignore) { /* adı boş kalabilir */ }
 
+            // 1) Talep başlıklarını çek
+            var all = RequestDAO.findAll();
+
+            // 2) Müşteri adlarını tek sorguda al
+            Set<Integer> ids = all.stream()
+                    .map(Request::getCustomerId)
+                    .collect(Collectors.toCollection(LinkedHashSet::new));
+            var nameMap = CustomerDAO.getCustomerNamesByIds(ids);
+
+            // 3) Tablo satırını doldur
+            for (Request r : all) {
                 rows.add(new Row(
                         r.getId(),
                         r.getCustomerId(),
-                        customerName,
+                        nameMap.getOrDefault(r.getCustomerId(), ""),
                         r.getRequestDate(),
                         r.getStatus()
                 ));
             }
         } catch (Exception ex) {
-            error("Hata", "Veriler yüklenemedi: " + ex.getMessage());
+            Alert a = new Alert(Alert.AlertType.ERROR, "Veriler yüklenemedi: " + ex.getMessage(), ButtonType.OK);
+            a.setHeaderText(null); a.setTitle("Hata");
+            IconUtil.decorateAlert(a);
+            a.showAndWait();
         }
     }
-
-    private void info(String t, String m){ Alert a=new Alert(Alert.AlertType.INFORMATION,m,ButtonType.OK);a.setHeaderText(null);a.setTitle(t);IconUtil.decorateAlert(a);a.showAndWait();}
-    private void warn(String t, String m){ Alert a=new Alert(Alert.AlertType.WARNING,m,ButtonType.OK);a.setHeaderText(null);a.setTitle(t);IconUtil.decorateAlert(a);a.showAndWait();}
-    private void error(String t, String m){ Alert a=new Alert(Alert.AlertType.ERROR,m,ButtonType.OK);a.setHeaderText(null);a.setTitle(t);IconUtil.decorateAlert(a);a.showAndWait();}
 
     /** Liste satırı modeli. */
     public static class Row {

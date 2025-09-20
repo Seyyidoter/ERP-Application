@@ -17,8 +17,7 @@ import java.nio.file.Paths;
 import java.sql.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 /** Onaylanmış talepleri PDF'e, sayfa taşırmadan çok sayfalı olarak yazar. */
 public class ReportsController {
@@ -46,16 +45,15 @@ public class ReportsController {
                 } else {
                     DateTimeFormatter dateFmt = DateTimeFormatter.ofPattern("dd.MM.yyyy");
 
-                    for (Request r : approved) {
-                        String cname = "Bilinmiyor";
-                        try {
-                            Customer c = CustomerDAO.getCustomerById(r.getCustomerId());
-                            if (c != null) cname = c.getCompanyName();
-                        } catch (SQLException ignore) {}
+                    // --- müşteri adlarını toplu çek ---
+                    Set<Integer> customerIds = new LinkedHashSet<>();
+                    for (Request r : approved) customerIds.add(r.getCustomerId());
+                    Map<Integer, String> nameMap = CustomerDAO.getCustomerNamesByIds(customerIds);
 
+                    for (Request r : approved) {
+                        String cname = nameMap.getOrDefault(r.getCustomerId(), "Bilinmiyor");
                         String dateStr = (r.getRequestDate() != null)
-                                ? r.getRequestDate().format(dateFmt)
-                                : "";
+                                ? r.getRequestDate().format(dateFmt) : "";
 
                         w.println("--------------------------------------------------------------------------");
                         w.println("Talep ID: " + r.getId());
@@ -97,8 +95,10 @@ public class ReportsController {
 
                         w.println("----------------------------------------------------------------------");
                         w.println(String.format("Toplam Ürün Adedi: %d", totalQty));
-                        w.println(String.format("Toplam Liste Tutarı: %.2f TL", totalList.setScale(2, RoundingMode.HALF_UP).doubleValue()));
-                        w.println(String.format("Toplam İskontolu Tutar: %.2f TL", totalDisc.setScale(2, RoundingMode.HALF_UP).doubleValue()));
+                        w.println(String.format("Toplam Liste Tutarı: %.2f TL",
+                                totalList.setScale(2, RoundingMode.HALF_UP).doubleValue()));
+                        w.println(String.format("Toplam İskontolu Tutar: %.2f TL",
+                                totalDisc.setScale(2, RoundingMode.HALF_UP).doubleValue()));
                         w.println("");
                     }
                 }

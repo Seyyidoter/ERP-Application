@@ -14,6 +14,7 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.util.Locale;
 
@@ -27,7 +28,9 @@ public class CustomerController {
     @FXML private TableColumn<Customer, String>  phoneColumn;
     @FXML private TableColumn<Customer, String>  emailColumn;
     @FXML private TableColumn<Customer, Integer> iskontoColumn;
-    @FXML private TableColumn<Customer, Double>  balanceColumn;
+
+    // BAKIYE artık BigDecimal:
+    @FXML private TableColumn<Customer, BigDecimal>  balanceColumn;
 
     @FXML private TextField searchField;
 
@@ -43,15 +46,22 @@ public class CustomerController {
         phoneColumn.setCellValueFactory(new PropertyValueFactory<>("phone"));
         emailColumn.setCellValueFactory(new PropertyValueFactory<>("email"));
         iskontoColumn.setCellValueFactory(new PropertyValueFactory<>("iskonto"));
+
+        // BigDecimal balance:
         balanceColumn.setCellValueFactory(new PropertyValueFactory<>("balance"));
 
         // UI: sayısal hizalama/format
         iskontoColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
         balanceColumn.setCellFactory(col -> new TableCell<>() {
-            @Override protected void updateItem(Double v, boolean empty) {
+            @Override protected void updateItem(BigDecimal v, boolean empty) {
                 super.updateItem(v, empty);
-                setText(empty || v == null ? null : String.format(Locale.forLanguageTag("tr-TR"), "%.2f", v));
-                setStyle(empty ? "" : "-fx-alignment: CENTER-RIGHT;");
+                if (empty || v == null) {
+                    setText(null);
+                    setStyle("");
+                } else {
+                    setText(String.format(Locale.forLanguageTag("tr-TR"), "%.2f", v));
+                    setStyle("-fx-alignment: CENTER-RIGHT;");
+                }
             }
         });
 
@@ -82,7 +92,12 @@ public class CustomerController {
 
             // Sayısalları da basitçe string karşılaştır
             if (String.valueOf(c.getIskonto()).contains(q)) return true;
-            if (String.format(Locale.ROOT, "%.2f", c.getBalance()).contains(q)) return true;
+
+            // BigDecimal'ı stringe çevir – her iki formu da dene
+            BigDecimal bal = c.getBalance() == null ? BigDecimal.ZERO : c.getBalance();
+            if (bal.toPlainString().toLowerCase(Locale.ROOT).contains(q)) return true;
+            String bal2 = String.format(Locale.ROOT, "%.2f", bal);
+            if (bal2.contains(q)) return true;
 
             return false;
         });
@@ -103,7 +118,7 @@ public class CustomerController {
 
     @FXML private void handleClearSearch() { searchField.clear(); }
 
-    // ---------- CRUD ---------- (oluşturma, okuma, güncelleme ve silme)
+    // ---------- CRUD ----------
     @FXML
     private void handleAddButton() {
         try {
@@ -197,11 +212,12 @@ public class CustomerController {
         var res = td.showAndWait();
         if (res.isEmpty()) return;
 
-        double amount;
+        // Kullanıcıdan gelen değeri BigDecimal'a çevir
+        java.math.BigDecimal amountBD;
         try {
             String txt = res.get().replace(",", ".").trim();
-            amount = Double.parseDouble(txt);
-            if (amount <= 0) throw new NumberFormatException();
+            amountBD = new java.math.BigDecimal(txt);
+            if (amountBD.signum() <= 0) throw new NumberFormatException();
         } catch (NumberFormatException ex) {
             showAlert(Alert.AlertType.WARNING, "Uyarı", "Geçerli bir tutar girin (0'dan büyük).");
             return;
@@ -215,7 +231,8 @@ public class CustomerController {
         String desc = note.showAndWait().orElse("");
 
         try {
-            PaymentDAO.addPayment(sel.getId(), amount, desc);
+            // PaymentDAO zaten BigDecimal ile çalışıyor
+            PaymentDAO.addPayment(sel.getId(), amountBD, desc);
             showAlert(Alert.AlertType.INFORMATION, "Başarılı", "Ödeme kaydedildi.");
             loadCustomers();
         } catch (SQLException e) {

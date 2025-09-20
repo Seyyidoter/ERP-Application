@@ -1,9 +1,15 @@
 package com.example.erpdemo;
 
-import javafx.beans.property.SimpleDoubleProperty;
 import javafx.beans.property.SimpleIntegerProperty;
 import javafx.beans.property.SimpleStringProperty;
+import javafx.beans.property.SimpleObjectProperty;
 
+import java.math.BigDecimal;
+
+/**
+ * Müşteri modeli.
+ * Para birimi alanları UI katmanında da BigDecimal olarak taşınır (kayan nokta hatalarını önlemek için).
+ */
 public class Customer {
 
     private final SimpleIntegerProperty id;
@@ -12,22 +18,24 @@ public class Customer {
     private final SimpleStringProperty phone;
     private final SimpleStringProperty email;
     private final SimpleIntegerProperty iskonto;
-    private final SimpleDoubleProperty bakiye; // asıl alan
+
+    // Bakiye artık BigDecimal
+    private final SimpleObjectProperty<BigDecimal> bakiye;
 
     // Bakiye dahil kurucu
-    public Customer(int id, String companyName, String contactPerson, String phone, String email, int iskonto, double bakiye) {
+    public Customer(int id, String companyName, String contactPerson, String phone, String email, int iskonto, BigDecimal bakiye) {
         this.id = new SimpleIntegerProperty(id);
         this.companyName = new SimpleStringProperty(companyName);
         this.contactPerson = new SimpleStringProperty(contactPerson);
         this.phone = new SimpleStringProperty(phone);
         this.email = new SimpleStringProperty(email);
         this.iskonto = new SimpleIntegerProperty(iskonto);
-        this.bakiye = new SimpleDoubleProperty(bakiye);
+        this.bakiye = new SimpleObjectProperty<>(bakiye == null ? BigDecimal.ZERO : bakiye);
     }
 
-    // Geri uyumluluk
+    // Geri uyumluluk (bakiye yoksa 0)
     public Customer(int id, String companyName, String contactPerson, String phone, String email, int iskonto) {
-        this(id, companyName, contactPerson, phone, email, iskonto, 0.0);
+        this(id, companyName, contactPerson, phone, email, iskonto, BigDecimal.ZERO);
     }
 
     // --- Getter'lar ---
@@ -38,7 +46,8 @@ public class Customer {
     public String getEmail() { return email.get(); }
     public int getIskonto() { return iskonto.get(); }
 
-    public double getBalance() { return bakiye.get(); }
+    /** Bakiye artık BigDecimal döner. */
+    public BigDecimal getBalance() { return bakiye.get(); }
 
     // --- Property'ler ---
     public SimpleIntegerProperty idProperty() { return id; }
@@ -48,7 +57,7 @@ public class Customer {
     public SimpleStringProperty emailProperty() { return email; }
     public SimpleIntegerProperty iskontoProperty() { return iskonto; }
 
-    public SimpleDoubleProperty balanceProperty() { return bakiye; }
+    public SimpleObjectProperty<BigDecimal> balanceProperty() { return bakiye; }
 
     // --- Setter'lar ---
     public void setCompanyName(String companyName) { this.companyName.set(companyName); }
@@ -57,5 +66,5 @@ public class Customer {
     public void setEmail(String email) { this.email.set(email); }
     public void setIskonto(int iskonto) { this.iskonto.set(iskonto); }
 
-    public void setBalance(double balance) { this.bakiye.set(balance); } // alias
+    public void setBalance(BigDecimal balance) { this.bakiye.set(balance == null ? BigDecimal.ZERO : balance); }
 }

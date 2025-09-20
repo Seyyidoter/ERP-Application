@@ -35,31 +35,75 @@ public class EditCustomerController {
 
     @FXML
     private void handleSave() {
-        customer.setCompanyName(companyNameField.getText());
-        customer.setContactPerson(contactPersonField.getText());
-        customer.setPhone(phoneField.getText());
-        customer.setEmail(emailField.getText());
-        customer.setIskonto(Integer.parseInt(discountField.getText()));
+        // --- Temel alan kontrolleri ---
+        String companyName = safeTrim(companyNameField.getText());
+        if (companyName.isEmpty()) {
+            showAlert(Alert.AlertType.WARNING, "Uyarı", "Firma adı boş olamaz.");
+            return;
+        }
+
+        String contact = safeTrim(contactPersonField.getText());
+        String phone    = safeTrim(phoneField.getText());
+        String email    = safeTrim(emailField.getText());
+
+        // --- İskonto: 0..100 arası TAM SAYI olmalı ---
+        String discountRaw = safeTrim(discountField.getText());
+        if (discountRaw.isEmpty()) {
+            showAlert(Alert.AlertType.WARNING, "Uyarı", "İskonto alanı boş olamaz.");
+            return;
+        }
+
+        // Yalnızca rakam kontrolü
+        if (!discountRaw.matches("^\\d{1,3}$")) {
+            showAlert(Alert.AlertType.WARNING, "Uyarı", "İskonto yalnızca rakamlardan oluşan bir tam sayı olmalıdır.");
+            return;
+        }
+
+        int discount;
+        try {
+            discount = Integer.parseInt(discountRaw);
+        } catch (NumberFormatException ex) {
+            showAlert(Alert.AlertType.WARNING, "Uyarı", "İskonto geçerli bir tam sayı olmalıdır.");
+            return;
+        }
+
+        if (discount < 0 || discount > 100) {
+            showAlert(Alert.AlertType.WARNING, "Uyarı", "İskonto 0 ile 100 arasında bir tam sayı olmalıdır.");
+            return;
+        }
+
+        // --- Modeli güncelle ---
+        customer.setCompanyName(companyName);
+        customer.setContactPerson(contact);
+        customer.setPhone(phone);
+        customer.setEmail(email);
+        customer.setIskonto(discount);
 
         try {
             CustomerDAO.updateCustomer(customer);
-            showAlert("Başarılı", "Müşteri bilgileri başarıyla güncellendi.");
-            dialogStage.close();
-        } catch (SQLException | NumberFormatException e) {
-            showAlert("Hata", "Müşteri güncellenirken bir hata oluştu: " + e.getMessage());
+            showAlert(Alert.AlertType.INFORMATION, "Başarılı", "Müşteri bilgileri başarıyla güncellendi.");
+            if (dialogStage != null) dialogStage.close();
+        } catch (SQLException e) {
+            showAlert(Alert.AlertType.ERROR, "Hata", "Müşteri güncellenirken bir hata oluştu: " + e.getMessage());
         }
     }
 
     @FXML
     private void handleCancel() {
-        dialogStage.close();
+        if (dialogStage != null) dialogStage.close();
     }
 
-    private void showAlert(String title, String message) {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+    // ---------------- yardımcılar ----------------
+    private static String safeTrim(String s) {
+        return s == null ? "" : s.trim();
+    }
+
+    private void showAlert(Alert.AlertType type, String title, String message) {
+        Alert alert = new Alert(type);
         alert.setTitle(title);
         alert.setHeaderText(null);
         alert.setContentText(message);
+        IconUtil.decorateAlert(alert);
         alert.showAndWait();
     }
 }

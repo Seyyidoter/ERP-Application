@@ -41,15 +41,33 @@
       <classifier>win</classifier>
     </dependency>
 
+    <!-- SQL Server JDBC driver -->
     <dependency>
       <groupId>com.microsoft.sqlserver</groupId>
       <artifactId>mssql-jdbc</artifactId>
       <version>11.2.0.jre17</version>
     </dependency>
+
+    <!-- PDFBox -->
     <dependency>
       <groupId>org.apache.pdfbox</groupId>
       <artifactId>pdfbox</artifactId>
       <version>2.0.29</version>
+    </dependency>
+
+    <!-- HikariCP: bağlantı havuzu -->
+    <dependency>
+      <groupId>com.zaxxer</groupId>
+      <artifactId>HikariCP</artifactId>
+      <version>5.1.0</version>
+    </dependency>
+
+    <!-- (opsiyonel) basit log çıktısı -->
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-simple</artifactId>
+      <version>2.0.9</version>
+      <scope>runtime</scope>
     </dependency>
   </dependencies>
 
@@ -80,7 +98,7 @@
         </configuration>
       </plugin>
 
-      <!-- mvn exec:java ile çalıştırma kolaylığı (isteğe bağlı) -->
+      <!-- mvn exec:java -->
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>exec-maven-plugin</artifactId>
@@ -90,7 +108,7 @@
         </configuration>
       </plugin>
 
-      <!-- (İsteğe bağlı) JavaFX plugin: mvn javafx:run komutu için -->
+      <!-- (opsiyonel) JavaFX plugin -->
       <plugin>
         <groupId>org.openjfx</groupId>
         <artifactId>javafx-maven-plugin</artifactId>

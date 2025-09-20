@@ -12,7 +12,7 @@ import java.util.List;
 
 public class RequestDAO {
 
-    /** Liste ekranı */
+    /** Eski: yalın liste (JOIN yok). Kalan kodların bozulmaması için bırakıyoruz. */
     public static List<Request> findAll() {
         List<Request> list = new ArrayList<>();
         String sql = """
@@ -26,6 +26,35 @@ public class RequestDAO {
             while (rs.next()) list.add(mapRowToRequest(rs));
         } catch (SQLException e) {
             e.printStackTrace();
+        }
+        return list;
+    }
+
+    /** YENİ: N+1’i bitirmek için müşteri adıyla birlikte getirir. */
+    public static List<RequestSummary> findAllSummaries() throws SQLException {
+        List<RequestSummary> list = new ArrayList<>();
+        String sql = """
+            SELECT t.Id,
+                   t.MusteriId,
+                   m.FirmaAdi       AS CustomerName,
+                   CAST(t.TalepTarihi AS date) AS TalepTarihi,
+                   t.Durum
+            FROM dbo.Talepler t
+            LEFT JOIN dbo.Musteriler m ON m.Id = t.MusteriId
+            ORDER BY t.Id DESC
+        """;
+        try (Connection c = DatabaseManager.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                int id = rs.getInt("Id");
+                int customerId = rs.getInt("MusteriId");
+                Date d = rs.getDate("TalepTarihi");
+                LocalDate date = (d != null ? d.toLocalDate() : null);
+                String status = rs.getString("Durum");
+                String customerName = rs.getString("CustomerName");
+                list.add(new RequestSummary(id, customerId, customerName, date, status));
+            }
         }
         return list;
     }
@@ -120,7 +149,7 @@ public class RequestDAO {
                             rs.getString("ProductName"),
                             rs.getInt("Quantity"),
                             rs.getDouble("Price"),
-                            rs.getDouble("Price") // iskontolu = Price
+                            rs.getDouble("Price")
                     ));
                 }
             }
@@ -128,7 +157,7 @@ public class RequestDAO {
         return items;
     }
 
-    /** Onayla (bağımsız kullanım) */
+    /** Onayla */
     public static void approveRequest(int requestId, int userId) throws SQLException {
         String sql = """
             UPDATE dbo.Talepler
@@ -179,10 +208,10 @@ public class RequestDAO {
                 c.commit();
                 return affected;
             } catch (SQLException ex) {
-                try { c.rollback(); } catch (SQLException ignore) { /* loglanabilir */ }
+                try { c.rollback(); } catch (SQLException ignore) { }
                 throw ex;
             } finally {
-                try { c.setAutoCommit(old); } catch (SQLException ignore) { /* loglanabilir */ }
+                try { c.setAutoCommit(old); } catch (SQLException ignore) { }
             }
         }
     }
@@ -204,16 +233,6 @@ public class RequestDAO {
     }
 
     // =================== ATOMİK ONAY ===================
-    /**
-     * Onayı tek transaction'da yapar ve stok negatifleşmesini engeller.
-     * Adımlar:
-     *  1) Talep beklemede mi? ve müşteriId
-     *  2) Kalemleri çek
-     *  3) Her kalem için: UPDATE Stoklar SET Stok=Stok-? WHERE Id=? AND Stok >= ?
-     *  4) Toplam (BigDecimal, 2 ondalık HALF_UP)
-     *  5) Müşteri bakiyesi -= toplam
-     *  6) Talep 'Onaylandı'
-     */
     public static void approveRequestTransactionally(int requestId, int approverId) throws SQLException {
         try (Connection c = DatabaseManager.getConnection()) {
             boolean old = c.getAutoCommit();
@@ -284,10 +303,10 @@ public class RequestDAO {
 
                 c.commit();
             } catch (SQLException ex) {
-                try { c.rollback(); } catch (SQLException ignore) { /* loglanabilir */ }
+                try { c.rollback(); } catch (SQLException ignore) { }
                 throw ex;
             } finally {
-                try { c.setAutoCommit(old); } catch (SQLException ignore) { /* loglanabilir */ }
+                try { c.setAutoCommit(old); } catch (SQLException ignore) { }
             }
         }
     }

@@ -6,6 +6,7 @@ import javafx.collections.ObservableList;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.sql.*;
+import java.util.*;
 
 public class CustomerDAO {
 
@@ -17,10 +18,7 @@ public class CustomerDAO {
              ResultSet rs = stmt.executeQuery()) {
 
             while (rs.next()) {
-                // Bakiye DECIMAL ise BigDecimal oku, UI modeli double ile devam edebilir
                 BigDecimal bal = rs.getBigDecimal("Bakiye");
-                double balance = (bal == null ? 0.0 : bal.doubleValue());
-
                 Customer customer = new Customer(
                         rs.getInt("Id"),
                         rs.getString("FirmaAdi"),
@@ -28,7 +26,7 @@ public class CustomerDAO {
                         rs.getString("Telefon"),
                         rs.getString("Eposta"),
                         rs.getInt("Iskonto"),
-                        balance
+                        bal == null ? BigDecimal.ZERO : bal
                 );
                 customerList.add(customer);
             }
@@ -44,8 +42,6 @@ public class CustomerDAO {
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
                     BigDecimal bal = rs.getBigDecimal("Bakiye");
-                    double balance = (bal == null ? 0.0 : bal.doubleValue());
-
                     return new Customer(
                             rs.getInt("Id"),
                             rs.getString("FirmaAdi"),
@@ -53,7 +49,7 @@ public class CustomerDAO {
                             rs.getString("Telefon"),
                             rs.getString("Eposta"),
                             rs.getInt("Iskonto"),
-                            balance
+                            bal == null ? BigDecimal.ZERO : bal
                     );
                 }
             }
@@ -62,7 +58,6 @@ public class CustomerDAO {
     }
 
     public static void addCustomer(String companyName, String contactPerson, String phone, String email, int iskonto) throws SQLException {
-        // Bakiye varsayılan 0.00
         String sql = "INSERT INTO Musteriler (FirmaAdi, IletisimKisi, Telefon, Eposta, Iskonto, Bakiye) VALUES (?, ?, ?, ?, ?, 0)";
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -98,10 +93,7 @@ public class CustomerDAO {
         }
     }
 
-    /**
-     * Bakiye ayarla: delta pozitifse borç azalır (bakiye artar), negatifse borç artar (bakiye düşer).
-     * BigDecimal ile ve 2 ondalık ölçeğe yuvarlanarak çalışır.
-     */
+    /** Bakiye ayarla (BigDecimal, 2 ondalık). */
     public static void adjustBalance(int customerId, BigDecimal delta) throws SQLException {
         if (delta == null) throw new IllegalArgumentException("delta null olamaz");
         delta = delta.setScale(2, RoundingMode.HALF_UP);
@@ -115,11 +107,31 @@ public class CustomerDAO {
         }
     }
 
-    /** Kolaylık: double çağrıları için güvenli BigDecimal’a çevirir. */
+    /** double için aşırı yükleme (eski çağrılar uyumluluğu). */
     public static void adjustBalance(int customerId, double delta) throws SQLException {
-        if (!Double.isFinite(delta)) {
-            throw new IllegalArgumentException("delta geçerli bir sayı olmalı.");
-        }
+        if (!Double.isFinite(delta)) throw new IllegalArgumentException("delta geçerli olmalı");
         adjustBalance(customerId, BigDecimal.valueOf(delta));
+    }
+
+    // ============ YENİ: toplu müşteri adı =============
+    public static Map<Integer, String> getCustomerNamesByIds(Set<Integer> ids) throws SQLException {
+        Map<Integer, String> map = new HashMap<>();
+        if (ids == null || ids.isEmpty()) return map;
+
+        StringBuilder sb = new StringBuilder("SELECT Id, FirmaAdi FROM Musteriler WHERE Id IN (");
+        String sep = "";
+        for (int i = 0; i < ids.size(); i++) { sb.append(sep).append("?"); sep = ","; }
+        sb.append(")");
+
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sb.toString())) {
+            int idx = 1;
+            for (Integer id : ids) ps.setInt(idx++, id);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) map.put(rs.getInt("Id"), rs.getString("FirmaAdi"));
+            }
+        }
+        return map;
     }
 }
