@@ -10,6 +10,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
+/** Talepler için DAO */
 public class RequestDAO {
 
     public static List<RequestSummary> findAllSummaries() throws SQLException {
@@ -105,12 +106,15 @@ public class RequestDAO {
         return list;
     }
 
-    /** Talep kalemleri (görüntüleme için) – fiyatlar BigDecimal. */
+    /** Görüntüleme için talep kalemleri (liste ve iskontolu fiyat BigDecimal). */
     public static ObservableList<RequestItem> getRequestItemsByRequestId(int requestId) throws SQLException {
         ObservableList<RequestItem> items = FXCollections.observableArrayList();
         String sql = """
-            SELECT k.Id, k.TalepId, k.UrunId, s.UrunAdi AS ProductName,
-                   k.Miktar AS Quantity, k.TeklifFiyati AS Price
+            SELECT k.Id, k.TalepId, k.UrunId,
+                   s.UrunAdi AS ProductName,
+                   k.Miktar  AS Quantity,
+                   s.Fiyat   AS ListPrice,
+                   k.TeklifFiyati AS DiscountedPrice
             FROM dbo.TalepKalemleri k
             JOIN dbo.Stoklar s ON s.Id = k.UrunId
             WHERE k.TalepId = ?
@@ -127,8 +131,8 @@ public class RequestDAO {
                             rs.getInt("UrunId"),
                             rs.getString("ProductName"),
                             rs.getInt("Quantity"),
-                            rs.getBigDecimal("Price"),
-                            rs.getBigDecimal("Price")
+                            rs.getBigDecimal("ListPrice"),
+                            rs.getBigDecimal("DiscountedPrice")
                     ));
                 }
             }
@@ -180,105 +184,125 @@ public class RequestDAO {
     }
 
     /**
-     * Stok düşme + müşteri bakiyesi artırma + talebi onaylama işlemlerini
-     * TEK transaction içinde ve yarışa kapalı şekilde yapar.
+     * Stok düşme + bakiye güncelleme + talebi onaylama işlemlerini
+     * TEK transaction içinde, yarışa kapalı ve deadlock'a dayanıklı şekilde yapar.
+     *
+     * Durum geçişi: 'Onay Bekliyor' -> 'Onaylanıyor' -> 'Onaylandı'
      */
     public static void approveRequestTransactionally(int requestId, int approverId) throws SQLException {
-        try (Connection c = DatabaseManager.getConnection()) {
-            final boolean oldAuto = c.getAutoCommit();
-            final int oldIso = c.getTransactionIsolation();
+        final int maxRetries = 3;
+        final long[] backoff = {100L, 250L, 500L};
 
-            c.setAutoCommit(false);
-            c.setTransactionIsolation(Connection.TRANSACTION_SERIALIZABLE);
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try (Connection c = DatabaseManager.getConnection()) {
+                final boolean oldAuto = c.getAutoCommit();
+                final int oldIso = c.getTransactionIsolation();
+                c.setAutoCommit(false);
+                c.setTransactionIsolation(Connection.TRANSACTION_READ_COMMITTED);
 
-            try {
-                // 1) Başlık kilitle
-                Integer customerId = null;
-                String lockHeaderSql = """
-                    SELECT MusteriId
-                    FROM dbo.Talepler WITH (UPDLOCK, ROWLOCK, HOLDLOCK)
-                    WHERE Id = ? AND Durum = N'Onay Bekliyor'
-                """;
-                try (PreparedStatement ps = c.prepareStatement(lockHeaderSql)) {
-                    ps.setInt(1, requestId);
-                    try (ResultSet rs = ps.executeQuery()) {
-                        if (rs.next()) customerId = rs.getInt(1);
-                    }
+                try (Statement st = c.createStatement()) {
+                    st.execute("SET LOCK_TIMEOUT 5000"); // 5 sn
                 }
-                if (customerId == null) throw new SQLException("Talep beklemede değil veya bulunamadı.");
 
-                // 2) Kalemleri kilitle
-                List<ItemLite> items = new ArrayList<>();
-                String lockItemsSql = """
-                    SELECT UrunId, Miktar, TeklifFiyati
-                    FROM dbo.TalepKalemleri WITH (UPDLOCK, ROWLOCK, HOLDLOCK)
-                    WHERE TalepId = ?
-                    ORDER BY Id
-                """;
-                try (PreparedStatement ps = c.prepareStatement(lockItemsSql)) {
-                    ps.setInt(1, requestId);
-                    try (ResultSet rs = ps.executeQuery()) {
-                        while (rs.next()) {
-                            items.add(new ItemLite(
-                                    rs.getInt("UrunId"),
-                                    rs.getInt("Miktar"),
-                                    rs.getBigDecimal("TeklifFiyati")));
+                try {
+                    // 0) Yalnız bir işlemci içeri girsin: Onay Bekliyor -> Onaylanıyor
+                    int touched;
+                    try (PreparedStatement ps = c.prepareStatement(
+                            "UPDATE dbo.Talepler SET Durum=N'Onaylanıyor' WHERE Id=? AND Durum=N'Onay Bekliyor'")) {
+                        ps.setInt(1, requestId);
+                        touched = ps.executeUpdate();
+                    }
+                    if (touched != 1) {
+                        throw new SQLException("Talep beklemede değil veya başka bir işlem tarafından alındı.");
+                    }
+
+                    // 1) Müşteri id
+                    Integer customerId = null;
+                    try (PreparedStatement ps = c.prepareStatement(
+                            "SELECT MusteriId FROM dbo.Talepler WHERE Id=?")) {
+                        ps.setInt(1, requestId);
+                        try (ResultSet rs = ps.executeQuery()) {
+                            if (rs.next()) customerId = rs.getInt(1);
                         }
                     }
-                }
-                if (items.isEmpty()) throw new SQLException("Talebe ait kalem bulunamadı.");
+                    if (customerId == null) throw new SQLException("Talep başlığı bulunamadı.");
 
-                // 3) Stok düş
-                try (PreparedStatement up = c.prepareStatement(
-                        "UPDATE dbo.Stoklar SET Stok = Stok - ? WHERE Id = ? AND Stok >= ?")) {
-                    for (ItemLite it : items) {
-                        up.setInt(1, it.qty());
-                        up.setInt(2, it.productId());
-                        up.setInt(3, it.qty());
-                        int affected = up.executeUpdate();
-                        if (affected != 1) throw new SQLException("Stok yetersiz (ÜrünId=" + it.productId() + ").");
+                    // 2) Kalemler (productId'e göre sırala → deadlock riski düşer)
+                    List<ItemLite> items = new ArrayList<>();
+                    try (PreparedStatement ps = c.prepareStatement(
+                            "SELECT UrunId, Miktar, TeklifFiyati FROM dbo.TalepKalemleri WHERE TalepId=?")) {
+                        ps.setInt(1, requestId);
+                        try (ResultSet rs = ps.executeQuery()) {
+                            while (rs.next()) {
+                                items.add(new ItemLite(
+                                        rs.getInt("UrunId"),
+                                        rs.getInt("Miktar"),
+                                        rs.getBigDecimal("TeklifFiyati")));
+                            }
+                        }
                     }
-                }
+                    if (items.isEmpty()) throw new SQLException("Talebe ait kalem bulunamadı.");
+                    items.sort(java.util.Comparator.comparingInt(ItemLite::productId));
 
-                // 4) Toplam
-                BigDecimal total = BigDecimal.ZERO;
-                for (ItemLite it : items) {
-                    BigDecimal sub = it.price().multiply(BigDecimal.valueOf(it.qty()));
-                    total = total.add(sub);
-                }
-                total = total.setScale(2, RoundingMode.HALF_UP);
+                    // 3) Stok düş (koşullu)
+                    try (PreparedStatement up = c.prepareStatement(
+                            "UPDATE dbo.Stoklar SET Stok = Stok - ? WHERE Id = ? AND Stok >= ?")) {
+                        for (ItemLite it : items) {
+                            up.setInt(1, it.qty());
+                            up.setInt(2, it.productId());
+                            up.setInt(3, it.qty());
+                            int affected = up.executeUpdate();
+                            if (affected != 1) throw new SQLException("Stok yetersiz (ÜrünId=" + it.productId() + ").");
+                        }
+                    }
 
-                // 5) Bakiye
-                try (PreparedStatement bal = c.prepareStatement(
-                        "UPDATE dbo.Musteriler SET Bakiye = Bakiye - ? WHERE Id = ?")) {
-                    bal.setBigDecimal(1, total);
-                    bal.setInt(2, customerId);
-                    bal.executeUpdate();
-                }
+                    // 4) Toplam
+                    BigDecimal total = BigDecimal.ZERO;
+                    for (ItemLite it : items) {
+                        BigDecimal sub = it.price().multiply(BigDecimal.valueOf(it.qty()));
+                        total = total.add(sub);
+                    }
+                    total = total.setScale(2, RoundingMode.HALF_UP);
 
-                // 6) Onayla
-                int affectedApprove;
-                try (PreparedStatement ps = c.prepareStatement(
-                        "UPDATE dbo.Talepler " +
-                                "SET Durum=N'Onaylandı', OnaylayanKullaniciId=?, OnayTarihi=GETDATE() " +
-                                "WHERE Id=? AND Durum=N'Onay Bekliyor'")) {
-                    ps.setInt(1, approverId);
-                    ps.setInt(2, requestId);
-                    affectedApprove = ps.executeUpdate();
-                }
-                if (affectedApprove != 1) {
-                    throw new SQLException("Talep başka bir işlem tarafından güncellenmiş görünüyor.");
-                }
+                    // 5) Bakiye (iş mantığına göre – sende müşteri bakiyesini düşürüyordu, korundu)
+                    try (PreparedStatement bal = c.prepareStatement(
+                            "UPDATE dbo.Musteriler SET Bakiye = Bakiye - ? WHERE Id = ?")) {
+                        bal.setBigDecimal(1, total);
+                        bal.setInt(2, customerId);
+                        bal.executeUpdate();
+                    }
 
-                c.commit();
-            } catch (SQLException ex) {
-                try { c.rollback(); } catch (SQLException ignore) { }
-                throw ex;
-            } finally {
-                try { c.setTransactionIsolation(oldIso); } catch (SQLException ignore) { }
-                try { c.setAutoCommit(oldAuto); } catch (SQLException ignore) { }
+                    // 6) Onayla (yalnızca 'Onaylanıyor' ise)
+                    try (PreparedStatement ps = c.prepareStatement(
+                            "UPDATE dbo.Talepler " +
+                                    "SET Durum=N'Onaylandı', OnaylayanKullaniciId=?, OnayTarihi=GETDATE() " +
+                                    "WHERE Id=? AND Durum=N'Onaylanıyor'")) {
+                        ps.setInt(1, approverId);
+                        ps.setInt(2, requestId);
+                        int ok = ps.executeUpdate();
+                        if (ok != 1) throw new SQLException("Talep durumu beklenmedik şekilde değişti.");
+                    }
+
+                    c.commit();
+                    return; // başarı
+
+                } catch (SQLException ex) {
+                    try { c.rollback(); } catch (SQLException ignore) { }
+                    if (isDeadlockOrTimeout(ex) && attempt < maxRetries) {
+                        try { Thread.sleep(backoff[attempt - 1]); } catch (InterruptedException ie) {
+                            Thread.currentThread().interrupt();
+                        }
+                        continue; // yeniden dene
+                    }
+                    throw ex;
+                } finally {
+                    try { c.setTransactionIsolation(oldIso); } catch (SQLException ignore) { }
+                    try { c.setAutoCommit(oldAuto); } catch (SQLException ignore) { }
+                }
             }
         }
+
+        throw new SQLException("Onay işlemi tekrar denemelerine rağmen tamamlanamadı.");
     }
 
     public static void rejectRequest(int requestId, int approverId) throws SQLException {
@@ -311,4 +335,12 @@ public class RequestDAO {
     }
 
     private record ItemLite(int productId, int qty, BigDecimal price) {}
+
+    /** SQL Server deadlock (1205) veya lock timeout (1222) tespiti */
+    private static boolean isDeadlockOrTimeout(SQLException ex) {
+        int code = ex.getErrorCode();        // 1205: deadlock victim, 1222: lock timeout
+        if (code == 1205 || code == 1222) return true;
+        String state = ex.getSQLState();     // bazı sürümlerde 40001 (serialization failure) gelebilir
+        return "40001".equals(state);
+    }
 }

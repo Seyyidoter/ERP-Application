@@ -73,6 +73,7 @@ public class ReportsController {
                             w.println("Durum         : " + r.getStatus());
                             w.println("──────────────────────────────────────────────────────────────────────────");
 
+                            // HATA YUTMAK YOK — SQLException dışarı fırlayacak
                             List<ItemRow> items = fetchItemsForRequest(r.getId());
                             if (items.isEmpty()) {
                                 w.println("Kalem bulunamadı.");
@@ -139,7 +140,8 @@ public class ReportsController {
 
     /* -------------------- DB yardımcıları -------------------- */
 
-    private List<ItemRow> fetchItemsForRequest(int requestId) {
+    // >>> DEĞİŞTİ: SQLException'ı yutmak yerine dışarı atıyoruz.
+    private List<ItemRow> fetchItemsForRequest(int requestId) throws SQLException {
         String sql = """
             SELECT s.UrunAdi, tk.Miktar, s.Fiyat AS ListeFiyati, tk.TeklifFiyati AS IskontoluFiyat
             FROM dbo.TalepKalemleri tk
@@ -147,6 +149,7 @@ public class ReportsController {
             WHERE tk.TalepId = ?
             ORDER BY tk.Id
             """;
+
         List<ItemRow> list = new ArrayList<>();
         try (Connection c = DatabaseManager.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
@@ -161,7 +164,7 @@ public class ReportsController {
                     ));
                 }
             }
-        } catch (SQLException ignore) { }
+        }
         return list;
     }
 

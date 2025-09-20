@@ -17,10 +17,10 @@ public class Product {
 
     public Product(int id, String urunAdi, BigDecimal fiyat, int stok, String birim) {
         this.id = new SimpleIntegerProperty(id);
-        this.urunAdi = new SimpleStringProperty(urunAdi);
+        this.urunAdi = new SimpleStringProperty(norm(urunAdi));
         this.fiyat = new SimpleObjectProperty<>(fiyat == null ? BigDecimal.ZERO : fiyat);
         this.stok = new SimpleIntegerProperty(stok);
-        this.birim = new SimpleStringProperty(birim);
+        this.birim = new SimpleStringProperty(norm(birim));
     }
 
     public int getId() { return id.get(); }
@@ -35,8 +35,16 @@ public class Product {
     public SimpleIntegerProperty stokProperty() { return stok; }
     public SimpleStringProperty birimProperty() { return birim; }
 
-    public void setUrunAdi(String urunAdi) { this.urunAdi.set(urunAdi); }
+    public void setUrunAdi(String urunAdi) { this.urunAdi.set(norm(urunAdi)); }
     public void setFiyat(BigDecimal fiyat) { this.fiyat.set(fiyat == null ? BigDecimal.ZERO : fiyat); }
     public void setStok(int stok) { this.stok.set(stok); }
-    public void setBirim(String birim) { this.birim.set(birim); }
+    public void setBirim(String birim) { this.birim.set(norm(birim)); }
+
+    /** null → "", trim → iç/dış boşluk sadeleştirme */
+    private static String norm(String s) {
+        if (s == null) return "";
+        // dışı kırp, içerdeki birden fazla boşluğu tek boşluğa indir (isteğe bağlı faydalı)
+        String t = s.trim().replaceAll("\\s+", " ");
+        return t;
+    }
 }
