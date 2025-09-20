@@ -15,7 +15,6 @@ import java.io.IOException;
 import java.sql.SQLException;
 import java.time.LocalDate;
 
-/** Talep/Teklif liste ekranı + yeni oluştur / görüntüle / sil. */
 public class RequestController {
 
     @FXML private TableView<Row> tblRequests;
@@ -34,7 +33,6 @@ public class RequestController {
         colCustomerName.setCellValueFactory(new PropertyValueFactory<>("customerName"));
         colDate.setCellValueFactory(new PropertyValueFactory<>("requestDate"));
         colStatus.setCellValueFactory(new PropertyValueFactory<>("status"));
-
         DateUtil.setDateColumnDMY(colDate);
 
         tblRequests.setItems(rows);
@@ -64,10 +62,7 @@ public class RequestController {
     @FXML
     private void viewRequest() {
         Row sel = tblRequests.getSelectionModel().getSelectedItem();
-        if (sel == null) {
-            AppDialogs.warn("Lütfen bir talep seçin.");
-            return;
-        }
+        if (sel == null) { AppDialogs.warn("Lütfen bir talep seçin."); return; }
         try {
             FXMLLoader fxml = new FXMLLoader(getClass().getResource("view-request.fxml"));
             Parent view = fxml.load();
@@ -100,31 +95,37 @@ public class RequestController {
 
         if (q.getResult() != ButtonType.YES) return;
 
-        try {
-            RequestDAO.deleteRequestById(sel.getId());
-            AppDialogs.info("Talep silindi.");
-            refresh();
-        } catch (SQLException ex) {
-            AppDialogs.dbError("Talep silme", ex);
-        }
+        tblRequests.setDisable(true);
+        Async.runVoid(() -> {
+                    try {
+                        RequestDAO.deleteRequestById(sel.getId());
+                    } catch (SQLException ex) {
+                        throw new RuntimeException(ex);
+                    }
+                }, () -> {
+                    AppDialogs.info("Talep silindi.");
+                    refresh();
+                }, ex -> AppDialogs.dbError("Talep silme", toSql(ex)),
+                () -> tblRequests.setDisable(false));
     }
 
-    /** Artık deprecated findAll() yerine JOIN’li özet sorgu kullanılıyor. */
+    /** JOIN’li özet sorgu kullanılıyor; arka planda yükle. */
     private void refresh() {
-        try {
-            rows.clear();
-            for (RequestSummary s : RequestDAO.findAllSummaries()) {
-                rows.add(new Row(
-                        s.getId(),
-                        s.getCustomerId(),
-                        s.getCustomerName(),
-                        s.getRequestDate(),
-                        s.getStatus()
-                ));
-            }
-        } catch (SQLException ex) {
-            AppDialogs.dbError("Taleplerin yüklenmesi", ex);
-        }
+        tblRequests.setDisable(true);
+        Async.run(() -> {
+                    try {
+                        var list = RequestDAO.findAllSummaries();
+                        ObservableList<Row> tmp = FXCollections.observableArrayList();
+                        for (RequestSummary s : list) {
+                            tmp.add(new Row(s.getId(), s.getCustomerId(), s.getCustomerName(), s.getRequestDate(), s.getStatus()));
+                        }
+                        return tmp;
+                    } catch (SQLException ex) {
+                        throw new RuntimeException(ex);
+                    }
+                }, tmp -> rows.setAll(tmp),
+                ex -> AppDialogs.dbError("Taleplerin yüklenmesi", toSql(ex)),
+                () -> tblRequests.setDisable(false));
     }
 
     /** Liste satırı modeli. */
@@ -134,15 +135,23 @@ public class RequestController {
         private final String customerName;
         private final LocalDate requestDate;
         private final String status;
-
         public Row(int id, int customerId, String customerName, LocalDate requestDate, String status){
             this.id = id; this.customerId = customerId; this.customerName = customerName; this.requestDate = requestDate; this.status = status;
         }
-
         public int getId(){ return id; }
         public int getCustomerId(){ return customerId; }
         public String getCustomerName(){ return customerName; }
         public LocalDate getRequestDate(){ return requestDate; }
         public String getStatus(){ return status; }
+    }
+
+    private static SQLException toSql(Throwable t) {
+        if (t instanceof SQLException se) return se;
+        Throwable c = t.getCause();
+        while (c != null && c != t) {
+            if (c instanceof SQLException se) return se;
+            c = c.getCause();
+        }
+        return new SQLException(t.getMessage(), t);
     }
 }

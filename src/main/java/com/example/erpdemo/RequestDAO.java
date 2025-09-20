@@ -12,24 +12,6 @@ import java.util.List;
 
 public class RequestDAO {
 
-    @Deprecated
-    public static List<Request> findAll() {
-        List<Request> list = new ArrayList<>();
-        String sql = """
-            SELECT Id, MusteriId, TalepTarihi, Durum, OnaylayanKullaniciId, OnayTarihi
-            FROM dbo.Talepler
-            ORDER BY Id DESC
-        """;
-        try (Connection c = DatabaseManager.getConnection();
-             PreparedStatement ps = c.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
-            while (rs.next()) list.add(mapRowToRequest(rs));
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        return list;
-    }
-
     public static List<RequestSummary> findAllSummaries() throws SQLException {
         List<RequestSummary> list = new ArrayList<>();
         String sql = """
@@ -178,19 +160,23 @@ public class RequestDAO {
         }
     }
 
-    public static double getRequestTotal(int requestId) throws SQLException {
-        String sql = """
-            SELECT COALESCE(SUM(Miktar * TeklifFiyati), 0)
-            FROM dbo.TalepKalemleri
-            WHERE TalepId = ?
-        """;
+    /** Toplamı BigDecimal olarak döndürür (2 ondalık, HALF_UP). */
+    public static BigDecimal getRequestTotal(int requestId) throws SQLException {
+        String sql = "SELECT COALESCE(SUM(Miktar * TeklifFiyati), 0) FROM dbo.TalepKalemleri WHERE TalepId = ?";
         try (Connection c = DatabaseManager.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setInt(1, requestId);
             try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? rs.getDouble(1) : 0.0;
+                BigDecimal v = rs.next() ? rs.getBigDecimal(1) : BigDecimal.ZERO;
+                return (v == null ? BigDecimal.ZERO : v).setScale(2, RoundingMode.HALF_UP);
             }
         }
+    }
+
+    /** Eski çağrılar için kolaylık. Yeni kodlarda BigDecimal kullanalım. */
+    @Deprecated
+    public static double getRequestTotalAsDouble(int requestId) throws SQLException {
+        return getRequestTotal(requestId).doubleValue();
     }
 
     /**
@@ -203,11 +189,10 @@ public class RequestDAO {
             final int oldIso = c.getTransactionIsolation();
 
             c.setAutoCommit(false);
-            // Eşzamanlı onay yarışı için en güvenli yaklaşım:
             c.setTransactionIsolation(Connection.TRANSACTION_SERIALIZABLE);
 
             try {
-                // 1) Talep satırını BEKLEME durumunda satır kilidiyle oku
+                // 1) Başlık kilitle
                 Integer customerId = null;
                 String lockHeaderSql = """
                     SELECT MusteriId
@@ -222,7 +207,7 @@ public class RequestDAO {
                 }
                 if (customerId == null) throw new SQLException("Talep beklemede değil veya bulunamadı.");
 
-                // 2) Kalemleri, yine kilit ipuçlarıyla oku
+                // 2) Kalemleri kilitle
                 List<ItemLite> items = new ArrayList<>();
                 String lockItemsSql = """
                     SELECT UrunId, Miktar, TeklifFiyati
@@ -243,7 +228,7 @@ public class RequestDAO {
                 }
                 if (items.isEmpty()) throw new SQLException("Talebe ait kalem bulunamadı.");
 
-                // 3) Stok düş (negatife izin verme). UPDATE zaten satır kilidi alır.
+                // 3) Stok düş
                 try (PreparedStatement up = c.prepareStatement(
                         "UPDATE dbo.Stoklar SET Stok = Stok - ? WHERE Id = ? AND Stok >= ?")) {
                     for (ItemLite it : items) {
@@ -255,7 +240,7 @@ public class RequestDAO {
                     }
                 }
 
-                // 4) Toplam (2 ondalık, HALF_UP)
+                // 4) Toplam
                 BigDecimal total = BigDecimal.ZERO;
                 for (ItemLite it : items) {
                     BigDecimal sub = it.price().multiply(BigDecimal.valueOf(it.qty()));
@@ -263,7 +248,7 @@ public class RequestDAO {
                 }
                 total = total.setScale(2, RoundingMode.HALF_UP);
 
-                // 5) Müşteri bakiyesi -= toplam (borç artar)
+                // 5) Bakiye
                 try (PreparedStatement bal = c.prepareStatement(
                         "UPDATE dbo.Musteriler SET Bakiye = Bakiye - ? WHERE Id = ?")) {
                     bal.setBigDecimal(1, total);
@@ -271,7 +256,7 @@ public class RequestDAO {
                     bal.executeUpdate();
                 }
 
-                // 6) Talebi ONAYLA — koşullu update ile tek atışta güvence
+                // 6) Onayla
                 int affectedApprove;
                 try (PreparedStatement ps = c.prepareStatement(
                         "UPDATE dbo.Talepler " +
@@ -282,7 +267,6 @@ public class RequestDAO {
                     affectedApprove = ps.executeUpdate();
                 }
                 if (affectedApprove != 1) {
-                    // Teorik olarak başka bir işlem arada durumu değiştirdiyse, geri al.
                     throw new SQLException("Talep başka bir işlem tarafından güncellenmiş görünüyor.");
                 }
 
@@ -291,7 +275,6 @@ public class RequestDAO {
                 try { c.rollback(); } catch (SQLException ignore) { }
                 throw ex;
             } finally {
-                // Eski ayarlara dön
                 try { c.setTransactionIsolation(oldIso); } catch (SQLException ignore) { }
                 try { c.setAutoCommit(oldAuto); } catch (SQLException ignore) { }
             }
@@ -311,9 +294,7 @@ public class RequestDAO {
             ps.setInt(1, approverId);
             ps.setInt(2, requestId);
             int affected = ps.executeUpdate();
-            if (affected == 0) {
-                throw new SQLException("Talep beklemede değil veya bulunamadı.");
-            }
+            if (affected == 0) throw new SQLException("Talep beklemede değil veya bulunamadı.");
         }
     }
 

@@ -13,7 +13,6 @@ import javafx.stage.Stage;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.sql.SQLException;
-import java.util.Locale;
 
 public class StockController {
 
@@ -28,20 +27,13 @@ public class StockController {
     public void initialize() {
         idColumn.setCellValueFactory(new PropertyValueFactory<>("id"));
         nameColumn.setCellValueFactory(new PropertyValueFactory<>("urunAdi"));
-        priceColumn.setCellValueFactory(new PropertyValueFactory<>("fiyat"));   // BigDecimal
+        priceColumn.setCellValueFactory(new PropertyValueFactory<>("fiyat"));
         stockColumn.setCellValueFactory(new PropertyValueFactory<>("stok"));
         unitColumn.setCellValueFactory(new PropertyValueFactory<>("birim"));
 
-        priceColumn.setCellFactory(col -> new TableCell<>() {
-            @Override protected void updateItem(BigDecimal v, boolean empty) {
-                super.updateItem(v, empty);
-                if (empty || v == null) { setText(null); setStyle(""); }
-                else {
-                    setText(String.format(Locale.forLanguageTag("tr-TR"), "%.2f", v));
-                    setStyle("-fx-alignment: CENTER-RIGHT;");
-                }
-            }
-        });
+        // Para görünümü
+        priceColumn.setCellFactory(MoneyCells.twoDecimalsTR());
+
         stockColumn.setCellFactory(col -> new TableCell<>() {
             @Override protected void updateItem(Integer v, boolean empty) {
                 super.updateItem(v, empty);

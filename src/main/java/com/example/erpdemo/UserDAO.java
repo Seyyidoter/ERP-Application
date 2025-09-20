@@ -26,19 +26,8 @@ public class UserDAO {
         return user;
     }
 
-    /** Var olan basit sürüm: mevcut şifre kontrolü dışarıda yapılır. */
-    public static void updatePassword(int userId, String newPassword) throws SQLException {
-        String sql = "UPDATE Kullanicilar SET Sifre=? WHERE Id=?";
-        try (Connection conn = DatabaseManager.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, newPassword);
-            ps.setInt(2, userId);
-            ps.executeUpdate();
-        }
-    }
-
     /**
-     * Aşırı-yüklenmiş sürüm: mevcut şifreyi kontrol eder, doğruysa yeni şifreyi yazar.
+     * Mevcut şifreyi doğrular; doğruysa yeni şifreyi yazar.
      * @return true -> güncellendi, false -> mevcut şifre hatalı
      */
     public static boolean updatePassword(int userId, String currentPassword, String newPassword) throws SQLException {

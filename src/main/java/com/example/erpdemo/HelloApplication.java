@@ -4,49 +4,49 @@ import javafx.application.Application;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
-import javafx.scene.image.Image;
 import javafx.stage.Stage;
 
-import java.util.Locale;
-
+/**
+ * Uygulama giriş noktası.
+ * Not: Uygulama kapanırken Hikari havuzunu kapatmak için stop() override edildi.
+ */
 public class HelloApplication extends Application {
 
-    /** Uygulamanın ana sahnesi (PDF kaydet vb. yerlerde lazım) */
-    private static Stage primaryStage;
+    /** Oturum açmış kullanıcının ID’si (Approval ekranı tarafından kullanılıyor). */
+    private static volatile int loggedInUserId = 0;
 
-    /** Basit oturum bilgisi: onaylayan kullanıcı id (şimdilik 1) */
-    private static int loggedInUserId = 1;
-
-    public static Stage getPrimaryStage() { return primaryStage; }
     public static int getLoggedInUserId() { return loggedInUserId; }
     public static void setLoggedInUserId(int id) { loggedInUserId = id; }
 
     @Override
     public void start(Stage stage) throws Exception {
-        Locale.setDefault(new Locale("tr","TR"));
+        // Giriş (login) ekranını yükle
+        FXMLLoader fxml = new FXMLLoader(getClass().getResource("hello-view.fxml"));
+        Parent root = fxml.load();
 
-        FXMLLoader loader = new FXMLLoader(HelloApplication.class.getResource("hello-view.fxml"));
-        Parent root = loader.load();
-
-        Scene scene = new Scene(root, 600, 420);
-        var css = HelloApplication.class.getResource("hello.css");
-        if (css != null) scene.getStylesheets().add(css.toExternalForm());
-
-        stage.setTitle("Omnis");
-        stage.getIcons().addAll(
-                new Image(HelloApplication.class.getResourceAsStream("/com/example/erpdemo/assets/logo-16.png")),
-                new Image(HelloApplication.class.getResourceAsStream("/com/example/erpdemo/assets/logo-32.png")),
-                new Image(HelloApplication.class.getResourceAsStream("/com/example/erpdemo/assets/logo-64.png"))
-        );
-
-        stage.setMinWidth(560);
-        stage.setMinHeight(380);
+        Scene scene = new Scene(root);
         stage.setScene(scene);
-        stage.centerOnScreen();
+        stage.setTitle("Omnis");
+        IconUtil.setAppIcon(stage); // (opsiyonel) uygulama ikonu
 
-        primaryStage = stage;
         stage.show();
     }
 
-    public static void main(String[] args) { launch(); }
+    /**
+     * JavaFX yaşam döngüsü: pencere kapanırken çağrılır.
+     * Burada HikariCP havuzunu düzgün biçimde kapatıyoruz.
+     */
+    @Override
+    public void stop() {
+        try {
+            DatabaseManager.shutdownPool();
+        } catch (Exception ex) {
+            // Kapanışta hata olsa bile uygulamayı engellemeyelim; loglamak yeterli.
+            System.err.println("Connection pool shutdown error: " + ex.getMessage());
+        }
+    }
+
+    public static void main(String[] args) {
+        launch();
+    }
 }

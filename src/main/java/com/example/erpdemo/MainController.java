@@ -256,12 +256,12 @@ public class MainController {
         }
 
         try {
-            boolean ok = DatabaseManager.validateLogin(loggedInUser.getUsername(), cur);
-            if (!ok) {
+            // Tek DB çağrısı: mevcut şifre kontrol + güncelleme
+            boolean updated = UserDAO.updatePassword(loggedInUser.getId(), cur, np1);
+            if (!updated) {
                 showAlert(Alert.AlertType.ERROR, "Hata", "Mevcut şifre yanlış.");
                 return;
             }
-            UserDAO.updatePassword(loggedInUser.getId(), np1);
             showAlert(Alert.AlertType.INFORMATION, "Başarılı", "Şifreniz güncellendi.");
         } catch (SQLException e) {
             showAlert(Alert.AlertType.ERROR, "Hata", "Şifre güncellenemedi: " + e.getMessage());

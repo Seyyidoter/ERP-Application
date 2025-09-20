@@ -9,7 +9,6 @@ import javafx.stage.Stage;
 import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.time.LocalDate;
-import java.util.Locale;
 
 public class ProductHistoryController {
 
@@ -24,8 +23,8 @@ public class ProductHistoryController {
     @FXML private TableColumn<ProductHistoryRow, String>     colStatus;
     @FXML private TableColumn<ProductHistoryRow, String>     colCustomer;
     @FXML private TableColumn<ProductHistoryRow, Integer>    colQty;
-    @FXML private TableColumn<ProductHistoryRow, BigDecimal> colUnit;      // BigDecimal
-    @FXML private TableColumn<ProductHistoryRow, BigDecimal> colSubtotal;  // BigDecimal
+    @FXML private TableColumn<ProductHistoryRow, BigDecimal> colUnit;
+    @FXML private TableColumn<ProductHistoryRow, BigDecimal> colSubtotal;
 
     @FXML private Label lblTotalQty, lblTotalAmount;
 
@@ -37,41 +36,19 @@ public class ProductHistoryController {
         colReqId.setCellValueFactory(new PropertyValueFactory<>("requestId"));
         colDate.setCellValueFactory(new PropertyValueFactory<>("date"));
         colStatus.setCellValueFactory(new PropertyValueFactory<>("status"));
-        colCustomer.setCellValueFactory(new PropertyValueFactory<>("customer"));   // <-- customerName yerine customer
+        colCustomer.setCellValueFactory(new PropertyValueFactory<>("customer"));
         colQty.setCellValueFactory(new PropertyValueFactory<>("qty"));
         colUnit.setCellValueFactory(new PropertyValueFactory<>("unit"));
         colSubtotal.setCellValueFactory(new PropertyValueFactory<>("subtotal"));
 
-        // hizalama + sayı biçimleme
         colQty.setStyle("-fx-alignment: CENTER-RIGHT;");
-        colUnit.setCellFactory(col -> new TableCell<>() {
-            @Override protected void updateItem(BigDecimal v, boolean empty) {
-                super.updateItem(v, empty);
-                if (empty || v == null) {
-                    setText(null); setStyle("");
-                } else {
-                    setText(String.format(Locale.forLanguageTag("tr-TR"), "%.2f", v));
-                    setStyle("-fx-alignment: CENTER-RIGHT;");
-                }
-            }
-        });
-        colSubtotal.setCellFactory(col -> new TableCell<>() {
-            @Override protected void updateItem(BigDecimal v, boolean empty) {
-                super.updateItem(v, empty);
-                if (empty || v == null) {
-                    setText(null); setStyle("");
-                } else {
-                    setText(String.format(Locale.forLanguageTag("tr-TR"), "%.2f", v));
-                    setStyle("-fx-alignment: CENTER-RIGHT;");
-                }
-            }
-        });
+        colUnit.setCellFactory(MoneyCells.twoDecimalsTR());
+        colSubtotal.setCellFactory(MoneyCells.twoDecimalsTR());
 
         tblHistory.setPlaceholder(new Label("Kayıt bulunmuyor."));
         cbStatus.getItems().setAll("Hepsi", "Onaylandı", "Reddedildi", "Onay Bekliyor");
         cbStatus.getSelectionModel().selectFirst();
 
-        // tarih kolonu görsel formatı (sende varsa)
         try { DateUtil.setDateColumnDMY(colDate); } catch (Throwable ignore) {}
     }
 
@@ -104,27 +81,40 @@ public class ProductHistoryController {
         String customerLike = txtCustomer.getText() == null ? null : txtCustomer.getText().trim();
         if (customerLike != null && customerLike.isEmpty()) customerLike = null;
 
-        try {
-            ObservableList<ProductHistoryRow> list =
-                    ProductHistoryDAO.findHistoryForProduct(product.getId(), from, to, statusParam, customerLike);
-            tblHistory.setItems(list);
+        setBusy(true);
+        String finalCustomerLike = customerLike;
 
-            int totalQty = list.stream()
-                    .filter(r -> "Onaylandı".equalsIgnoreCase(r.getStatus()))
-                    .mapToInt(ProductHistoryRow::getQty)
-                    .sum();
+        Async.run(() -> {
+                    try {
+                        return ProductHistoryDAO.findHistoryForProduct(
+                                product.getId(), from, to, statusParam, finalCustomerLike);
+                    } catch (SQLException e) {
+                        throw new RuntimeException(e);
+                    }
+                },
+                list -> {
+                    tblHistory.setItems(list);
 
-            BigDecimal totalAmount = list.stream()
-                    .filter(r -> "Onaylandı".equalsIgnoreCase(r.getStatus()))
-                    .map(ProductHistoryRow::getSubtotal)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+                    int totalQty = list.stream()
+                            .filter(r -> "Onaylandı".equalsIgnoreCase(r.getStatus()))
+                            .mapToInt(ProductHistoryRow::getQty)
+                            .sum();
 
-            lblTotalQty.setText(String.valueOf(totalQty));
-            lblTotalAmount.setText(String.format(Locale.forLanguageTag("tr-TR"), "%.2f TL", totalAmount));
+                    BigDecimal totalAmount = list.stream()
+                            .filter(r -> "Onaylandı".equalsIgnoreCase(r.getStatus()))
+                            .map(ProductHistoryRow::getSubtotal)
+                            .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        } catch (SQLException e) {
-            AppDialogs.dbError("Ürün geçmişi yükleme", e);
-        }
+                    lblTotalQty.setText(String.valueOf(totalQty));
+                    lblTotalAmount.setText(MoneyCells.fmtTL(totalAmount));
+                },
+                ex -> AppDialogs.dbError("Ürün geçmişi yükleme", toSql(ex)),
+                () -> setBusy(false));
+    }
+
+    private void setBusy(boolean busy) {
+        tblHistory.setDisable(busy);
+        if (dialogStage != null) dialogStage.getScene().getRoot().setDisable(busy);
     }
 
     @FXML
@@ -133,5 +123,16 @@ public class ProductHistoryController {
         else if (tblHistory != null && tblHistory.getScene() != null) {
             tblHistory.getScene().getWindow().hide();
         }
+    }
+
+    /** Throwable → SQLException dönüştürücü (zincirde varsa onu döndürür) */
+    private static SQLException toSql(Throwable t) {
+        if (t instanceof SQLException se) return se;
+        Throwable c = t.getCause();
+        while (c != null && c != t) {
+            if (c instanceof SQLException se) return se;
+            c = c.getCause();
+        }
+        return new SQLException(t.getMessage(), t);
     }
 }
