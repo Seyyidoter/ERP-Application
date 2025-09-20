@@ -216,7 +216,6 @@ public class CustomerController {
 
         try {
             PaymentDAO.addPayment(sel.getId(), amount, desc);
-            CustomerDAO.adjustBalance(sel.getId(), amount); // borç azalır
             showAlert(Alert.AlertType.INFORMATION, "Başarılı", "Ödeme kaydedildi.");
             loadCustomers();
         } catch (SQLException e) {

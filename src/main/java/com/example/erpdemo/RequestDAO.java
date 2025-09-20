@@ -206,7 +206,8 @@ public class RequestDAO {
     private static Request mapRowToRequest(ResultSet rs) throws SQLException {
         int id = rs.getInt("Id");
         int customerId = rs.getInt("MusteriId");
-        LocalDate requestDate = rs.getDate("TalepTarihi").toLocalDate();
+        Date d = rs.getDate("TalepTarihi");
+        LocalDate requestDate = (d != null ? d.toLocalDate() : null);
         String status = rs.getString("Durum");
         Integer approvedBy = (Integer) rs.getObject("OnaylayanKullaniciId");
         Date approvedAtSql = rs.getDate("OnayTarihi");

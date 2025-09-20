@@ -3,7 +3,8 @@
 <?import javafx.scene.control.*?>
 <?import javafx.geometry.*?>
 
-<BorderPane xmlns:fx="http://javafx.com/fxml"
+<BorderPane xmlns="http://javafx.com/javafx/21"
+            xmlns:fx="http://javafx.com/fxml"
             fx:controller="com.example.erpdemo.MainController"
             stylesheets="@main-view.css">
 

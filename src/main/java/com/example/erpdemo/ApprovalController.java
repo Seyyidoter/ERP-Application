@@ -9,6 +9,8 @@ import javafx.scene.control.cell.PropertyValueFactory;
 import java.sql.SQLException;
 import java.time.LocalDate;
 
+import static jdk.internal.org.jline.utils.Log.warn;
+
 /**
  * Onay ekranı: bekleyen talepleri listeler, Onayla/Reddet işlemlerini yapar.
  * Onaylanınca talep toplamı kadar müşterinin bakiyesi DÜŞÜRÜLÜR (borç artar).
@@ -54,19 +56,50 @@ public class ApprovalController {
         if (sel == null) return;
 
         try {
-            // 1) Talebi onayla
-            RequestDAO.approveRequest(sel.getId(), HelloApplication.getLoggedInUserId());
+            // 0) Kalemleri çek
+            var items = RequestDAO.getRequestItemsByRequestId(sel.getId());
+            if (items == null || items.isEmpty()) {
+                warn("Uyarı", "Talebe ait kalem bulunamadı.");
+                return;
+            }
 
-            // 2) Toplamı al ve bakiyeyi düşür (borç artar)
-            double total = RequestDAO.getRequestTotal(sel.getId());
+            // 0.1) Stokları tekrar doğrula (yarış durumlarına karşı)
+            for (var it : items) {
+                var p = ProductDAO.getProductById(it.getProductId());
+                if (p == null) {
+                    error("Hata", "Ürün bulunamadı (ID: " + it.getProductId() + ").");
+                    return;
+                }
+                if (p.getStok() < it.getQuantity()) {
+                    warn("Uyarı", "Stok yetersiz: " + p.getUrunAdi() +
+                            " (Stok: " + p.getStok() + ", İstenen: " + it.getQuantity() + ")");
+                    return;
+                }
+            }
+
+            // 1) Talebi onayla
+            int approverId = HelloApplication.getLoggedInUserId();
+            RequestDAO.approveRequest(sel.getId(), approverId);
+
+            // 2) Stok düş
+            for (var it : items) {
+                ProductDAO.updateProductStock(it.getProductId(), -it.getQuantity());
+            }
+
+            // 3) Toplamı kalemlerden hesapla ve bakiyeyi düş (borç artar)
+            double total = items.stream()
+                    .mapToDouble(i -> i.getDiscountedPrice() * i.getQuantity())
+                    .sum();
             CustomerDAO.adjustBalance(sel.getCustomerId(), -total);
 
-            info("Başarılı", "Talep onaylandı. Müşteri bakiyesine yansıtıldı.");
+            info("Başarılı", "Talep onaylandı. Stok ve müşteri bakiyesi güncellendi.");
             refresh();
+
         } catch (SQLException ex) {
             error("Hata", "Onay işlemi başarısız: " + ex.getMessage());
         }
     }
+
 
     @FXML
     private void handleReject() {
