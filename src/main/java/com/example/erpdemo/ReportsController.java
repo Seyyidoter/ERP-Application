@@ -45,6 +45,7 @@ public class ReportsController {
                 return;
             }
 
+            // Yazma işi bittiğinde PdfWriter otomatik kapanacak
             try (PdfWriter w = new PdfWriter(document, font)) {
                 w.startPage();
                 w.println("Onaylanmış Talepler Raporu");
@@ -56,7 +57,7 @@ public class ReportsController {
                 } else {
                     DateTimeFormatter dateFmt = DateTimeFormatter.ofPattern("dd.MM.yyyy", TR);
 
-                    // müşteri adlarını toplu çek
+                    // müşteri adlarını toplu çek (tek sefer)
                     Set<Integer> customerIds = new LinkedHashSet<>();
                     for (Request r : approved) customerIds.add(r.getCustomerId());
                     Map<Integer, String> nameMap = CustomerDAO.getCustomerNamesByIds(customerIds);
@@ -118,8 +119,9 @@ public class ReportsController {
                         w.println("");
                     }
                 }
-            }
+            } // <- PdfWriter kapandı
 
+            // Dosyayı writer kapandıktan sonra kaydet
             String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH.mm.ss", TR));
             Path outDir = Paths.get("reports");
             Files.createDirectories(outDir);
@@ -176,7 +178,7 @@ public class ReportsController {
         mono = tryLoadFont(doc, "/DejaVuSansMono.ttf");
         if (mono != null) return mono;
 
-        // 2) times.ttf (mevcut projede var) – oransal, sadece yedek
+        // 2) times.ttf (yedek, oransal)
         PDType0Font times = tryLoadFont(doc, "/com/example/erpdemo/times.ttf");
         if (times != null) return times;
         return tryLoadFont(doc, "/times.ttf");
@@ -277,7 +279,6 @@ public class ReportsController {
     private static String fmtMoney(BigDecimal v) {
         if (v == null) v = BigDecimal.ZERO;
         v = v.setScale(2, RoundingMode.HALF_UP);
-        // Genişliği padding ile veriyoruz; sayı formatını TR yapıyoruz.
         return String.format(TR, "%.2f", v);
     }
 }

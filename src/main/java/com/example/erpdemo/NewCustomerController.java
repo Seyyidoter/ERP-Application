@@ -35,7 +35,7 @@ public class NewCustomerController {
                 }
                 discount = Integer.parseInt(discTxt);
             } catch (NumberFormatException nfe) {
-                AppDialogs.error("İskonto değeri sayısal olmalı (örn. 0, 5, 10).");
+                AppDialogs.warn("İskonto değeri sayısal olmalı (örn. 0, 5, 10).");
                 return;
             }
         }
@@ -50,7 +50,8 @@ public class NewCustomerController {
             AppDialogs.info("Müşteri başarıyla eklendi.");
             closeWindow();
         } catch (SQLException e) {
-            AppDialogs.error("Müşteri eklenemedi: " + e.getMessage());
+            // HATA MESAJI SIZDIRMA: kullanıcıya güvenli/arkaplanda loglanan mesaj göster
+            AppDialogs.dbError("Müşteri ekleme", e);
         }
     }
 

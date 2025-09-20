@@ -1,61 +1,70 @@
 package com.example.erpdemo;
 
 import javafx.fxml.FXML;
+import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
+import javafx.scene.control.TextFormatter;
 import javafx.stage.Stage;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.sql.SQLException;
+import java.util.Locale;
+import java.util.function.UnaryOperator;
 
 public class NewProductController {
 
-    @FXML private javafx.scene.control.Label titleLabel;
+    @FXML private Label     titleLabel;
     @FXML private TextField nameField;
     @FXML private TextField priceField;
     @FXML private TextField stockField;
     @FXML private TextField unitField;
 
-    private Stage dialogStage;
+    private Stage   dialogStage;
     private Product product;
 
     public void setDialogStage(Stage dialogStage) { this.dialogStage = dialogStage; }
 
+    @FXML
+    public void initialize() {
+        priceField.setTextFormatter(new TextFormatter<>(numericDecimalFilter()));
+        stockField.setTextFormatter(new TextFormatter<>(numericIntFilter()));
+    }
+
     public void setProduct(Product product) {
         this.product = product;
-        titleLabel.setText("Ürün Düzenle");
-        nameField.setText(product.getUrunAdi());
-        priceField.setText(product.getFiyat() == null ? "0.00" : product.getFiyat().toPlainString());
-        stockField.setText(String.valueOf(product.getStok()));
-        unitField.setText(product.getBirim());
+        if (titleLabel != null) titleLabel.setText(product == null ? "Yeni Ürün Ekle" : "Ürün Düzenle");
+
+        if (product != null) {
+            nameField.setText(product.getUrunAdi());
+            priceField.setText(String.format(Locale.ROOT, "%.2f", product.getFiyat())); // BigDecimal->String
+            stockField.setText(String.valueOf(product.getStok()));
+            unitField.setText(product.getBirim());
+        }
     }
 
     @FXML
     private void handleSave() {
         try {
-            String name = nameField.getText();
-            String unit = unitField.getText();
+            String name = safeTrim(nameField.getText());
+            String unit = safeTrim(unitField.getText());
+            if (name.isBlank()) { AppDialogs.warn("Ürün adı boş olamaz."); return; }
+            if (unit.isBlank()) { AppDialogs.warn("Birim boş olamaz.");   return; }
 
-            if (name == null || name.isBlank()) { AppDialogs.warn("Ürün adı boş olamaz."); return; }
-            if (unit == null || unit.isBlank()) { AppDialogs.warn("Birim boş olamaz."); return; }
-
-            String priceText = (priceField.getText() == null ? "0" : priceField.getText().trim().replace(",", "."));
-            BigDecimal price;
-            try {
-                price = new BigDecimal(priceText);
-            } catch (NumberFormatException ex) {
-                AppDialogs.warn("Fiyat sayısal olmalı."); return;
-            }
+            BigDecimal price = parsePriceBD(priceField.getText());
+            if (price == null) { AppDialogs.warn("Fiyat girin (örn. 12,50)."); return; }
             if (price.signum() < 0) { AppDialogs.warn("Fiyat negatif olamaz."); return; }
 
-            int stock;
-            try { stock = Integer.parseInt(stockField.getText().trim()); }
-            catch (NumberFormatException ex) { AppDialogs.warn("Stok sayısal bir tam sayı olmalı."); return; }
-            if (stock < 0) { AppDialogs.warn("Stok negatif olamaz."); return; }
+            Integer stock = parseInt(stockField.getText());
+            if (stock == null) { AppDialogs.warn("Stok sayısal bir tam sayı olmalı."); return; }
+            if (stock < 0)     { AppDialogs.warn("Stok negatif olamaz.");              return; }
 
             if (product == null) {
+                // EKLE – DAO artık BigDecimal alıyor
                 ProductDAO.addProduct(name, price, stock, unit);
                 AppDialogs.info("Yeni ürün başarıyla eklendi.");
             } else {
+                // GÜNCELLE – Product#setFiyat de BigDecimal alıyor
                 product.setUrunAdi(name);
                 product.setFiyat(price);
                 product.setStok(stock);
@@ -63,12 +72,59 @@ public class NewProductController {
                 ProductDAO.updateProduct(product);
                 AppDialogs.info("Ürün bilgileri başarıyla güncellendi.");
             }
-            if (dialogStage != null) dialogStage.close();
+
+            closeWindowIfPossible();
+
         } catch (SQLException e) {
             AppDialogs.dbError("Ürün kaydetme", e);
+        } catch (Exception e) {
+            AppDialogs.unexpectedError("Ürün kaydetme", e);
         }
     }
 
     @FXML
-    private void handleCancel() { if (dialogStage != null) dialogStage.close(); }
+    private void handleCancel() { closeWindowIfPossible(); }
+
+    private void closeWindowIfPossible() {
+        if (nameField != null && nameField.getScene() != null) {
+            var w = nameField.getScene().getWindow();
+            if (w instanceof Stage s) s.close(); else w.hide();
+        }
+    }
+
+    private static String safeTrim(String s) { return s == null ? "" : s.trim(); }
+
+    /** Virgül/nokta ayracını kabul eder, 2 ondalığa yuvarlanmış BigDecimal döndürür. */
+    private static BigDecimal parsePriceBD(String raw) {
+        if (raw == null) return null;
+        String txt = raw.trim();
+        if (txt.isEmpty()) return null;
+        txt = txt.replace(',', '.');
+        try {
+            return new BigDecimal(txt).setScale(2, RoundingMode.HALF_UP);
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
+    private static Integer parseInt(String raw) {
+        if (raw == null) return null;
+        String t = raw.trim();
+        if (t.isEmpty()) return null;
+        try { return Integer.parseInt(t); } catch (NumberFormatException ex) { return null; }
+    }
+
+    private static UnaryOperator<TextFormatter.Change> numericIntFilter() {
+        return change -> change.getControlNewText().matches("\\d*") ? change : null;
+    }
+
+    private static UnaryOperator<TextFormatter.Change> numericDecimalFilter() {
+        return change -> {
+            String s = change.getControlNewText();
+            if (s.isEmpty()) return change;
+            if (!s.matches("[0-9.,]*")) return null;
+            long sep = s.chars().filter(ch -> ch == '.' || ch == ',').count();
+            return sep <= 1 ? change : null;
+        };
+    }
 }
