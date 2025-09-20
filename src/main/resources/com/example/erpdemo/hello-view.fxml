@@ -24,27 +24,25 @@
           <Image url="@assets/logo-32.png"/>
         </image>
       </ImageView>
-      <Label text="Omnis"
-             style="-fx-font-size:28px; -fx-font-weight:bold; -fx-text-fill:white;"/>
+      <Label text="Omnis" styleClass="title"/>
     </HBox>
 
-    <!-- Kart (daha küçük) -->
+    <!-- Kart -->
     <VBox spacing="16"
           prefWidth="460" maxWidth="460" minWidth="460"
           prefHeight="250" maxHeight="250" minHeight="250"
-          style="-fx-background-color: rgba(245,246,248,0.94);
-                     -fx-background-radius: 16;
-                     -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.28), 18, 0.2, 0, 6);">
+          styleClass="card">
+
       <padding>
         <Insets top="20" right="20" bottom="20" left="20"/>
       </padding>
 
       <!-- Etiket üstte, alan altta -->
       <VBox spacing="8">
-        <Label text="Kullanıcı Adı"/>
+        <Label text="Kullanıcı Adı" styleClass="field-label"/>
         <TextField fx:id="txtUser" promptText="kullanıcı" onAction="#handleLogin"/>
 
-        <Label text="Şifre" style="-fx-padding: 12 0 0 0;"/>
+        <Label text="Şifre" style="-fx-padding: 12 0 0 0;" styleClass="field-label"/>
         <PasswordField fx:id="txtPass" promptText="••••" onAction="#handleLogin"/>
 
         <HBox alignment="CENTER_LEFT" spacing="8" style="-fx-padding: 14 0 0 0;">
@@ -52,8 +50,8 @@
                   text="Giriş Yap"
                   onAction="#handleLogin"
                   defaultButton="true"
-                  style="-fx-background-color:#1a73e8; -fx-text-fill:white; -fx-font-weight:bold;
-                                   -fx-background-radius:10; -fx-padding:12 18;"/>
+                  styleClass="primary-btn"
+                  focusTraversable="false"/>
         </HBox>
       </VBox>
     </VBox>

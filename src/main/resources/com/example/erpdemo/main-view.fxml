@@ -4,16 +4,16 @@
 <?import javafx.geometry.*?>
 
 <BorderPane xmlns="http://javafx.com/javafx/21"
-            xmlns:fx="http://javafx.com/fxml"
+            xmlns:fx="http://javafx.com/fxml/1"
             fx:controller="com.example.erpdemo.MainController"
             stylesheets="@main-view.css">
 
-    <!-- ÜST: App Bar (Yardım butonu kaldırıldı) -->
+    <!-- ÜST: App Bar -->
     <top>
         <HBox styleClass="appbar" alignment="CENTER_LEFT" spacing="14">
             <Label fx:id="pageTitle" text="Gösterge Paneli" styleClass="appbar-title"/>
             <Region HBox.hgrow="ALWAYS"/>
-            <MenuButton fx:id="userMenu" text="Kullanıcı" styleClass="user-menu">
+            <MenuButton fx:id="userMenu" text="Kullanıcı" styleClass="user-menu" focusTraversable="false">
                 <items>
                     <MenuItem text="Şifre Değiştir" onAction="#changePassword"/>
                     <MenuItem text="Çıkış" onAction="#logout"/>
