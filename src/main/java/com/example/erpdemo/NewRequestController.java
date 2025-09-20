@@ -8,6 +8,8 @@ import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.stage.Stage;
 
 import java.sql.SQLException;
+import java.util.*;
+import java.util.stream.Collectors;
 
 public class NewRequestController {
 
@@ -57,6 +59,15 @@ public class NewRequestController {
         quantityColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
     }
 
+    /** Aynı üründen tabloda zaten ekli miktarları toplar. */
+    private Map<Integer, Integer> collectQuantitiesByProduct() {
+        Map<Integer, Integer> map = new HashMap<>();
+        for (RequestItem it : requestItems) {
+            map.merge(it.getProductId(), it.getQuantity(), Integer::sum);
+        }
+        return map;
+    }
+
     @FXML
     private void handleAddProduct() {
         Customer cus = customerComboBox.getSelectionModel().getSelectedItem();
@@ -79,14 +90,19 @@ public class NewRequestController {
             return;
         }
 
-        // ---- STOK KONTROLÜ ----
-        if (qty > prd.getStok()) {
-            showAlert("Uyarı", "Stok yetersiz! (Stok: " + prd.getStok() + ")");
+        // ---- STOK KONTROLÜ (listede aynı üründen mevcut miktarı da dahil ederek) ----
+        int alreadyAdded = collectQuantitiesByProduct().getOrDefault(prd.getId(), 0);
+        if (qty + alreadyAdded > prd.getStok()) {
+            showAlert("Uyarı", "Stok yetersiz! (Stok: " + prd.getStok() +
+                    ", Listede mevcut: " + alreadyAdded + ", Eklemek istediğiniz: " + qty + ")");
             return;
         }
 
         double price = prd.getFiyat();
-        double discounted = price - (price * cus.getIskonto() / 100.0);
+        double discounted = price;
+        if (cus != null) {
+            discounted = price - (price * cus.getIskonto() / 100.0);
+        }
 
         requestItems.add(new RequestItem(
                 0, // id
@@ -111,14 +127,43 @@ public class NewRequestController {
         }
 
         try {
+            // ======== SON STOK KONTROLÜ (KAYIT ANINDA, GÜNCEL DB DEĞERİYLE) ========
+            // Aynı ürünlerden gelen miktarları topla
+            Map<Integer, Integer> totals = collectQuantitiesByProduct();
+
+            // Her ürün için veritabanından güncel stok çek, karşılaştır
+            List<String> insuff = new ArrayList<>();
+            for (Map.Entry<Integer, Integer> e : totals.entrySet()) {
+                int productId = e.getKey();
+                int requested = e.getValue();
+
+                Product latest = ProductDAO.getProductById(productId);
+                if (latest == null) {
+                    insuff.add("Ürün bulunamadı (ID: " + productId + ")");
+                    continue;
+                }
+                if (latest.getStok() < requested) {
+                    insuff.add(latest.getUrunAdi() + " — İstenen: " + requested +
+                            ", Güncel Stok: " + latest.getStok());
+                }
+            }
+            if (!insuff.isEmpty()) {
+                String msg = "Aşağıdaki kalemlerde stok yetersiz olduğu için talep kaydedilmedi:\n\n" +
+                        insuff.stream().collect(Collectors.joining("\n"));
+                showAlert("Uyarı", msg);
+                return;
+            }
+            // =====================================================================
+
+            // KAYDET: başlık + kalemler (kalem fiyatları İSKONTOLU fiyattır)
             int requestId = RequestDAO.addRequest(cus.getId());
             if (requestId != -1) {
                 for (RequestItem it : requestItems) {
-                    // veritabanına yazılan fiyat "iskontolu" fiyattır
                     RequestDAO.addRequestItem(requestId, it.getProductId(), it.getQuantity(), it.getDiscountedPrice());
                 }
                 showAlert("Başarılı", "Talep kaydedildi.");
                 if (dialogStage != null) dialogStage.close();
+                else closeWindowIfPossible();
             } else {
                 showAlert("Hata", "Talep kaydedilemedi.");
             }
@@ -130,7 +175,11 @@ public class NewRequestController {
     @FXML
     private void handleCancel() {
         if (dialogStage != null) dialogStage.close();
-        else if (productTable != null && productTable.getScene() != null) {
+        else closeWindowIfPossible();
+    }
+
+    private void closeWindowIfPossible() {
+        if (productTable != null && productTable.getScene() != null) {
             productTable.getScene().getWindow().hide();
         }
     }

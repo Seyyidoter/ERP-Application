@@ -1,15 +1,19 @@
 package com.example.erpdemo;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.sql.*;
 
+/**
+ * Tahsilat: ödeme kaydını ekler ve AYNI transaction içinde bakiyeyi ARTIRIR.
+ * amount > 0 olmalı. note null olabilir.
+ *
+ * Not: Para tutarları için double yerine BigDecimal kullanıyoruz (kayan nokta hatalarını önlemek için).
+ */
 public class PaymentDAO {
 
     /**
-     * Tahsilat: ödeme kaydını ekler ve AYNI transaction içinde bakiyeyi ARTIRIR.
-     * amount > 0 olmalı. note null olabilir.
-     *
-     * Not: Para tutarları için double yerine BigDecimal kullanıyoruz (kayan nokta hatalarını önlemek için).
+     * BigDecimal tabanlı güvenli ödeme ekleme.
      */
     public static void addPayment(int customerId, BigDecimal amount, String note) throws SQLException {
         // ---- Giriş kontrolleri ----
@@ -20,8 +24,8 @@ public class PaymentDAO {
             throw new IllegalArgumentException("Ödeme tutarı 0'dan büyük olmalı.");
         }
 
-        // İstersen sabitle: 2 ondalık basamak (DB'deki DECIMAL(18,2) vb. ile uyum)
-        amount = amount.setScale(2, BigDecimal.ROUND_HALF_UP);
+        // Java 9+ : RoundingMode kullan (deprecated integer sabitler yerine)
+        amount = amount.setScale(2, RoundingMode.HALF_UP);
 
         final String insertSql =
                 "INSERT INTO dbo.Odemeler (MusteriId, Tutar, Aciklama) VALUES (?, ?, ?)";
@@ -63,7 +67,7 @@ public class PaymentDAO {
                 try { c.rollback(); } catch (SQLException ignore) { /* loglanabilir */ }
                 throw ex;
             } finally {
-                // ---- Transaction modunu eski haline getir (restorasyon) ----
+                // ---- Transaction modunu eski haline getir ----
                 try { c.setAutoCommit(oldAutoCommit); } catch (SQLException ignore) { /* loglanabilir */ }
             }
         }

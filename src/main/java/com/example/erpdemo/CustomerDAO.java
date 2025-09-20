@@ -2,6 +2,9 @@ package com.example.erpdemo;
 
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.sql.*;
 
 public class CustomerDAO {
@@ -14,6 +17,10 @@ public class CustomerDAO {
              ResultSet rs = stmt.executeQuery()) {
 
             while (rs.next()) {
+                // Bakiye DECIMAL ise BigDecimal oku, UI modeli double ile devam edebilir
+                BigDecimal bal = rs.getBigDecimal("Bakiye");
+                double balance = (bal == null ? 0.0 : bal.doubleValue());
+
                 Customer customer = new Customer(
                         rs.getInt("Id"),
                         rs.getString("FirmaAdi"),
@@ -21,7 +28,7 @@ public class CustomerDAO {
                         rs.getString("Telefon"),
                         rs.getString("Eposta"),
                         rs.getInt("Iskonto"),
-                        rs.getDouble("Bakiye")
+                        balance
                 );
                 customerList.add(customer);
             }
@@ -36,6 +43,9 @@ public class CustomerDAO {
             stmt.setInt(1, customerId);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
+                    BigDecimal bal = rs.getBigDecimal("Bakiye");
+                    double balance = (bal == null ? 0.0 : bal.doubleValue());
+
                     return new Customer(
                             rs.getInt("Id"),
                             rs.getString("FirmaAdi"),
@@ -43,7 +53,7 @@ public class CustomerDAO {
                             rs.getString("Telefon"),
                             rs.getString("Eposta"),
                             rs.getInt("Iskonto"),
-                            rs.getDouble("Bakiye")
+                            balance
                     );
                 }
             }
@@ -52,7 +62,7 @@ public class CustomerDAO {
     }
 
     public static void addCustomer(String companyName, String contactPerson, String phone, String email, int iskonto) throws SQLException {
-        // Bakiye kolonu varsa varsayılanı 0 olsun; yoksa bu alanı bırak.
+        // Bakiye varsayılan 0.00
         String sql = "INSERT INTO Musteriler (FirmaAdi, IletisimKisi, Telefon, Eposta, Iskonto, Bakiye) VALUES (?, ?, ?, ?, ?, 0)";
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -88,15 +98,28 @@ public class CustomerDAO {
         }
     }
 
-    /** Bakiye ayarla: delta pozitifse borç azalır (bakiye artar), negatifse borç artar (bakiye düşer). */
-    public static void adjustBalance(int customerId, double delta) throws SQLException {
+    /**
+     * Bakiye ayarla: delta pozitifse borç azalır (bakiye artar), negatifse borç artar (bakiye düşer).
+     * BigDecimal ile ve 2 ondalık ölçeğe yuvarlanarak çalışır.
+     */
+    public static void adjustBalance(int customerId, BigDecimal delta) throws SQLException {
+        if (delta == null) throw new IllegalArgumentException("delta null olamaz");
+        delta = delta.setScale(2, RoundingMode.HALF_UP);
+
         String sql = "UPDATE Musteriler SET Bakiye = Bakiye + ? WHERE Id = ?";
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setDouble(1, delta);
+            ps.setBigDecimal(1, delta);
             ps.setInt(2, customerId);
             ps.executeUpdate();
         }
     }
 
+    /** Kolaylık: double çağrıları için güvenli BigDecimal’a çevirir. */
+    public static void adjustBalance(int customerId, double delta) throws SQLException {
+        if (!Double.isFinite(delta)) {
+            throw new IllegalArgumentException("delta geçerli bir sayı olmalı.");
+        }
+        adjustBalance(customerId, BigDecimal.valueOf(delta));
+    }
 }

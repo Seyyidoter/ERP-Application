@@ -2,10 +2,7 @@ package com.example.erpdemo;
 
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.sql.*;
 
 public class ProductDAO {
 
@@ -73,13 +70,21 @@ public class ProductDAO {
         }
     }
 
+    /**
+     * Güvenli stok güncellemesi.
+     * quantityChange < 0 ise: negatifleşmeyi engellemek için WHERE koşulu eklenir.
+     */
     public static void updateProductStock(int productId, int quantityChange) throws SQLException {
-        String sql = "UPDATE Stoklar SET Stok = Stok + ? WHERE Id = ?";
+        String sql = "UPDATE Stoklar SET Stok = Stok + ? WHERE Id = ? AND Stok + ? >= 0";
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, quantityChange);
             stmt.setInt(2, productId);
-            stmt.executeUpdate();
+            stmt.setInt(3, quantityChange);
+            int affected = stmt.executeUpdate();
+            if (affected != 1) {
+                throw new SQLException("Yetersiz stok veya ürün bulunamadı (Id=" + productId + ").");
+            }
         }
     }
 

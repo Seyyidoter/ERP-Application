@@ -51,7 +51,8 @@
                 <TableColumn fx:id="colStatus"    text="Durum"         prefWidth="130"/>
                 <TableColumn fx:id="colCustomer"  text="Müşteri"       prefWidth="280"/>
                 <TableColumn fx:id="colQty"       text="Miktar"        prefWidth="110"/>
-                <TableColumn fx:id="colUnit"      text="Birim Fiyat"   prefWidth="130"/>
+                <!-- değişen başlık: -->
+                <TableColumn fx:id="colUnit"      text="İskontolu Fiyat" prefWidth="130"/>
                 <TableColumn fx:id="colSubtotal"  text="Ara Toplam"    prefWidth="140"/>
             </columns>
         </TableView>

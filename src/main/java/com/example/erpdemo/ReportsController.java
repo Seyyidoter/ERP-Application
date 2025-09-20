@@ -8,6 +8,8 @@ import org.apache.pdfbox.pdmodel.font.PDType0Font;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -42,7 +44,6 @@ public class ReportsController {
                 if (approved.isEmpty()) {
                     w.println("Onaylanmış talep bulunamadı.");
                 } else {
-                    // SADECE BU KISIM DEĞİŞTİ: Türkiye formatı -> dd.MM.yyyy
                     DateTimeFormatter dateFmt = DateTimeFormatter.ofPattern("dd.MM.yyyy");
 
                     for (Request r : approved) {
@@ -74,36 +75,35 @@ public class ReportsController {
                         w.println("----------------------------------------------------------------------");
 
                         int totalQty = 0;
-                        double totalList = 0;
-                        double totalDisc = 0;
+                        BigDecimal totalList = BigDecimal.ZERO;
+                        BigDecimal totalDisc = BigDecimal.ZERO;
 
                         for (ItemRow it : items) {
-                            double subList = it.quantity * it.listPrice;
-                            double subDisc = it.quantity * it.discountedPrice;
+                            BigDecimal subList = it.listPrice.multiply(BigDecimal.valueOf(it.quantity));
+                            BigDecimal subDisc = it.discountedPrice.multiply(BigDecimal.valueOf(it.quantity));
 
                             totalQty += it.quantity;
-                            totalList += subList;
-                            totalDisc += subDisc;
+                            totalList = totalList.add(subList);
+                            totalDisc = totalDisc.add(subDisc);
 
                             String line = String.format("%-28s %6d %12.2f %12.2f %12.2f",
                                     trim(it.productName, 28),
                                     it.quantity,
-                                    it.listPrice,
-                                    it.discountedPrice,
-                                    subDisc);
+                                    it.listPrice.setScale(2, RoundingMode.HALF_UP).doubleValue(),
+                                    it.discountedPrice.setScale(2, RoundingMode.HALF_UP).doubleValue(),
+                                    subDisc.setScale(2, RoundingMode.HALF_UP).doubleValue());
                             w.println(line);
                         }
 
                         w.println("----------------------------------------------------------------------");
                         w.println(String.format("Toplam Ürün Adedi: %d", totalQty));
-                        w.println(String.format("Toplam Liste Tutarı: %.2f TL", totalList));
-                        w.println(String.format("Toplam İskontolu Tutar: %.2f TL", totalDisc));
+                        w.println(String.format("Toplam Liste Tutarı: %.2f TL", totalList.setScale(2, RoundingMode.HALF_UP).doubleValue()));
+                        w.println(String.format("Toplam İskontolu Tutar: %.2f TL", totalDisc.setScale(2, RoundingMode.HALF_UP).doubleValue()));
                         w.println("");
                     }
                 }
             }
 
-            // Çalıştırma klasörünün altına reports/ ve benzersiz dosya adı
             String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH.mm.ss"));
             Path outDir = Paths.get("reports");
             Files.createDirectories(outDir);
@@ -137,8 +137,8 @@ public class ReportsController {
                     list.add(new ItemRow(
                             rs.getString("UrunAdi"),
                             rs.getInt("Miktar"),
-                            rs.getDouble("ListeFiyati"),
-                            rs.getDouble("IskontoluFiyat")
+                            rs.getBigDecimal("ListeFiyati"),
+                            rs.getBigDecimal("IskontoluFiyat")
                     ));
                 }
             }
@@ -149,10 +149,8 @@ public class ReportsController {
     /* -------------------- Font yükleme -------------------- */
 
     private PDType0Font loadFont(PDDocument doc) throws IOException {
-        // Önce canonical path
         URL url = ReportsController.class.getResource("/com/example/erpdemo/times.ttf");
         if (url != null) try (InputStream in = url.openStream()) { return PDType0Font.load(doc, in); }
-        // Alternatif kök
         try (InputStream in = ReportsController.class.getResourceAsStream("/times.ttf")) {
             if (in != null) return PDType0Font.load(doc, in);
         }
@@ -171,15 +169,16 @@ public class ReportsController {
 
     /* -------------------- İç sınıflar -------------------- */
 
-    /** Basit satır modeli. */
     private static final class ItemRow {
-        final String productName; final int quantity; final double listPrice; final double discountedPrice;
-        ItemRow(String productName, int quantity, double listPrice, double discountedPrice) {
-            this.productName = productName; this.quantity = quantity; this.listPrice = listPrice; this.discountedPrice = discountedPrice;
+        final String productName; final int quantity;
+        final BigDecimal listPrice; final BigDecimal discountedPrice;
+        ItemRow(String productName, int quantity, BigDecimal listPrice, BigDecimal discountedPrice) {
+            this.productName = productName; this.quantity = quantity;
+            this.listPrice = listPrice == null ? BigDecimal.ZERO : listPrice;
+            this.discountedPrice = discountedPrice == null ? BigDecimal.ZERO : discountedPrice;
         }
     }
 
-    /** Çok satırlı metin yazımı ve sayfa taşırma için minimal yardımcı. */
     private static final class PdfWriter implements AutoCloseable {
         private final PDDocument doc;
         private final PDType0Font font;

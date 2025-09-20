@@ -12,6 +12,8 @@ import java.time.LocalDate;
 /**
  * Onay ekranı: bekleyen talepleri listeler, Onayla/Reddet işlemlerini yapar.
  * Onaylanınca talep toplamı kadar müşterinin bakiyesi DÜŞÜRÜLÜR (borç artar).
+ *
+ * Not: Onay işlemi artık DAO içinde TEK TRANSACTION olarak yapılır.
  */
 public class ApprovalController {
 
@@ -54,41 +56,9 @@ public class ApprovalController {
         if (sel == null) return;
 
         try {
-            // 0) Kalemleri çek
-            var items = RequestDAO.getRequestItemsByRequestId(sel.getId());
-            if (items == null || items.isEmpty()) {
-                warn("Uyarı", "Talebe ait kalem bulunamadı.");
-                return;
-            }
-
-            // 0.1) Stokları tekrar doğrula (yarış durumlarına karşı)
-            for (var it : items) {
-                var p = ProductDAO.getProductById(it.getProductId());
-                if (p == null) {
-                    error("Hata", "Ürün bulunamadı (ID: " + it.getProductId() + ").");
-                    return;
-                }
-                if (p.getStok() < it.getQuantity()) {
-                    warn("Uyarı", "Stok yetersiz: " + p.getUrunAdi() +
-                            " (Stok: " + p.getStok() + ", İstenen: " + it.getQuantity() + ")");
-                    return;
-                }
-            }
-
-            // 1) Talebi onayla
             int approverId = HelloApplication.getLoggedInUserId();
-            RequestDAO.approveRequest(sel.getId(), approverId);
-
-            // 2) Stok düş
-            for (var it : items) {
-                ProductDAO.updateProductStock(it.getProductId(), -it.getQuantity());
-            }
-
-            // 3) Toplamı kalemlerden hesapla ve bakiyeyi düş (borç artar)
-            double total = items.stream()
-                    .mapToDouble(i -> i.getDiscountedPrice() * i.getQuantity())
-                    .sum();
-            CustomerDAO.adjustBalance(sel.getCustomerId(), -total);
+            // Tüm operasyon tek transaction:
+            RequestDAO.approveRequestTransactionally(sel.getId(), approverId);
 
             info("Başarılı", "Talep onaylandı. Stok ve müşteri bakiyesi güncellendi.");
             refresh();
@@ -130,12 +100,6 @@ public class ApprovalController {
         IconUtil.decorateAlert(a);
         a.showAndWait();
     }
-    private void warn(String t, String m){
-        Alert a = new Alert(Alert.AlertType.WARNING, m, ButtonType.OK);
-        a.setHeaderText(null); a.setTitle(t);
-        IconUtil.decorateAlert(a);
-        a.showAndWait();
-    }
     private void error(String t, String m){
         Alert a = new Alert(Alert.AlertType.ERROR, m, ButtonType.OK);
         a.setHeaderText(null); a.setTitle(t);
@@ -159,7 +123,5 @@ public class ApprovalController {
         public String getStatus() { return status; }
     }
 
-    public void setCurrentUserId(int userId) {
-        HelloApplication.setLoggedInUserId(userId);
-    }
+    public void setCurrentUserId(int userId) { HelloApplication.setLoggedInUserId(userId); }
 }
