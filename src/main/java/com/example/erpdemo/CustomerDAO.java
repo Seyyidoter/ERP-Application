@@ -99,7 +99,4 @@ public class CustomerDAO {
         }
     }
 
-    public static void changeBalance(int customerId, double delta) throws SQLException {
-        adjustBalance(customerId, delta);
-    }
 }

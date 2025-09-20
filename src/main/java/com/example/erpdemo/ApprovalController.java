@@ -11,6 +11,7 @@ import java.time.LocalDate;
 
 import static jdk.internal.org.jline.utils.Log.warn;
 
+
 /**
  * Onay ekranı: bekleyen talepleri listeler, Onayla/Reddet işlemlerini yapar.
  * Onaylanınca talep toplamı kadar müşterinin bakiyesi DÜŞÜRÜLÜR (borç artar).
