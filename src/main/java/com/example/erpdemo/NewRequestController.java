@@ -8,6 +8,7 @@ import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.stage.Stage;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.sql.SQLException;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -21,8 +22,8 @@ public class NewRequestController {
     @FXML private TableView<RequestItem> productTable;
     @FXML private TableColumn<RequestItem, String>     productNameColumn;
     @FXML private TableColumn<RequestItem, Integer>    quantityColumn;
-    @FXML private TableColumn<RequestItem, BigDecimal> priceColumn;           // <-- BigDecimal
-    @FXML private TableColumn<RequestItem, BigDecimal> discountedPriceColumn;  // <-- BigDecimal
+    @FXML private TableColumn<RequestItem, BigDecimal> priceColumn;           // BigDecimal
+    @FXML private TableColumn<RequestItem, BigDecimal> discountedPriceColumn; // BigDecimal
 
     @FXML private Label totalAmountLabel;
 
@@ -48,17 +49,16 @@ public class NewRequestController {
 
         productTable.setItems(requestItems);
 
-        // BigDecimal’ı 2 ondalık basamakla yazdır
         priceColumn.setCellFactory(col -> new TableCell<>() {
             @Override protected void updateItem(BigDecimal v, boolean empty) {
                 super.updateItem(v, empty);
-                setText(empty || v == null ? null : String.format("%.2f", v.doubleValue()));
+                setText(empty || v == null ? null : String.format(java.util.Locale.forLanguageTag("tr-TR"), "%.2f", v));
             }
         });
         discountedPriceColumn.setCellFactory(col -> new TableCell<>() {
             @Override protected void updateItem(BigDecimal v, boolean empty) {
                 super.updateItem(v, empty);
-                setText(empty || v == null ? null : String.format("%.2f", v.doubleValue()));
+                setText(empty || v == null ? null : String.format(java.util.Locale.forLanguageTag("tr-TR"), "%.2f", v));
             }
         });
 
@@ -95,8 +95,11 @@ public class NewRequestController {
             return;
         }
 
-        double price = prd.getFiyat();
-        double discounted = price - (price * cus.getIskonto() / 100.0);
+        BigDecimal price = prd.getFiyat(); // BigDecimal
+        BigDecimal discountPct = BigDecimal.valueOf(cus.getIskonto()); // % int
+        BigDecimal discounted = price
+                .multiply(BigDecimal.ONE.subtract(discountPct.divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP)))
+                .setScale(2, RoundingMode.HALF_UP);
 
         requestItems.add(new RequestItem(0, 0, prd.getId(), prd.getUrunAdi(), qty, price, discounted));
 
@@ -137,10 +140,12 @@ public class NewRequestController {
             int requestId = RequestDAO.addRequest(cus.getId());
             if (requestId != -1) {
                 for (RequestItem it : requestItems) {
-                    RequestDAO.addRequestItem(requestId,
+                    RequestDAO.addRequestItem(
+                            requestId,
                             it.getProductId(),
                             it.getQuantity(),
-                            it.getDiscountedPrice().doubleValue());
+                            it.getDiscountedPrice() // BigDecimal
+                    );
                 }
                 AppDialogs.info("Talep kaydedildi.");
                 if (dialogStage != null) dialogStage.close();
@@ -171,6 +176,6 @@ public class NewRequestController {
         BigDecimal total = requestItems.stream()
                 .map(RequestItem::getSubtotal)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        totalAmountLabel.setText(String.format("%.2f TL", total.doubleValue()));
+        totalAmountLabel.setText(String.format(java.util.Locale.forLanguageTag("tr-TR"), "%.2f TL", total));
     }
 }

@@ -14,20 +14,27 @@ public class RequestItem {
     /** İskontolu birim fiyat */
     private final BigDecimal discountedPrice;
 
+    // BigDecimal temelli ana kurucu
     public RequestItem(int id,
                        int requestId,
                        int productId,
                        String productName,
                        int quantity,
-                       double listPrice,
-                       double discountedPrice) {
+                       BigDecimal listPrice,
+                       BigDecimal discountedPrice) {
         this.id = id;
         this.requestId = requestId;
         this.productId = productId;
         this.productName = productName;
         this.quantity = quantity;
-        this.listPrice = BigDecimal.valueOf(listPrice);
-        this.discountedPrice = BigDecimal.valueOf(discountedPrice);
+        this.listPrice = listPrice == null ? BigDecimal.ZERO : listPrice;
+        this.discountedPrice = discountedPrice == null ? BigDecimal.ZERO : discountedPrice;
+    }
+
+    // (Opsiyonel) eski çağrılar için double → BigDecimal sarmalayıcı
+    @Deprecated
+    public RequestItem(int id, int requestId, int productId, String productName, int quantity, double listPrice, double discountedPrice) {
+        this(id, requestId, productId, productName, quantity, BigDecimal.valueOf(listPrice), BigDecimal.valueOf(discountedPrice));
     }
 
     public int getId() { return id; }

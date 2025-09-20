@@ -11,30 +11,35 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.sql.SQLException;
+import java.util.Locale;
 
 public class StockController {
 
     @FXML private TableView<Product> productTable;
-    @FXML private TableColumn<Product, Integer> idColumn;
-    @FXML private TableColumn<Product, String>  nameColumn;
-    @FXML private TableColumn<Product, Double>  priceColumn;
-    @FXML private TableColumn<Product, Integer> stockColumn;
-    @FXML private TableColumn<Product, String>  unitColumn;
+    @FXML private TableColumn<Product, Integer>    idColumn;
+    @FXML private TableColumn<Product, String>     nameColumn;
+    @FXML private TableColumn<Product, BigDecimal> priceColumn; // BigDecimal
+    @FXML private TableColumn<Product, Integer>    stockColumn;
+    @FXML private TableColumn<Product, String>     unitColumn;
 
     @FXML
     public void initialize() {
         idColumn.setCellValueFactory(new PropertyValueFactory<>("id"));
         nameColumn.setCellValueFactory(new PropertyValueFactory<>("urunAdi"));
-        priceColumn.setCellValueFactory(new PropertyValueFactory<>("fiyat"));
+        priceColumn.setCellValueFactory(new PropertyValueFactory<>("fiyat"));   // BigDecimal
         stockColumn.setCellValueFactory(new PropertyValueFactory<>("stok"));
         unitColumn.setCellValueFactory(new PropertyValueFactory<>("birim"));
 
         priceColumn.setCellFactory(col -> new TableCell<>() {
-            @Override protected void updateItem(Double v, boolean empty) {
+            @Override protected void updateItem(BigDecimal v, boolean empty) {
                 super.updateItem(v, empty);
-                setText(empty || v == null ? null : String.format("%.2f", v));
-                setStyle(empty ? "" : "-fx-alignment: CENTER-RIGHT;");
+                if (empty || v == null) { setText(null); setStyle(""); }
+                else {
+                    setText(String.format(Locale.forLanguageTag("tr-TR"), "%.2f", v));
+                    setStyle("-fx-alignment: CENTER-RIGHT;");
+                }
             }
         });
         stockColumn.setCellFactory(col -> new TableCell<>() {

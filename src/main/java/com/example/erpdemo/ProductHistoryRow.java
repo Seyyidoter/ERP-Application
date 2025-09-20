@@ -24,24 +24,17 @@ public class ProductHistoryRow {
         this.subtotal = subtotal == null ? BigDecimal.ZERO : subtotal;
     }
 
-    public int getColReqId() { return requestId; }
     public int getRequestId() { return requestId; }
 
-    public LocalDate getColDate() { return date; }
     public LocalDate getDate() { return date; }
 
-    public String getColStatus() { return status; }
     public String getStatus() { return status; }
 
-    public String getColCustomer() { return customer; }
     public String getCustomer() { return customer; }
 
-    public int getColQty() { return qty; }
     public int getQty() { return qty; }
 
-    public BigDecimal getColUnit() { return unit; }
     public BigDecimal getUnit() { return unit; }
 
-    public BigDecimal getColSubtotal() { return subtotal; }
     public BigDecimal getSubtotal() { return subtotal; }
 }

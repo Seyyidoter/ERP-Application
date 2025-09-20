@@ -2,6 +2,8 @@ package com.example.erpdemo;
 
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+
+import java.math.BigDecimal;
 import java.sql.*;
 
 public class ProductDAO {
@@ -16,7 +18,7 @@ public class ProductDAO {
                 productList.add(new Product(
                         rs.getInt("Id"),
                         rs.getString("UrunAdi"),
-                        rs.getDouble("Fiyat"),
+                        rs.getBigDecimal("Fiyat"),   // BigDecimal
                         rs.getInt("Stok"),
                         rs.getString("Birim")
                 ));
@@ -35,7 +37,7 @@ public class ProductDAO {
                     return new Product(
                             rs.getInt("Id"),
                             rs.getString("UrunAdi"),
-                            rs.getDouble("Fiyat"),
+                            rs.getBigDecimal("Fiyat"), // BigDecimal
                             rs.getInt("Stok"),
                             rs.getString("Birim")
                     );
@@ -45,12 +47,13 @@ public class ProductDAO {
         return null;
     }
 
-    public static void addProduct(String urunAdi, double fiyat, int stok, String birim) throws SQLException {
+    public static void addProduct(String urunAdi, BigDecimal fiyat, int stok, String birim) throws SQLException {
+        if (fiyat == null) fiyat = BigDecimal.ZERO;
         String sql = "INSERT INTO Stoklar (UrunAdi, Fiyat, Stok, Birim) VALUES (?, ?, ?, ?)";
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, urunAdi);
-            stmt.setDouble(2, fiyat);
+            stmt.setBigDecimal(2, fiyat);
             stmt.setInt(3, stok);
             stmt.setString(4, birim);
             stmt.executeUpdate();
@@ -62,7 +65,7 @@ public class ProductDAO {
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, product.getUrunAdi());
-            stmt.setDouble(2, product.getFiyat());
+            stmt.setBigDecimal(2, product.getFiyat());
             stmt.setInt(3, product.getStok());
             stmt.setString(4, product.getBirim());
             stmt.setInt(5, product.getId());

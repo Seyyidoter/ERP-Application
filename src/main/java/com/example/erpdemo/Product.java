@@ -1,39 +1,42 @@
 package com.example.erpdemo;
 
-import javafx.beans.property.SimpleDoubleProperty;
 import javafx.beans.property.SimpleIntegerProperty;
 import javafx.beans.property.SimpleStringProperty;
+import javafx.beans.property.ObjectProperty;
+import javafx.beans.property.SimpleObjectProperty;
+
+import java.math.BigDecimal;
 
 public class Product {
 
     private final SimpleIntegerProperty id;
-    private final SimpleStringProperty urunAdi;
-    private final SimpleDoubleProperty fiyat;
+    private final SimpleStringProperty  urunAdi;
+    private final ObjectProperty<BigDecimal> fiyat;  // BigDecimal
     private final SimpleIntegerProperty stok;
-    private final SimpleStringProperty birim;
+    private final SimpleStringProperty  birim;
 
-    public Product(int id, String urunAdi, double fiyat, int stok, String birim) {
+    public Product(int id, String urunAdi, BigDecimal fiyat, int stok, String birim) {
         this.id = new SimpleIntegerProperty(id);
         this.urunAdi = new SimpleStringProperty(urunAdi);
-        this.fiyat = new SimpleDoubleProperty(fiyat);
+        this.fiyat = new SimpleObjectProperty<>(fiyat == null ? BigDecimal.ZERO : fiyat);
         this.stok = new SimpleIntegerProperty(stok);
         this.birim = new SimpleStringProperty(birim);
     }
 
     public int getId() { return id.get(); }
     public String getUrunAdi() { return urunAdi.get(); }
-    public double getFiyat() { return fiyat.get(); }
+    public BigDecimal getFiyat() { return fiyat.get(); }
     public int getStok() { return stok.get(); }
     public String getBirim() { return birim.get(); }
 
     public SimpleIntegerProperty idProperty() { return id; }
     public SimpleStringProperty urunAdiProperty() { return urunAdi; }
-    public SimpleDoubleProperty fiyatProperty() { return fiyat; }
+    public ObjectProperty<BigDecimal> fiyatProperty() { return fiyat; }
     public SimpleIntegerProperty stokProperty() { return stok; }
     public SimpleStringProperty birimProperty() { return birim; }
 
     public void setUrunAdi(String urunAdi) { this.urunAdi.set(urunAdi); }
-    public void setFiyat(double fiyat) { this.fiyat.set(fiyat); }
+    public void setFiyat(BigDecimal fiyat) { this.fiyat.set(fiyat == null ? BigDecimal.ZERO : fiyat); }
     public void setStok(int stok) { this.stok.set(stok); }
     public void setBirim(String birim) { this.birim.set(birim); }
 }

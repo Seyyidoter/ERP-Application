@@ -22,13 +22,26 @@ import java.util.*;
 /** Onaylanmış talepleri PDF'e, sayfa taşırmadan çok sayfalı olarak yazar. */
 public class ReportsController {
 
+    // --- Kolon genişlikleri (monospace ile hizalanır) ---
+    private static final int COL_W_PRODUCT  = 32; // ürün adı
+    private static final int COL_W_QTY      = 8;  // miktar
+    private static final int COL_W_LIST     = 12; // liste fiyatı
+    private static final int COL_W_DISC     = 12; // isk. fiyat
+    private static final int COL_W_SUBTOTAL = 12; // ara toplam
+
+    private static final Locale TR = Locale.forLanguageTag("tr-TR");
+
     @FXML
     private void generateApprovedRequestsReport() {
         try (PDDocument document = new PDDocument()) {
 
-            PDType0Font font = loadFont(document);
+            PDType0Font font = loadPreferredFont(document);
             if (font == null) {
-                AppDialogs.error("times.ttf bulunamadı.\nLütfen dosyayı resources/com/example/erpdemo/ altına koyun.");
+                AppDialogs.error("""
+                        PDF yazı tipi bulunamadı.
+                        Lütfen resources/com/example/erpdemo/ altına DejaVuSansMono.ttf
+                        (tercihen) ya da times.ttf ekleyin.
+                        """);
                 return;
             }
 
@@ -41,7 +54,7 @@ public class ReportsController {
                 if (approved.isEmpty()) {
                     w.println("Onaylanmış talep bulunamadı.");
                 } else {
-                    DateTimeFormatter dateFmt = DateTimeFormatter.ofPattern("dd.MM.yyyy");
+                    DateTimeFormatter dateFmt = DateTimeFormatter.ofPattern("dd.MM.yyyy", TR);
 
                     // müşteri adlarını toplu çek
                     Set<Integer> customerIds = new LinkedHashSet<>();
@@ -52,12 +65,12 @@ public class ReportsController {
                         String cname = nameMap.getOrDefault(r.getCustomerId(), "Bilinmiyor");
                         String dateStr = (r.getRequestDate() != null) ? r.getRequestDate().format(dateFmt) : "";
 
-                        w.println("--------------------------------------------------------------------------");
-                        w.println("Talep ID: " + r.getId());
-                        w.println("Müşteri Adı: " + cname);
-                        w.println("Talep Tarihi: " + dateStr);
-                        w.println("Durum: " + r.getStatus());
-                        w.println("--------------------------------------------------------------------------");
+                        w.println("──────────────────────────────────────────────────────────────────────────");
+                        w.println("Talep ID      : " + r.getId());
+                        w.println("Müşteri Adı   : " + cname);
+                        w.println("Talep Tarihi  : " + dateStr);
+                        w.println("Durum         : " + r.getStatus());
+                        w.println("──────────────────────────────────────────────────────────────────────────");
 
                         List<ItemRow> items = fetchItemsForRequest(r.getId());
                         if (items.isEmpty()) {
@@ -66,7 +79,14 @@ public class ReportsController {
                             continue;
                         }
 
-                        w.println("Ürün                         Miktar    Liste F.    İsk. Fiyat   Ara Toplam");
+                        // Başlık satırı
+                        w.println(
+                                padRight("Ürün", COL_W_PRODUCT) + " " +
+                                        padLeft("Miktar", COL_W_QTY) + " " +
+                                        padLeft("Liste F.", COL_W_LIST) + " " +
+                                        padLeft("İsk. Fiyat", COL_W_DISC) + " " +
+                                        padLeft("Ara Toplam", COL_W_SUBTOTAL)
+                        );
                         w.println("----------------------------------------------------------------------");
 
                         int totalQty = 0;
@@ -81,27 +101,26 @@ public class ReportsController {
                             totalList = totalList.add(subList);
                             totalDisc = totalDisc.add(subDisc);
 
-                            String line = String.format("%-28s %6d %12.2f %12.2f %12.2f",
-                                    trim(it.productName, 28),
-                                    it.quantity,
-                                    it.listPrice.setScale(2, RoundingMode.HALF_UP).doubleValue(),
-                                    it.discountedPrice.setScale(2, RoundingMode.HALF_UP).doubleValue(),
-                                    subDisc.setScale(2, RoundingMode.HALF_UP).doubleValue());
+                            String line =
+                                    padRight(trim(it.productName, COL_W_PRODUCT), COL_W_PRODUCT) + " " +
+                                            padLeft(String.valueOf(it.quantity), COL_W_QTY) + " " +
+                                            padLeft(fmtMoney(it.listPrice), COL_W_LIST) + " " +
+                                            padLeft(fmtMoney(it.discountedPrice), COL_W_DISC) + " " +
+                                            padLeft(fmtMoney(subDisc), COL_W_SUBTOTAL);
+
                             w.println(line);
                         }
 
                         w.println("----------------------------------------------------------------------");
-                        w.println(String.format("Toplam Ürün Adedi: %d", totalQty));
-                        w.println(String.format("Toplam Liste Tutarı: %.2f TL",
-                                totalList.setScale(2, RoundingMode.HALF_UP).doubleValue()));
-                        w.println(String.format("Toplam İskontolu Tutar: %.2f TL",
-                                totalDisc.setScale(2, RoundingMode.HALF_UP).doubleValue()));
+                        w.println(String.format(TR, "Toplam Ürün Adedi   : %d", totalQty));
+                        w.println(String.format(TR, "Toplam Liste Tutarı : %s TL", fmtMoney(totalList)));
+                        w.println(String.format(TR, "Toplam İsk. Tutar   : %s TL", fmtMoney(totalDisc)));
                         w.println("");
                     }
                 }
             }
 
-            String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH.mm.ss"));
+            String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH.mm.ss", TR));
             Path outDir = Paths.get("reports");
             Files.createDirectories(outDir);
             Path outPath = outDir.resolve("ApprovedRequestsReport_" + ts + ".pdf");
@@ -146,11 +165,31 @@ public class ReportsController {
 
     /* -------------------- Font yükleme -------------------- */
 
-    private PDType0Font loadFont(PDDocument doc) throws IOException {
-        URL url = ReportsController.class.getResource("/com/example/erpdemo/times.ttf");
-        if (url != null) try (InputStream in = url.openStream()) { return PDType0Font.load(doc, in); }
-        try (InputStream in = ReportsController.class.getResourceAsStream("/times.ttf")) {
-            if (in != null) return PDType0Font.load(doc, in);
+    /**
+     * Önce monospace "DejaVuSansMono.ttf" arar (Türkçe+Unicode destekli, hizalama için ideal).
+     * Bulamazsa "times.ttf"’ye düşer.
+     */
+    private PDType0Font loadPreferredFont(PDDocument doc) throws IOException {
+        // 1) DejaVuSansMono.ttf
+        PDType0Font mono = tryLoadFont(doc, "/com/example/erpdemo/DejaVuSansMono.ttf");
+        if (mono != null) return mono;
+        mono = tryLoadFont(doc, "/DejaVuSansMono.ttf");
+        if (mono != null) return mono;
+
+        // 2) times.ttf (mevcut projede var) – oransal, sadece yedek
+        PDType0Font times = tryLoadFont(doc, "/com/example/erpdemo/times.ttf");
+        if (times != null) return times;
+        return tryLoadFont(doc, "/times.ttf");
+    }
+
+    private PDType0Font tryLoadFont(PDDocument doc, String path) throws IOException {
+        URL url = ReportsController.class.getResource(path);
+        if (url != null) {
+            try (InputStream in = url.openStream()) {
+                return PDType0Font.load(doc, in, true);
+            } catch (Exception ignore) {
+                // yut – bir sonrakini dene
+            }
         }
         return null;
     }
@@ -161,9 +200,10 @@ public class ReportsController {
         final String productName; final int quantity;
         final BigDecimal listPrice; final BigDecimal discountedPrice;
         ItemRow(String productName, int quantity, BigDecimal listPrice, BigDecimal discountedPrice) {
-            this.productName = productName; this.quantity = quantity;
-            this.listPrice = listPrice == null ? BigDecimal.ZERO : listPrice;
-            this.discountedPrice = discountedPrice == null ? BigDecimal.ZERO : discountedPrice;
+            this.productName = productName;
+            this.quantity = quantity;
+            this.listPrice = (listPrice == null ? BigDecimal.ZERO : listPrice);
+            this.discountedPrice = (discountedPrice == null ? BigDecimal.ZERO : discountedPrice);
         }
     }
 
@@ -217,8 +257,27 @@ public class ReportsController {
         }
     }
 
+    // --- küçük yardımcılar ---
+
     private static String trim(String s, int max) {
         if (s == null) return "";
         return s.length() <= max ? s : s.substring(0, max - 1) + "…";
+    }
+
+    private static String padRight(String s, int width) {
+        if (s == null) s = "";
+        return s.length() >= width ? s : s + " ".repeat(width - s.length());
+    }
+
+    private static String padLeft(String s, int width) {
+        if (s == null) s = "";
+        return s.length() >= width ? s : " ".repeat(width - s.length()) + s;
+    }
+
+    private static String fmtMoney(BigDecimal v) {
+        if (v == null) v = BigDecimal.ZERO;
+        v = v.setScale(2, RoundingMode.HALF_UP);
+        // Genişliği padding ile veriyoruz; sayı formatını TR yapıyoruz.
+        return String.format(TR, "%.2f", v);
     }
 }

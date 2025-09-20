@@ -4,6 +4,7 @@ import javafx.fxml.FXML;
 import javafx.scene.control.TextField;
 import javafx.stage.Stage;
 
+import java.math.BigDecimal;
 import java.sql.SQLException;
 
 public class NewProductController {
@@ -23,7 +24,7 @@ public class NewProductController {
         this.product = product;
         titleLabel.setText("Ürün Düzenle");
         nameField.setText(product.getUrunAdi());
-        priceField.setText(String.valueOf(product.getFiyat()));
+        priceField.setText(product.getFiyat() == null ? "0.00" : product.getFiyat().toPlainString());
         stockField.setText(String.valueOf(product.getStok()));
         unitField.setText(product.getBirim());
     }
@@ -37,9 +38,14 @@ public class NewProductController {
             if (name == null || name.isBlank()) { AppDialogs.warn("Ürün adı boş olamaz."); return; }
             if (unit == null || unit.isBlank()) { AppDialogs.warn("Birim boş olamaz."); return; }
 
-            String priceText = priceField.getText().replace(",", ".");
-            double price = Double.parseDouble(priceText);
-            if (price < 0) { AppDialogs.warn("Fiyat negatif olamaz."); return; }
+            String priceText = (priceField.getText() == null ? "0" : priceField.getText().trim().replace(",", "."));
+            BigDecimal price;
+            try {
+                price = new BigDecimal(priceText);
+            } catch (NumberFormatException ex) {
+                AppDialogs.warn("Fiyat sayısal olmalı."); return;
+            }
+            if (price.signum() < 0) { AppDialogs.warn("Fiyat negatif olamaz."); return; }
 
             int stock;
             try { stock = Integer.parseInt(stockField.getText().trim()); }
@@ -58,8 +64,6 @@ public class NewProductController {
                 AppDialogs.info("Ürün bilgileri başarıyla güncellendi.");
             }
             if (dialogStage != null) dialogStage.close();
-        } catch (NumberFormatException e) {
-            AppDialogs.warn("Fiyat sayısal olmalı.");
         } catch (SQLException e) {
             AppDialogs.dbError("Ürün kaydetme", e);
         }

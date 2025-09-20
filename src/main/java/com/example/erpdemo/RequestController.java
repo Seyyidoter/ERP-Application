@@ -14,8 +14,6 @@ import javafx.stage.Stage;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.time.LocalDate;
-import java.util.*;
-import java.util.stream.Collectors;
 
 /** Talep/Teklif liste ekranı + yeni oluştur / görüntüle / sil. */
 public class RequestController {
@@ -111,27 +109,21 @@ public class RequestController {
         }
     }
 
+    /** Artık deprecated findAll() yerine JOIN’li özet sorgu kullanılıyor. */
     private void refresh() {
         try {
             rows.clear();
-
-            var all = RequestDAO.findAll();
-
-            Set<Integer> ids = all.stream().map(Request::getCustomerId)
-                    .collect(Collectors.toCollection(LinkedHashSet::new));
-            var nameMap = CustomerDAO.getCustomerNamesByIds(ids);
-
-            for (Request r : all) {
+            for (RequestSummary s : RequestDAO.findAllSummaries()) {
                 rows.add(new Row(
-                        r.getId(),
-                        r.getCustomerId(),
-                        nameMap.getOrDefault(r.getCustomerId(), ""),
-                        r.getRequestDate(),
-                        r.getStatus()
+                        s.getId(),
+                        s.getCustomerId(),
+                        s.getCustomerName(),
+                        s.getRequestDate(),
+                        s.getStatus()
                 ));
             }
-        } catch (Exception ex) {
-            AppDialogs.unexpectedError("Taleplerin yüklenmesi", ex);
+        } catch (SQLException ex) {
+            AppDialogs.dbError("Taleplerin yüklenmesi", ex);
         }
     }
 
