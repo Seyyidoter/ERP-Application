@@ -41,11 +41,11 @@
       <classifier>win</classifier>
     </dependency>
 
-    <!-- SQL Server JDBC driver -->
+    <!-- SQL Server JDBC driver (Java 11+; JDK 21 ile uyumlu) -->
     <dependency>
       <groupId>com.microsoft.sqlserver</groupId>
       <artifactId>mssql-jdbc</artifactId>
-      <version>11.2.0.jre17</version>
+      <version>12.6.1.jre11</version>
     </dependency>
 
     <!-- PDFBox -->
