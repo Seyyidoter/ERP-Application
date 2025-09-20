@@ -1,7 +1,6 @@
 package com.example.erpdemo;
 
 import javafx.fxml.FXML;
-import javafx.scene.control.Alert;
 import javafx.scene.control.TextField;
 import javafx.stage.Stage;
 
@@ -16,94 +15,80 @@ public class EditCustomerController {
     @FXML private TextField emailField;
     @FXML private TextField discountField;
 
-    private Customer customer;
     private Stage dialogStage;
+    private Customer customer; // düzenlenecek mevcut müşteri
 
-    public void setDialogStage(Stage dialogStage) {
-        this.dialogStage = dialogStage;
-    }
+    public void setDialogStage(Stage stage) { this.dialogStage = stage; }
 
     public void setCustomer(Customer customer) {
         this.customer = customer;
+        if (customer == null) return;
+
         idField.setText(String.valueOf(customer.getId()));
         companyNameField.setText(customer.getCompanyName());
         contactPersonField.setText(customer.getContactPerson());
         phoneField.setText(customer.getPhone());
         emailField.setText(customer.getEmail());
-        discountField.setText(String.valueOf(customer.getIskonto()));
+        discountField.setText(String.valueOf(customer.getIskonto())); // int %
     }
 
     @FXML
     private void handleSave() {
-        // --- Temel alan kontrolleri ---
-        String companyName = safeTrim(companyNameField.getText());
-        if (companyName.isEmpty()) {
-            showAlert(Alert.AlertType.WARNING, "Uyarı", "Firma adı boş olamaz.");
-            return;
-        }
+        if (customer == null) { AppDialogs.error("Düzenlenecek müşteri bulunamadı."); return; }
 
-        String contact = safeTrim(contactPersonField.getText());
-        String phone    = safeTrim(phoneField.getText());
-        String email    = safeTrim(emailField.getText());
+        String company = trim(companyNameField.getText());
+        String contact = trim(contactPersonField.getText());
+        String phone   = trim(phoneField.getText());
+        String email   = trim(emailField.getText());
+        String discTxt = discountField.getText() == null ? "" : discountField.getText().trim();
 
-        // --- İskonto: 0..100 arası TAM SAYI olmalı ---
-        String discountRaw = safeTrim(discountField.getText());
-        if (discountRaw.isEmpty()) {
-            showAlert(Alert.AlertType.WARNING, "Uyarı", "İskonto alanı boş olamaz.");
-            return;
-        }
-
-        // Yalnızca rakam kontrolü
-        if (!discountRaw.matches("^\\d{1,3}$")) {
-            showAlert(Alert.AlertType.WARNING, "Uyarı", "İskonto yalnızca rakamlardan oluşan bir tam sayı olmalıdır.");
-            return;
-        }
+        if (company.isEmpty()) { AppDialogs.warn("Firma adı boş olamaz."); return; }
 
         int discount;
-        try {
-            discount = Integer.parseInt(discountRaw);
-        } catch (NumberFormatException ex) {
-            showAlert(Alert.AlertType.WARNING, "Uyarı", "İskonto geçerli bir tam sayı olmalıdır.");
-            return;
+        if (discTxt.isEmpty()) {
+            discount = 0;
+        } else {
+            try {
+                // iskonto % tam sayı olarak tutuluyor
+                if (discTxt.contains(".") || discTxt.contains(",")) {
+                    AppDialogs.warn("İskonto yüzdesi tam sayı olmalıdır (örn. 0, 5, 10…).");
+                    return;
+                }
+                discount = Integer.parseInt(discTxt);
+            } catch (NumberFormatException nfe) {
+                AppDialogs.warn("İskonto değeri sayısal olmalı (örn. 0, 5, 10).");
+                return;
+            }
         }
-
         if (discount < 0 || discount > 100) {
-            showAlert(Alert.AlertType.WARNING, "Uyarı", "İskonto 0 ile 100 arasında bir tam sayı olmalıdır.");
+            AppDialogs.warn("İskonto yüzdesi 0 ile 100 arasında olmalıdır.");
             return;
         }
 
-        // --- Modeli güncelle ---
-        customer.setCompanyName(companyName);
-        customer.setContactPerson(contact);
-        customer.setPhone(phone);
-        customer.setEmail(email);
-        customer.setIskonto(discount);
-
         try {
+            customer.setCompanyName(company);
+            customer.setContactPerson(contact);
+            customer.setPhone(phone);
+            customer.setEmail(email);
+            customer.setIskonto(discount);
+
             CustomerDAO.updateCustomer(customer);
-            showAlert(Alert.AlertType.INFORMATION, "Başarılı", "Müşteri bilgileri başarıyla güncellendi.");
-            if (dialogStage != null) dialogStage.close();
+            AppDialogs.info("Müşteri bilgileri güncellendi.");
+            closeWindow();
         } catch (SQLException e) {
-            showAlert(Alert.AlertType.ERROR, "Hata", "Müşteri güncellenirken bir hata oluştu: " + e.getMessage());
+            AppDialogs.dbError("Müşteri güncelleme", e);
         }
     }
 
     @FXML
-    private void handleCancel() {
+    private void handleCancel() { closeWindow(); }
+
+    private static String trim(String s) { return s == null ? "" : s.trim(); }
+
+    private void closeWindow() {
         if (dialogStage != null) dialogStage.close();
-    }
-
-    // ---------------- yardımcılar ----------------
-    private static String safeTrim(String s) {
-        return s == null ? "" : s.trim();
-    }
-
-    private void showAlert(Alert.AlertType type, String title, String message) {
-        Alert alert = new Alert(type);
-        alert.setTitle(title);
-        alert.setHeaderText(null);
-        alert.setContentText(message);
-        IconUtil.decorateAlert(alert);
-        alert.showAndWait();
+        else if (companyNameField != null && companyNameField.getScene() != null) {
+            companyNameField.getScene().getWindow().hide();
+        }
     }
 }

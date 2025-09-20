@@ -6,8 +6,10 @@ import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.stage.Stage;
 
+import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.time.LocalDate;
+import java.util.Locale;
 
 public class ProductHistoryController {
 
@@ -17,13 +19,13 @@ public class ProductHistoryController {
     @FXML private TextField txtCustomer;
 
     @FXML private TableView<ProductHistoryRow> tblHistory;
-    @FXML private TableColumn<ProductHistoryRow, Integer>   colReqId;
-    @FXML private TableColumn<ProductHistoryRow, LocalDate> colDate;
-    @FXML private TableColumn<ProductHistoryRow, String>    colStatus;
-    @FXML private TableColumn<ProductHistoryRow, String>    colCustomer;
-    @FXML private TableColumn<ProductHistoryRow, Integer>   colQty;
-    @FXML private TableColumn<ProductHistoryRow, Double>    colUnit;
-    @FXML private TableColumn<ProductHistoryRow, Double>    colSubtotal;
+    @FXML private TableColumn<ProductHistoryRow, Integer>    colReqId;
+    @FXML private TableColumn<ProductHistoryRow, LocalDate>  colDate;
+    @FXML private TableColumn<ProductHistoryRow, String>     colStatus;
+    @FXML private TableColumn<ProductHistoryRow, String>     colCustomer;
+    @FXML private TableColumn<ProductHistoryRow, Integer>    colQty;
+    @FXML private TableColumn<ProductHistoryRow, BigDecimal> colUnit;      // BigDecimal
+    @FXML private TableColumn<ProductHistoryRow, BigDecimal> colSubtotal;  // BigDecimal
 
     @FXML private Label lblTotalQty, lblTotalAmount;
 
@@ -35,32 +37,42 @@ public class ProductHistoryController {
         colReqId.setCellValueFactory(new PropertyValueFactory<>("requestId"));
         colDate.setCellValueFactory(new PropertyValueFactory<>("date"));
         colStatus.setCellValueFactory(new PropertyValueFactory<>("status"));
-        colCustomer.setCellValueFactory(new PropertyValueFactory<>("customerName"));
-        colQty.setCellValueFactory(new PropertyValueFactory<>("quantity"));
-        colUnit.setCellValueFactory(new PropertyValueFactory<>("unitPrice"));
+        colCustomer.setCellValueFactory(new PropertyValueFactory<>("customer"));   // <-- customerName yerine customer
+        colQty.setCellValueFactory(new PropertyValueFactory<>("qty"));
+        colUnit.setCellValueFactory(new PropertyValueFactory<>("unit"));
         colSubtotal.setCellValueFactory(new PropertyValueFactory<>("subtotal"));
 
+        // hizalama + sayı biçimleme
         colQty.setStyle("-fx-alignment: CENTER-RIGHT;");
         colUnit.setCellFactory(col -> new TableCell<>() {
-            @Override protected void updateItem(Double v, boolean empty) {
+            @Override protected void updateItem(BigDecimal v, boolean empty) {
                 super.updateItem(v, empty);
-                setText(empty || v == null ? null : String.format("%.2f", v));
-                setStyle(empty ? "" : "-fx-alignment: CENTER-RIGHT;");
+                if (empty || v == null) {
+                    setText(null); setStyle("");
+                } else {
+                    setText(String.format(Locale.forLanguageTag("tr-TR"), "%.2f", v));
+                    setStyle("-fx-alignment: CENTER-RIGHT;");
+                }
             }
         });
         colSubtotal.setCellFactory(col -> new TableCell<>() {
-            @Override protected void updateItem(Double v, boolean empty) {
+            @Override protected void updateItem(BigDecimal v, boolean empty) {
                 super.updateItem(v, empty);
-                setText(empty || v == null ? null : String.format("%.2f", v));
-                setStyle(empty ? "" : "-fx-alignment: CENTER-RIGHT;");
+                if (empty || v == null) {
+                    setText(null); setStyle("");
+                } else {
+                    setText(String.format(Locale.forLanguageTag("tr-TR"), "%.2f", v));
+                    setStyle("-fx-alignment: CENTER-RIGHT;");
+                }
             }
         });
 
         tblHistory.setPlaceholder(new Label("Kayıt bulunmuyor."));
-
-        // Durum seçenekleri
         cbStatus.getItems().setAll("Hepsi", "Onaylandı", "Reddedildi", "Onay Bekliyor");
         cbStatus.getSelectionModel().selectFirst();
+
+        // tarih kolonu görsel formatı (sende varsa)
+        try { DateUtil.setDateColumnDMY(colDate); } catch (Throwable ignore) {}
     }
 
     public void setDialogStage(Stage s) { this.dialogStage = s; }
@@ -68,11 +80,10 @@ public class ProductHistoryController {
     public void setProduct(Product p) {
         this.product = p;
         lblProduct.setText(p != null ? p.getUrunAdi() : "—");
-        loadData(); // ilk yükleme
+        loadData();
     }
 
-    @FXML
-    private void handleApplyFilters() { loadData(); }
+    @FXML private void handleApplyFilters() { loadData(); }
 
     @FXML
     private void handleClearFilters() {
@@ -89,34 +100,30 @@ public class ProductHistoryController {
         LocalDate from = dpFrom.getValue();
         LocalDate to   = dpTo.getValue();
         String status  = cbStatus.getValue();
-        String statusParam = (status == null || "Hepsi".equals(status)) ? "" : status;
-        String customerLike = txtCustomer.getText() == null ? "" : txtCustomer.getText().trim();
+        String statusParam = ("Hepsi".equals(status) ? null : status);
+        String customerLike = txtCustomer.getText() == null ? null : txtCustomer.getText().trim();
+        if (customerLike != null && customerLike.isEmpty()) customerLike = null;
 
         try {
-            ObservableList<ProductHistoryRow> list = ProductHistoryDAO.getProductHistory(
-                    product.getId(), from, to, statusParam, customerLike
-            );
+            ObservableList<ProductHistoryRow> list =
+                    ProductHistoryDAO.findHistoryForProduct(product.getId(), from, to, statusParam, customerLike);
             tblHistory.setItems(list);
 
-            // Yalnızca "Onaylandı" olanların toplamı
             int totalQty = list.stream()
                     .filter(r -> "Onaylandı".equalsIgnoreCase(r.getStatus()))
-                    .mapToInt(ProductHistoryRow::getQuantity)
+                    .mapToInt(ProductHistoryRow::getQty)
                     .sum();
 
-            double totalAmount = list.stream()
+            BigDecimal totalAmount = list.stream()
                     .filter(r -> "Onaylandı".equalsIgnoreCase(r.getStatus()))
-                    .mapToDouble(ProductHistoryRow::getSubtotal)
-                    .sum();
+                    .map(ProductHistoryRow::getSubtotal)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
 
             lblTotalQty.setText(String.valueOf(totalQty));
-            lblTotalAmount.setText(String.format("%.2f TL", totalAmount));
+            lblTotalAmount.setText(String.format(Locale.forLanguageTag("tr-TR"), "%.2f TL", totalAmount));
 
         } catch (SQLException e) {
-            Alert a = new Alert(Alert.AlertType.ERROR, "Geçmiş yüklenemedi:\n" + e.getMessage(), ButtonType.OK);
-            a.setTitle("Hata"); a.setHeaderText(null);
-            IconUtil.decorateAlert(a);
-            a.showAndWait();
+            AppDialogs.dbError("Ürün geçmişi yükleme", e);
         }
     }
 

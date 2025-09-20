@@ -1,70 +1,61 @@
 package com.example.erpdemo;
 
 import javafx.beans.property.SimpleIntegerProperty;
-import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.SimpleObjectProperty;
+import javafx.beans.property.SimpleStringProperty;
 
 import java.math.BigDecimal;
 
-/**
- * Müşteri modeli.
- * Para birimi alanları UI katmanında da BigDecimal olarak taşınır (kayan nokta hatalarını önlemek için).
- */
+/** Müşteri modeli (UI-dostu property'ler + BigDecimal bakiye). */
 public class Customer {
 
     private final SimpleIntegerProperty id;
-    private final SimpleStringProperty companyName;
-    private final SimpleStringProperty contactPerson;
-    private final SimpleStringProperty phone;
-    private final SimpleStringProperty email;
-    private final SimpleIntegerProperty iskonto;
+    private final SimpleStringProperty  companyName;
+    private final SimpleStringProperty  contactPerson;
+    private final SimpleStringProperty  phone;
+    private final SimpleStringProperty  email;
+    private final SimpleIntegerProperty iskonto; // yüzde (0..100)
+    private final SimpleObjectProperty<BigDecimal> balance;
 
-    // Bakiye artık BigDecimal
-    private final SimpleObjectProperty<BigDecimal> bakiye;
-
-    // Bakiye dahil kurucu
-    public Customer(int id, String companyName, String contactPerson, String phone, String email, int iskonto, BigDecimal bakiye) {
+    public Customer(int id, String companyName, String contactPerson,
+                    String phone, String email, int iskonto, BigDecimal balance) {
         this.id = new SimpleIntegerProperty(id);
-        this.companyName = new SimpleStringProperty(companyName);
+        this.companyName   = new SimpleStringProperty(companyName);
         this.contactPerson = new SimpleStringProperty(contactPerson);
-        this.phone = new SimpleStringProperty(phone);
-        this.email = new SimpleStringProperty(email);
-        this.iskonto = new SimpleIntegerProperty(iskonto);
-        this.bakiye = new SimpleObjectProperty<>(bakiye == null ? BigDecimal.ZERO : bakiye);
+        this.phone         = new SimpleStringProperty(phone);
+        this.email         = new SimpleStringProperty(email);
+        this.iskonto       = new SimpleIntegerProperty(iskonto);
+        this.balance       = new SimpleObjectProperty<>(balance == null ? BigDecimal.ZERO : balance);
     }
 
-    // Geri uyumluluk (bakiye yoksa 0)
-    public Customer(int id, String companyName, String contactPerson, String phone, String email, int iskonto) {
+    public Customer(int id, String companyName, String contactPerson,
+                    String phone, String email, int iskonto) {
         this(id, companyName, contactPerson, phone, email, iskonto, BigDecimal.ZERO);
     }
 
-    // --- Getter'lar ---
+    // --- getters ---
     public int getId() { return id.get(); }
     public String getCompanyName() { return companyName.get(); }
     public String getContactPerson() { return contactPerson.get(); }
     public String getPhone() { return phone.get(); }
     public String getEmail() { return email.get(); }
     public int getIskonto() { return iskonto.get(); }
+    public BigDecimal getBalance() { return balance.get(); }
 
-    /** Bakiye artık BigDecimal döner. */
-    public BigDecimal getBalance() { return bakiye.get(); }
-
-    // --- Property'ler ---
+    // --- properties (TableView binding) ---
     public SimpleIntegerProperty idProperty() { return id; }
     public SimpleStringProperty companyNameProperty() { return companyName; }
     public SimpleStringProperty contactPersonProperty() { return contactPerson; }
     public SimpleStringProperty phoneProperty() { return phone; }
     public SimpleStringProperty emailProperty() { return email; }
     public SimpleIntegerProperty iskontoProperty() { return iskonto; }
+    public SimpleObjectProperty<BigDecimal> balanceProperty() { return balance; }
 
-    public SimpleObjectProperty<BigDecimal> balanceProperty() { return bakiye; }
-
-    // --- Setter'lar ---
-    public void setCompanyName(String companyName) { this.companyName.set(companyName); }
-    public void setContactPerson(String contactPerson) { this.contactPerson.set(contactPerson); }
-    public void setPhone(String phone) { this.phone.set(phone); }
-    public void setEmail(String email) { this.email.set(email); }
-    public void setIskonto(int iskonto) { this.iskonto.set(iskonto); }
-
-    public void setBalance(BigDecimal balance) { this.bakiye.set(balance == null ? BigDecimal.ZERO : balance); }
+    // --- setters ---
+    public void setCompanyName(String v) { companyName.set(v); }
+    public void setContactPerson(String v) { contactPerson.set(v); }
+    public void setPhone(String v) { phone.set(v); }
+    public void setEmail(String v) { email.set(v); }
+    public void setIskonto(int v) { iskonto.set(v); }
+    public void setBalance(BigDecimal v) { balance.set(v == null ? BigDecimal.ZERO : v); }
 }

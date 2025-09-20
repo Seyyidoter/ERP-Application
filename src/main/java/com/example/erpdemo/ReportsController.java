@@ -1,9 +1,9 @@
 package com.example.erpdemo;
 
 import javafx.fxml.FXML;
-import javafx.scene.control.Alert;
-import javafx.scene.control.ButtonType;
 import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.font.PDType0Font;
 
 import java.io.IOException;
@@ -28,9 +28,7 @@ public class ReportsController {
 
             PDType0Font font = loadFont(document);
             if (font == null) {
-                showInfo("Hata",
-                        "times.ttf bulunamadı.\n" +
-                                "Lütfen dosyayı resources/com/example/erpdemo/ altına koyun.");
+                AppDialogs.error("times.ttf bulunamadı.\nLütfen dosyayı resources/com/example/erpdemo/ altına koyun.");
                 return;
             }
 
@@ -45,15 +43,14 @@ public class ReportsController {
                 } else {
                     DateTimeFormatter dateFmt = DateTimeFormatter.ofPattern("dd.MM.yyyy");
 
-                    // --- müşteri adlarını toplu çek ---
+                    // müşteri adlarını toplu çek
                     Set<Integer> customerIds = new LinkedHashSet<>();
                     for (Request r : approved) customerIds.add(r.getCustomerId());
                     Map<Integer, String> nameMap = CustomerDAO.getCustomerNamesByIds(customerIds);
 
                     for (Request r : approved) {
                         String cname = nameMap.getOrDefault(r.getCustomerId(), "Bilinmiyor");
-                        String dateStr = (r.getRequestDate() != null)
-                                ? r.getRequestDate().format(dateFmt) : "";
+                        String dateStr = (r.getRequestDate() != null) ? r.getRequestDate().format(dateFmt) : "";
 
                         w.println("--------------------------------------------------------------------------");
                         w.println("Talep ID: " + r.getId());
@@ -110,11 +107,12 @@ public class ReportsController {
             Path outPath = outDir.resolve("ApprovedRequestsReport_" + ts + ".pdf");
             document.save(outPath.toFile());
 
-            showInfo("Başarılı", "Rapor oluşturuldu: " + outPath.toAbsolutePath());
+            AppDialogs.info("Rapor oluşturuldu: " + outPath.toAbsolutePath());
 
-        } catch (IOException | SQLException e) {
-            showInfo("Hata", "PDF oluşturulamadı: " + e.getMessage());
-            e.printStackTrace();
+        } catch (SQLException e) {
+            AppDialogs.dbError("Rapor verilerini alma", e);
+        } catch (IOException e) {
+            AppDialogs.unexpectedError("PDF oluşturma", e);
         }
     }
 
@@ -142,7 +140,7 @@ public class ReportsController {
                     ));
                 }
             }
-        } catch (SQLException ignore) {}
+        } catch (SQLException ignore) { }
         return list;
     }
 
@@ -157,17 +155,7 @@ public class ReportsController {
         return null;
     }
 
-    /* -------------------- UI yardımcıları -------------------- */
-
-    private void showInfo(String title, String msg) {
-        Alert a = new Alert(Alert.AlertType.INFORMATION, msg, ButtonType.OK);
-        a.setTitle(title);
-        a.setHeaderText(null);
-        IconUtil.decorateAlert(a);
-        a.showAndWait();
-    }
-
-    /* -------------------- İç sınıflar -------------------- */
+    /* -------------------- İç modeller -------------------- */
 
     private static final class ItemRow {
         final String productName; final int quantity;
@@ -179,23 +167,31 @@ public class ReportsController {
         }
     }
 
+    /* -------------------- PDF yardımcıları -------------------- */
+
+    /** Basit satır-yazıcı: font, satır yüksekliği ve sayfa taşması yönetimi. */
     private static final class PdfWriter implements AutoCloseable {
         private final PDDocument doc;
         private final PDType0Font font;
-        private org.apache.pdfbox.pdmodel.PDPageContentStream cs;
-        private float leading = 14.5f;
-        private float marginLeft = 25f;
-        private float startY = 750f;
-        private float cursorY = startY;
+        private PDPageContentStream cs;
+
+        // metrikler
+        private float leading      = 14.5f;
+        private float marginLeft   = 25f;
+        private float startY       = 750f;
+        private float cursorY      = startY;
         private final float bottomMargin = 40f;
 
-        PdfWriter(PDDocument doc, PDType0Font font) { this.doc = doc; this.font = font; }
+        PdfWriter(PDDocument doc, PDType0Font font) {
+            this.doc = doc;
+            this.font = font;
+        }
 
         void startPage() throws IOException {
             if (cs != null) { cs.endText(); cs.close(); }
-            var page = new org.apache.pdfbox.pdmodel.PDPage();
+            PDPage page = new PDPage();
             doc.addPage(page);
-            cs = new org.apache.pdfbox.pdmodel.PDPageContentStream(doc, page);
+            cs = new PDPageContentStream(doc, page);
             cs.beginText();
             cs.setFont(font, 12);
             cs.setLeading(leading);
@@ -211,7 +207,9 @@ public class ReportsController {
         }
 
         private void ensureSpace(int lines) throws IOException {
-            if (cursorY - (lines * leading) < bottomMargin) startPage();
+            if (cursorY - (lines * leading) < bottomMargin) {
+                startPage();
+            }
         }
 
         @Override public void close() throws IOException {

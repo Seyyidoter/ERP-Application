@@ -1,10 +1,7 @@
 package com.example.erpdemo;
 
 import javafx.fxml.FXML;
-import javafx.scene.control.Alert;
-import javafx.scene.control.ButtonType;
 import javafx.scene.control.TextField;
-import javafx.stage.Stage;
 
 import java.sql.SQLException;
 
@@ -18,43 +15,54 @@ public class NewCustomerController {
 
     @FXML
     private void handleSave() {
-        String companyName = companyNameField.getText();
-        String contactPerson = contactPersonField.getText();
-        String phone = phoneField.getText();
-        String email = emailField.getText();
+        String company = trim(companyNameField.getText());
+        String contact = trim(contactPersonField.getText());
+        String phone   = trim(phoneField.getText());
+        String email   = trim(emailField.getText());
+        String discTxt = discountField.getText() == null ? "" : discountField.getText().trim().replace(",", ".");
 
-        Integer discount = parseIntOrNull(discountField.getText());
-        if (discount == null || discount < 0) {
-            showAlert(Alert.AlertType.WARNING, "Uyarı", "İskonto geçerli bir sayı olmalı (0 veya üzeri).");
+        if (company.isEmpty()) { AppDialogs.warn("Firma adı boş olamaz."); return; }
+
+        int discount;
+        if (discTxt.isEmpty()) {
+            discount = 0;
+        } else {
+            try {
+                // “12.5” gibi değer girilmişse yuvarlama yapmadan int gerekir -> sadece tam sayı kabul edelim:
+                if (discTxt.contains(".")) {
+                    AppDialogs.warn("İskonto yüzdesi tam sayı olmalıdır (örn. 0, 5, 10…).");
+                    return;
+                }
+                discount = Integer.parseInt(discTxt);
+            } catch (NumberFormatException nfe) {
+                AppDialogs.error("İskonto değeri sayısal olmalı (örn. 0, 5, 10).");
+                return;
+            }
+        }
+        if (discount < 0 || discount > 100) {
+            AppDialogs.warn("İskonto yüzdesi 0 ile 100 arasında olmalıdır.");
             return;
         }
 
         try {
-            CustomerDAO.addCustomer(companyName, contactPerson, phone, email, discount);
-            showAlert(Alert.AlertType.INFORMATION, "Başarılı", "Yeni müşteri başarıyla eklendi.");
-            Stage stage = (Stage) companyNameField.getScene().getWindow();
-            stage.close();
+            // DAO imzana göre uyarlayın; tipler: (String, String, String, String, int)
+            CustomerDAO.addCustomer(company, contact, phone, email, discount);
+            AppDialogs.info("Müşteri başarıyla eklendi.");
+            closeWindow();
         } catch (SQLException e) {
-            showAlert(Alert.AlertType.ERROR, "Hata", "Müşteri eklenirken bir hata oluştu: " + e.getMessage());
+            AppDialogs.error("Müşteri eklenemedi: " + e.getMessage());
         }
     }
 
     @FXML
-    private void handleCancel() {
-        Stage stage = (Stage) companyNameField.getScene().getWindow();
-        stage.close();
-    }
+    private void handleCancel() { closeWindow(); }
 
-    private Integer parseIntOrNull(String s) {
-        try { return Integer.valueOf(s.trim()); } catch (Exception e) { return null; }
-    }
+    /* ------------ küçük yardımcılar ------------ */
+    private static String trim(String s) { return s == null ? "" : s.trim(); }
 
-    private void showAlert(Alert.AlertType type, String title, String message) {
-        Alert alert = new Alert(type, message, ButtonType.OK);
-        alert.setTitle(title);
-        alert.setHeaderText(null);
-        IconUtil.decorateAlert(alert);
-
-        alert.showAndWait();
+    private void closeWindow() {
+        if (companyNameField != null && companyNameField.getScene() != null) {
+            companyNameField.getScene().getWindow().hide();
+        }
     }
 }

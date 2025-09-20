@@ -4,6 +4,7 @@ import javafx.fxml.FXML;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
 
+import java.math.BigDecimal;
 import java.sql.*;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -19,9 +20,9 @@ public class ViewRequestController {
     @FXML private Label dateLabel;
 
     @FXML private TableView<ItemRow> requestItemsTable;
-    @FXML private TableColumn<ItemRow, String>  productNameColumn;
-    @FXML private TableColumn<ItemRow, Integer> quantityColumn;
-    @FXML private TableColumn<ItemRow, Double>  discountedPriceColumn;
+    @FXML private TableColumn<ItemRow, String>     productNameColumn;
+    @FXML private TableColumn<ItemRow, Integer>    quantityColumn;
+    @FXML private TableColumn<ItemRow, BigDecimal> discountedPriceColumn; // <-- BigDecimal
 
     @FXML private Button closeBtn;
 
@@ -32,12 +33,12 @@ public class ViewRequestController {
         // Kolon bağları
         productNameColumn.setCellValueFactory(new PropertyValueFactory<>("productName"));
         quantityColumn.setCellValueFactory(new PropertyValueFactory<>("quantity"));
-        discountedPriceColumn.setCellValueFactory(new PropertyValueFactory<>("discountedPrice"));
+        discountedPriceColumn.setCellValueFactory(new PropertyValueFactory<>("discountedPrice")); // BigDecimal
 
         // Sayısal hizalama + TR para biçimi
         quantityColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
         discountedPriceColumn.setCellFactory(col -> new TableCell<>() {
-            @Override protected void updateItem(Double v, boolean empty) {
+            @Override protected void updateItem(BigDecimal v, boolean empty) {
                 super.updateItem(v, empty);
                 if (empty || v == null) {
                     setText(null);
@@ -104,6 +105,7 @@ public class ViewRequestController {
         var daoItems = RequestDAO.getRequestItemsByRequestId(id);
         List<ItemRow> list = new ArrayList<>();
         for (RequestItem it : daoItems) {
+            // RequestItem.getDiscountedPrice() -> BigDecimal
             list.add(new ItemRow(it.getProductName(), it.getQuantity(), it.getDiscountedPrice()));
         }
         return list;
@@ -121,25 +123,26 @@ public class ViewRequestController {
 
     /** Tablo satırı modeli (JavaFX property’leriyle) */
     public static class ItemRow {
-        private final javafx.beans.property.SimpleStringProperty productName = new javafx.beans.property.SimpleStringProperty();
-        private final javafx.beans.property.SimpleIntegerProperty quantity    = new javafx.beans.property.SimpleIntegerProperty();
-        private final javafx.beans.property.SimpleDoubleProperty  discountedPrice = new javafx.beans.property.SimpleDoubleProperty();
+        private final javafx.beans.property.SimpleStringProperty  productName     = new javafx.beans.property.SimpleStringProperty();
+        private final javafx.beans.property.SimpleIntegerProperty quantity        = new javafx.beans.property.SimpleIntegerProperty();
+        private final javafx.beans.property.ObjectProperty<BigDecimal> discountedPrice =
+                new javafx.beans.property.SimpleObjectProperty<>(BigDecimal.ZERO);
 
-        public ItemRow(String productName, int quantity, double discountedPrice) {
+        public ItemRow(String productName, int quantity, BigDecimal discountedPrice) {
             this.productName.set(productName);
             this.quantity.set(quantity);
-            this.discountedPrice.set(discountedPrice);
+            this.discountedPrice.set(discountedPrice == null ? BigDecimal.ZERO : discountedPrice);
         }
 
         // Getter’lar
         public String getProductName() { return productName.get(); }
         public int getQuantity() { return quantity.get(); }
-        public double getDiscountedPrice() { return discountedPrice.get(); }
+        public BigDecimal getDiscountedPrice() { return discountedPrice.get(); }
 
         // Property’ler (PropertyValueFactory için)
         public javafx.beans.property.SimpleStringProperty productNameProperty() { return productName; }
         public javafx.beans.property.SimpleIntegerProperty quantityProperty() { return quantity; }
-        public javafx.beans.property.SimpleDoubleProperty discountedPriceProperty() { return discountedPrice; }
+        public javafx.beans.property.ObjectProperty<BigDecimal> discountedPriceProperty() { return discountedPrice; }
     }
 
     // --- küçük yardımcı ---

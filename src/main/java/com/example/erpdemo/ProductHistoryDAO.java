@@ -3,83 +3,65 @@ package com.example.erpdemo;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 
+import java.math.BigDecimal;
 import java.sql.*;
 import java.time.LocalDate;
 
+/** Ürün sipariş geçmişi sorguları (BigDecimal uyumlu). */
 public class ProductHistoryDAO {
 
-    /** Ürün geçmişi – tarih aralığı, durum, müşteri (LIKE) filtreleriyle */
-    public static ObservableList<ProductHistoryRow> getProductHistory(
+    public static ObservableList<ProductHistoryRow> findHistoryForProduct(
             int productId,
-            LocalDate fromDate,
-            LocalDate toDate,
-            String status,          // "" => hepsi
-            String customerLike     // "" => filtre yok (LIKE %xxx%)
-    ) throws SQLException {
+            LocalDate from, LocalDate to,
+            String statusLike,
+            String customerLike) throws SQLException {
 
-        String sql = """
-            SELECT
-                t.Id AS RequestId,
-                CAST(t.TalepTarihi AS date) AS TalepTarihi,
-                t.Durum AS Durum,
-                m.FirmaAdi AS CustomerName,
-                k.Miktar AS Qty,
-                k.TeklifFiyati AS UnitPrice
+        StringBuilder sb = new StringBuilder("""
+            SELECT t.Id AS ReqId,
+                   CAST(t.TalepTarihi AS date) AS Tarih,
+                   t.Durum,
+                   m.FirmaAdi AS Musteri,
+                   k.Miktar,
+                   k.TeklifFiyati
             FROM dbo.Talepler t
             JOIN dbo.TalepKalemleri k ON k.TalepId = t.Id
-            JOIN dbo.Musteriler m     ON m.Id = t.MusteriId
+            JOIN dbo.Musteriler m      ON m.Id = t.MusteriId
             WHERE k.UrunId = ?
-              AND (? IS NULL OR CAST(t.TalepTarihi AS date) >= ?)
-              AND (? IS NULL OR CAST(t.TalepTarihi AS date) <= ?)
-              AND (? = '' OR t.Durum = ?)
-              AND (? = '' OR m.FirmaAdi LIKE ?)
-            ORDER BY t.TalepTarihi DESC, t.Id DESC, k.Id
-        """;
+        """);
 
-        ObservableList<ProductHistoryRow> list = FXCollections.observableArrayList();
+        if (from != null) sb.append(" AND CAST(t.TalepTarihi AS date) >= ? ");
+        if (to   != null) sb.append(" AND CAST(t.TalepTarihi AS date) <= ? ");
+        if (statusLike != null && !statusLike.isBlank()) sb.append(" AND t.Durum = ? ");
+        if (customerLike != null && !customerLike.isBlank()) sb.append(" AND m.FirmaAdi LIKE ? ");
+        sb.append(" ORDER BY t.Id DESC, k.Id ");
+
+        ObservableList<ProductHistoryRow> rows = FXCollections.observableArrayList();
 
         try (Connection c = DatabaseManager.getConnection();
-             PreparedStatement ps = c.prepareStatement(sql)) {
+             PreparedStatement ps = c.prepareStatement(sb.toString())) {
 
             int i = 1;
             ps.setInt(i++, productId);
-
-            // fromDate
-            if (fromDate == null) { ps.setNull(i++, Types.DATE); ps.setNull(i++, Types.DATE); }
-            else {
-                Date d = Date.valueOf(fromDate);
-                ps.setDate(i++, d); ps.setDate(i++, d);
-            }
-
-            // toDate
-            if (toDate == null) { ps.setNull(i++, Types.DATE); ps.setNull(i++, Types.DATE); }
-            else {
-                Date d = Date.valueOf(toDate);
-                ps.setDate(i++, d); ps.setDate(i++, d);
-            }
-
-            // status
-            ps.setString(i++, status == null ? "" : status);
-            ps.setString(i++, status == null ? "" : status);
-
-            // customer like
-            String like = (customerLike == null || customerLike.isBlank()) ? "" : "%" + customerLike + "%";
-            ps.setString(i++, like.isEmpty() ? "" : like);
-            ps.setString(i,   like.isEmpty() ? "" : like);
+            if (from != null) ps.setDate(i++, Date.valueOf(from));
+            if (to   != null) ps.setDate(i++, Date.valueOf(to));
+            if (statusLike != null && !statusLike.isBlank()) ps.setString(i++, statusLike);
+            if (customerLike != null && !customerLike.isBlank()) ps.setString(i++, "%" + customerLike + "%");
 
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    int reqId = rs.getInt("RequestId");
-                    Date d    = rs.getDate("TalepTarihi");
-                    LocalDate date = (d != null ? d.toLocalDate() : null);
-                    String s  = rs.getString("Durum");
-                    String customer = rs.getString("CustomerName");
-                    int qty = rs.getInt("Qty");
-                    double unit = rs.getDouble("UnitPrice");
-                    list.add(new ProductHistoryRow(reqId, date, s, customer, qty, unit));
+                    int reqId = rs.getInt("ReqId");
+                    Date d = rs.getDate("Tarih");
+                    LocalDate date = d == null ? null : d.toLocalDate();
+                    String status = rs.getString("Durum");
+                    String customer = rs.getString("Musteri");
+                    int qty = rs.getInt("Miktar");
+                    BigDecimal unit = rs.getBigDecimal("TeklifFiyati");
+                    BigDecimal subtotal = unit == null ? BigDecimal.ZERO : unit.multiply(BigDecimal.valueOf(qty));
+
+                    rows.add(new ProductHistoryRow(reqId, date, status, customer, qty, unit, subtotal));
                 }
             }
         }
-        return list;
+        return rows;
     }
 }

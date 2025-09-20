@@ -16,6 +16,7 @@ import javafx.stage.Stage;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.sql.SQLException;
+import java.text.NumberFormat;
 import java.util.Locale;
 
 /** Müşteri listesi + CRUD + Ödeme alma + Geçmiş + Filtreleme */
@@ -28,8 +29,6 @@ public class CustomerController {
     @FXML private TableColumn<Customer, String>  phoneColumn;
     @FXML private TableColumn<Customer, String>  emailColumn;
     @FXML private TableColumn<Customer, Integer> iskontoColumn;
-
-    // BAKIYE artık BigDecimal:
     @FXML private TableColumn<Customer, BigDecimal>  balanceColumn;
 
     @FXML private TextField searchField;
@@ -39,39 +38,39 @@ public class CustomerController {
 
     @FXML
     public void initialize() {
-        // Kolon bağları
         idColumn.setCellValueFactory(new PropertyValueFactory<>("id"));
         nameColumn.setCellValueFactory(new PropertyValueFactory<>("companyName"));
         contactColumn.setCellValueFactory(new PropertyValueFactory<>("contactPerson"));
         phoneColumn.setCellValueFactory(new PropertyValueFactory<>("phone"));
         emailColumn.setCellValueFactory(new PropertyValueFactory<>("email"));
         iskontoColumn.setCellValueFactory(new PropertyValueFactory<>("iskonto"));
-
-        // BigDecimal balance:
         balanceColumn.setCellValueFactory(new PropertyValueFactory<>("balance"));
 
-        // UI: sayısal hizalama/format
+        // hizalama ve para formatı (BigDecimal için %f KULLANMA!)
         iskontoColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
         balanceColumn.setCellFactory(col -> new TableCell<>() {
+            final NumberFormat nf = NumberFormat.getNumberInstance(new Locale("tr","TR"));
+            {
+                nf.setMinimumFractionDigits(2);
+                nf.setMaximumFractionDigits(2);
+            }
             @Override protected void updateItem(BigDecimal v, boolean empty) {
                 super.updateItem(v, empty);
                 if (empty || v == null) {
                     setText(null);
                     setStyle("");
                 } else {
-                    setText(String.format(Locale.forLanguageTag("tr-TR"), "%.2f", v));
+                    setText(nf.format(v));
                     setStyle("-fx-alignment: CENTER-RIGHT;");
                 }
             }
         });
 
-        // Filtre yapısı
         filtered = new FilteredList<>(master, x -> true);
         SortedList<Customer> sorted = new SortedList<>(filtered);
         sorted.comparatorProperty().bind(customerTable.comparatorProperty());
         customerTable.setItems(sorted);
 
-        // Canlı arama
         if (searchField != null) {
             searchField.textProperty().addListener((obs, old, q) -> applyFilter(q));
         }
@@ -84,22 +83,16 @@ public class CustomerController {
         if (q.isEmpty()) { filtered.setPredicate(x -> true); return; }
 
         filtered.setPredicate(c -> {
-            // Metin alanlarında arama
             if (contains(c.getCompanyName(), q)) return true;
             if (contains(c.getContactPerson(), q)) return true;
             if (contains(c.getPhone(), q)) return true;
             if (contains(c.getEmail(), q)) return true;
-
-            // Sayısalları da basitçe string karşılaştır
             if (String.valueOf(c.getIskonto()).contains(q)) return true;
 
-            // BigDecimal'ı stringe çevir – her iki formu da dene
             BigDecimal bal = c.getBalance() == null ? BigDecimal.ZERO : c.getBalance();
             if (bal.toPlainString().toLowerCase(Locale.ROOT).contains(q)) return true;
             String bal2 = String.format(Locale.ROOT, "%.2f", bal);
-            if (bal2.contains(q)) return true;
-
-            return false;
+            return bal2.contains(q);
         });
     }
 
@@ -111,8 +104,7 @@ public class CustomerController {
         try {
             master.setAll(CustomerDAO.getAllCustomers());
         } catch (SQLException e) {
-            e.printStackTrace();
-            showAlert(Alert.AlertType.ERROR, "Hata", "Müşteri verileri yüklenirken bir hata oluştu.");
+            AppDialogs.dbError("Müşteri verileri yüklenmesi", e);
         }
     }
 
@@ -134,8 +126,7 @@ public class CustomerController {
 
             loadCustomers();
         } catch (IOException e) {
-            e.printStackTrace();
-            showAlert(Alert.AlertType.ERROR, "Hata", "Yeni müşteri penceresi açılamıyor.");
+            AppDialogs.unexpectedError("Yeni müşteri penceresi açma", e);
         }
     }
 
@@ -161,11 +152,10 @@ public class CustomerController {
                 dialogStage.showAndWait();
                 loadCustomers();
             } catch (IOException e) {
-                e.printStackTrace();
-                showAlert(Alert.AlertType.ERROR, "Hata", "Müşteri düzenleme penceresi açılamadı.");
+                AppDialogs.unexpectedError("Müşteri düzenleme penceresi açma", e);
             }
         } else {
-            showAlert(Alert.AlertType.WARNING, "Uyarı", "Lütfen düzenlemek için bir müşteri seçin.");
+            AppDialogs.warn("Lütfen düzenlemek için bir müşteri seçin.");
         }
     }
 
@@ -173,7 +163,7 @@ public class CustomerController {
     private void handleDeleteButton() {
         Customer selectedCustomer = customerTable.getSelectionModel().getSelectedItem();
         if (selectedCustomer == null) {
-            showAlert(Alert.AlertType.WARNING, "Uyarı", "Lütfen silmek için bir müşteri seçin.");
+            AppDialogs.warn("Lütfen silmek için bir müşteri seçin.");
             return;
         }
         Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
@@ -186,11 +176,11 @@ public class CustomerController {
         if (confirm.getResult() == ButtonType.YES) {
             try {
                 CustomerDAO.deleteCustomer(selectedCustomer.getId());
-                showAlert(Alert.AlertType.INFORMATION, "Başarılı", "Müşteri başarıyla silindi.");
+                AppDialogs.info("Müşteri başarıyla silindi.");
                 loadCustomers();
             } catch (SQLException e) {
-                e.printStackTrace();
-                showAlert(Alert.AlertType.ERROR, "Hata", "Müşteri silinirken bir hata oluştu: " + e.getMessage());
+                String generic = "Bu müşteri ilişkili kayıtlar nedeniyle silinemedi.";
+                AppDialogs.dbError(generic, e);
             }
         }
     }
@@ -200,7 +190,7 @@ public class CustomerController {
     private void handleTakePayment() {
         Customer sel = customerTable.getSelectionModel().getSelectedItem();
         if (sel == null) {
-            showAlert(Alert.AlertType.WARNING, "Uyarı", "Lütfen ödeme almak için bir müşteri seçin.");
+            AppDialogs.warn("Lütfen ödeme almak için bir müşteri seçin.");
             return;
         }
 
@@ -212,14 +202,13 @@ public class CustomerController {
         var res = td.showAndWait();
         if (res.isEmpty()) return;
 
-        // Kullanıcıdan gelen değeri BigDecimal'a çevir
         java.math.BigDecimal amountBD;
         try {
             String txt = res.get().replace(",", ".").trim();
             amountBD = new java.math.BigDecimal(txt);
             if (amountBD.signum() <= 0) throw new NumberFormatException();
         } catch (NumberFormatException ex) {
-            showAlert(Alert.AlertType.WARNING, "Uyarı", "Geçerli bir tutar girin (0'dan büyük).");
+            AppDialogs.warn("Geçerli bir tutar girin (0'dan büyük).");
             return;
         }
 
@@ -231,12 +220,11 @@ public class CustomerController {
         String desc = note.showAndWait().orElse("");
 
         try {
-            // PaymentDAO zaten BigDecimal ile çalışıyor
             PaymentDAO.addPayment(sel.getId(), amountBD, desc);
-            showAlert(Alert.AlertType.INFORMATION, "Başarılı", "Ödeme kaydedildi.");
+            AppDialogs.info("Ödeme kaydedildi.");
             loadCustomers();
         } catch (SQLException e) {
-            showAlert(Alert.AlertType.ERROR, "Hata", "Ödeme kaydedilemedi: " + e.getMessage());
+            AppDialogs.dbError("Ödeme kaydı", e);
         }
     }
 
@@ -244,10 +232,7 @@ public class CustomerController {
     @FXML
     private void handleCustomerHistory() {
         Customer sel = customerTable.getSelectionModel().getSelectedItem();
-        if (sel == null) {
-            showAlert(Alert.AlertType.WARNING, "Uyarı", "Lütfen geçmişini görmek istediğiniz müşteriyi seçin.");
-            return;
-        }
+        if (sel == null) { AppDialogs.warn("Lütfen geçmişini görmek istediğiniz müşteriyi seçin."); return; }
         try {
             var url = getClass().getResource("customer-history-view.fxml");
             FXMLLoader loader = new FXMLLoader(url);
@@ -267,17 +252,7 @@ public class CustomerController {
 
             dlg.showAndWait();
         } catch (Exception ex) {
-            ex.printStackTrace();
-            showAlert(Alert.AlertType.ERROR, "Hata", "Geçmiş penceresi açılamadı:\n" + ex.getMessage());
+            AppDialogs.unexpectedError("Geçmiş penceresi açma", ex);
         }
-    }
-
-    // ---------- yardımcı ----------
-    private void showAlert(Alert.AlertType type, String title, String message) {
-        Alert alert = new Alert(type, message, ButtonType.OK);
-        alert.setTitle(title);
-        alert.setHeaderText(null);
-        IconUtil.decorateAlert(alert);
-        alert.showAndWait();
     }
 }

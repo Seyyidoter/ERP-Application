@@ -9,12 +9,7 @@ import javafx.scene.control.cell.PropertyValueFactory;
 import java.sql.SQLException;
 import java.time.LocalDate;
 
-/**
- * Onay ekranı: bekleyen talepleri listeler, Onayla/Reddet işlemlerini yapar.
- * Onaylanınca talep toplamı kadar müşterinin bakiyesi DÜŞÜRÜLÜR (borç artar).
- *
- * Not: Onay işlemi artık DAO içinde TEK TRANSACTION olarak yapılır.
- */
+/** Onay ekranı: bekleyen talepleri listeler, Onayla/Reddet işlemlerini yapar. */
 public class ApprovalController {
 
     @FXML private TableView<RequestRow> pendingRequestsTable;
@@ -54,17 +49,13 @@ public class ApprovalController {
     private void handleApprove() {
         RequestRow sel = pendingRequestsTable.getSelectionModel().getSelectedItem();
         if (sel == null) return;
-
         try {
             int approverId = HelloApplication.getLoggedInUserId();
-            // Tüm operasyon tek transaction:
             RequestDAO.approveRequestTransactionally(sel.getId(), approverId);
-
-            info("Başarılı", "Talep onaylandı. Stok ve müşteri bakiyesi güncellendi.");
+            AppDialogs.info("Talep onaylandı. Stok ve müşteri bakiyesi güncellendi.");
             refresh();
-
         } catch (SQLException ex) {
-            error("Hata", "Onay işlemi başarısız: " + ex.getMessage());
+            AppDialogs.dbError("Talep onaylama", ex);
         }
     }
 
@@ -72,13 +63,12 @@ public class ApprovalController {
     private void handleReject() {
         RequestRow sel = pendingRequestsTable.getSelectionModel().getSelectedItem();
         if (sel == null) return;
-
         try {
             RequestDAO.rejectRequest(sel.getId(), HelloApplication.getLoggedInUserId());
-            info("Bilgi", "Talep reddedildi.");
+            AppDialogs.info("Talep reddedildi.");
             refresh();
         } catch (SQLException ex) {
-            error("Hata", "Reddetme işlemi başarısız: " + ex.getMessage());
+            AppDialogs.dbError("Talep reddetme", ex);
         }
     }
 
@@ -89,22 +79,8 @@ public class ApprovalController {
                 rows.add(new RequestRow(r.getId(), r.getCustomerId(), r.getRequestDate(), r.getStatus()));
             }
         } catch (SQLException ex) {
-            error("Hata", "Veriler yüklenemedi: " + ex.getMessage());
+            AppDialogs.dbError("Bekleyen taleplerin yüklenmesi", ex);
         }
-    }
-
-    // ---- Basit alert yardımcıları ----
-    private void info(String t, String m){
-        Alert a = new Alert(Alert.AlertType.INFORMATION, m, ButtonType.OK);
-        a.setHeaderText(null); a.setTitle(t);
-        IconUtil.decorateAlert(a);
-        a.showAndWait();
-    }
-    private void error(String t, String m){
-        Alert a = new Alert(Alert.AlertType.ERROR, m, ButtonType.OK);
-        a.setHeaderText(null); a.setTitle(t);
-        IconUtil.decorateAlert(a);
-        a.showAndWait();
     }
 
     /** Tablo satırı modeli */

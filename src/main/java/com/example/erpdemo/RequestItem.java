@@ -1,45 +1,49 @@
 package com.example.erpdemo;
 
-import javafx.beans.property.SimpleDoubleProperty;
-import javafx.beans.property.SimpleIntegerProperty;
-import javafx.beans.property.SimpleStringProperty;
+import java.math.BigDecimal;
 
+/** Talep kalemi: miktar, liste fiyatı, iskontolu fiyat ve ara toplam. */
 public class RequestItem {
+    private final int id;
+    private final int requestId;
+    private final int productId;
+    private final String productName;
+    private final int quantity;
+    /** Liste fiyatı (iskontosuz) */
+    private final BigDecimal listPrice;
+    /** İskontolu birim fiyat */
+    private final BigDecimal discountedPrice;
 
-    private final SimpleIntegerProperty id;
-    private final SimpleIntegerProperty requestId;
-    private final SimpleIntegerProperty productId;
-
-    private final SimpleStringProperty productName; // Bu alan eklendi
-    private final SimpleIntegerProperty quantity;
-    private final SimpleDoubleProperty price;
-    private final SimpleDoubleProperty discountedPrice;
-
-    public RequestItem(int id, int requestId, int productId, String productName, int quantity, double price, double discountedPrice) {
-        this.id = new SimpleIntegerProperty(id);
-        this.requestId = new SimpleIntegerProperty(requestId);
-        this.productId = new SimpleIntegerProperty(productId);
-        this.productName = new SimpleStringProperty(productName);
-        this.quantity = new SimpleIntegerProperty(quantity);
-        this.price = new SimpleDoubleProperty(price);
-        this.discountedPrice = new SimpleDoubleProperty(discountedPrice);
+    public RequestItem(int id,
+                       int requestId,
+                       int productId,
+                       String productName,
+                       int quantity,
+                       double listPrice,
+                       double discountedPrice) {
+        this.id = id;
+        this.requestId = requestId;
+        this.productId = productId;
+        this.productName = productName;
+        this.quantity = quantity;
+        this.listPrice = BigDecimal.valueOf(listPrice);
+        this.discountedPrice = BigDecimal.valueOf(discountedPrice);
     }
 
-    // Getter metotları
-    public int getId() { return id.get(); }
-    public int getRequestId() { return requestId.get(); }
-    public int getProductId() { return productId.get(); }
-    public String getProductName() { return productName.get(); }
-    public int getQuantity() { return quantity.get(); }
-    public double getPrice() { return price.get(); }
-    public double getDiscountedPrice() { return discountedPrice.get(); }
+    public int getId() { return id; }
+    public int getRequestId() { return requestId; }
+    public int getProductId() { return productId; }
+    public String getProductName() { return productName; }
+    public int getQuantity() { return quantity; }
 
-    // Property metotları
-    public SimpleIntegerProperty idProperty() { return id; }
-    public SimpleIntegerProperty requestIdProperty() { return requestId; }
-    public SimpleIntegerProperty productIdProperty() { return productId; }
-    public SimpleStringProperty productNameProperty() { return productName; }
-    public SimpleIntegerProperty quantityProperty() { return quantity; }
-    public SimpleDoubleProperty priceProperty() { return price; }
-    public SimpleDoubleProperty discountedPriceProperty() { return discountedPrice; }
+    /** Liste fiyatı (TL) */
+    public BigDecimal getListPrice() { return listPrice; }
+
+    /** İskontolu birim fiyat (TL) */
+    public BigDecimal getDiscountedPrice() { return discountedPrice; }
+
+    /** Ara toplam = miktar * iskontolu fiyat */
+    public BigDecimal getSubtotal() {
+        return discountedPrice.multiply(BigDecimal.valueOf(quantity));
+    }
 }

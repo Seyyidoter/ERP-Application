@@ -7,6 +7,7 @@ import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.stage.Stage;
 
+import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -18,10 +19,10 @@ public class NewRequestController {
     @FXML private TextField quantityField;
 
     @FXML private TableView<RequestItem> productTable;
-    @FXML private TableColumn<RequestItem, String>  productNameColumn;
-    @FXML private TableColumn<RequestItem, Integer> quantityColumn;
-    @FXML private TableColumn<RequestItem, Double>  priceColumn;
-    @FXML private TableColumn<RequestItem, Double>  discountedPriceColumn;
+    @FXML private TableColumn<RequestItem, String>     productNameColumn;
+    @FXML private TableColumn<RequestItem, Integer>    quantityColumn;
+    @FXML private TableColumn<RequestItem, BigDecimal> priceColumn;           // <-- BigDecimal
+    @FXML private TableColumn<RequestItem, BigDecimal> discountedPriceColumn;  // <-- BigDecimal
 
     @FXML private Label totalAmountLabel;
 
@@ -37,29 +38,33 @@ public class NewRequestController {
             productComboBox.setItems(ProductDAO.getAllProducts());
             productComboBox.setConverter(new ProductStringConverter());
         } catch (SQLException e) {
-            showAlert("Hata", "Müşteri/ürün verileri yüklenemedi.");
+            AppDialogs.dbError("Müşteri/ürün verileri yükleme", e);
         }
 
         productNameColumn.setCellValueFactory(new PropertyValueFactory<>("productName"));
         quantityColumn.setCellValueFactory(new PropertyValueFactory<>("quantity"));
-        priceColumn.setCellValueFactory(new PropertyValueFactory<>("price"));
+        priceColumn.setCellValueFactory(new PropertyValueFactory<>("listPrice"));
         discountedPriceColumn.setCellValueFactory(new PropertyValueFactory<>("discountedPrice"));
 
         productTable.setItems(requestItems);
 
+        // BigDecimal’ı 2 ondalık basamakla yazdır
+        priceColumn.setCellFactory(col -> new TableCell<>() {
+            @Override protected void updateItem(BigDecimal v, boolean empty) {
+                super.updateItem(v, empty);
+                setText(empty || v == null ? null : String.format("%.2f", v.doubleValue()));
+            }
+        });
         discountedPriceColumn.setCellFactory(col -> new TableCell<>() {
-            @Override
-            protected void updateItem(Double value, boolean empty) {
-                super.updateItem(value, empty);
-                setText(empty || value == null ? null : String.format("%.2f", value));
+            @Override protected void updateItem(BigDecimal v, boolean empty) {
+                super.updateItem(v, empty);
+                setText(empty || v == null ? null : String.format("%.2f", v.doubleValue()));
             }
         });
 
-        // --- UI dokunuşu: miktar sütunu sağa hizalı ---
         quantityColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
     }
 
-    /** Aynı üründen tabloda zaten ekli miktarları toplar. */
     private Map<Integer, Integer> collectQuantitiesByProduct() {
         Map<Integer, Integer> map = new HashMap<>();
         for (RequestItem it : requestItems) {
@@ -74,45 +79,26 @@ public class NewRequestController {
         Product  prd = productComboBox.getSelectionModel().getSelectedItem();
 
         if (cus == null || prd == null || quantityField.getText().isBlank()) {
-            showAlert("Uyarı", "Lütfen müşteri, ürün ve miktar girin.");
+            AppDialogs.warn("Lütfen müşteri, ürün ve miktar girin.");
             return;
         }
 
         int qty;
-        try {
-            qty = Integer.parseInt(quantityField.getText().trim());
-        } catch (NumberFormatException e) {
-            showAlert("Hata", "Miktar sayısal olmalı.");
-            return;
-        }
-        if (qty <= 0) {
-            showAlert("Uyarı", "Miktar 0'dan büyük olmalı.");
-            return;
-        }
+        try { qty = Integer.parseInt(quantityField.getText().trim()); }
+        catch (NumberFormatException e) { AppDialogs.warn("Miktar sayısal olmalı."); return; }
+        if (qty <= 0) { AppDialogs.warn("Miktar 0'dan büyük olmalı."); return; }
 
-        // ---- STOK KONTROLÜ (listede aynı üründen mevcut miktarı da dahil ederek) ----
         int alreadyAdded = collectQuantitiesByProduct().getOrDefault(prd.getId(), 0);
         if (qty + alreadyAdded > prd.getStok()) {
-            showAlert("Uyarı", "Stok yetersiz! (Stok: " + prd.getStok() +
+            AppDialogs.warn("Stok yetersiz! (Stok: " + prd.getStok() +
                     ", Listede mevcut: " + alreadyAdded + ", Eklemek istediğiniz: " + qty + ")");
             return;
         }
 
         double price = prd.getFiyat();
-        double discounted = price;
-        if (cus != null) {
-            discounted = price - (price * cus.getIskonto() / 100.0);
-        }
+        double discounted = price - (price * cus.getIskonto() / 100.0);
 
-        requestItems.add(new RequestItem(
-                0, // id
-                0, // requestId (kaydedilince verilecek)
-                prd.getId(),
-                prd.getUrunAdi(),
-                qty,
-                price,
-                discounted
-        ));
+        requestItems.add(new RequestItem(0, 0, prd.getId(), prd.getUrunAdi(), qty, price, discounted));
 
         quantityField.clear();
         updateTotalAmount();
@@ -122,26 +108,20 @@ public class NewRequestController {
     private void handleSaveRequest() {
         Customer cus = customerComboBox.getSelectionModel().getSelectedItem();
         if (cus == null || requestItems.isEmpty()) {
-            showAlert("Uyarı", "Müşteri seçin ve en az bir ürün ekleyin.");
+            AppDialogs.warn("Müşteri seçin ve en az bir ürün ekleyin.");
             return;
         }
 
         try {
-            // ======== SON STOK KONTROLÜ (KAYIT ANINDA, GÜNCEL DB DEĞERİYLE) ========
-            // Aynı ürünlerden gelen miktarları topla
             Map<Integer, Integer> totals = collectQuantitiesByProduct();
 
-            // Her ürün için veritabanından güncel stok çek, karşılaştır
             List<String> insuff = new ArrayList<>();
             for (Map.Entry<Integer, Integer> e : totals.entrySet()) {
                 int productId = e.getKey();
                 int requested = e.getValue();
 
                 Product latest = ProductDAO.getProductById(productId);
-                if (latest == null) {
-                    insuff.add("Ürün bulunamadı (ID: " + productId + ")");
-                    continue;
-                }
+                if (latest == null) { insuff.add("Ürün bulunamadı (ID: " + productId + ")"); continue; }
                 if (latest.getStok() < requested) {
                     insuff.add(latest.getUrunAdi() + " — İstenen: " + requested +
                             ", Güncel Stok: " + latest.getStok());
@@ -150,25 +130,26 @@ public class NewRequestController {
             if (!insuff.isEmpty()) {
                 String msg = "Aşağıdaki kalemlerde stok yetersiz olduğu için talep kaydedilmedi:\n\n" +
                         insuff.stream().collect(Collectors.joining("\n"));
-                showAlert("Uyarı", msg);
+                AppDialogs.warn(msg);
                 return;
             }
-            // =====================================================================
 
-            // KAYDET: başlık + kalemler (kalem fiyatları İSKONTOLU fiyattır)
             int requestId = RequestDAO.addRequest(cus.getId());
             if (requestId != -1) {
                 for (RequestItem it : requestItems) {
-                    RequestDAO.addRequestItem(requestId, it.getProductId(), it.getQuantity(), it.getDiscountedPrice());
+                    RequestDAO.addRequestItem(requestId,
+                            it.getProductId(),
+                            it.getQuantity(),
+                            it.getDiscountedPrice().doubleValue());
                 }
-                showAlert("Başarılı", "Talep kaydedildi.");
+                AppDialogs.info("Talep kaydedildi.");
                 if (dialogStage != null) dialogStage.close();
                 else closeWindowIfPossible();
             } else {
-                showAlert("Hata", "Talep kaydedilemedi.");
+                AppDialogs.error("Talep kaydedilemedi.");
             }
         } catch (SQLException e) {
-            showAlert("Hata", "Veritabanı hatası: " + e.getMessage());
+            AppDialogs.dbError("Talep kaydı", e);
         }
     }
 
@@ -187,17 +168,9 @@ public class NewRequestController {
     public void setDialogStage(Stage s) { this.dialogStage = s; }
 
     private void updateTotalAmount() {
-        double total = requestItems.stream()
-                .mapToDouble(i -> i.getDiscountedPrice() * i.getQuantity())
-                .sum();
-        totalAmountLabel.setText(String.format("%.2f TL", total));
-    }
-
-    private void showAlert(String title, String message) {
-        Alert a = new Alert(Alert.AlertType.INFORMATION, message, ButtonType.OK);
-        a.setHeaderText(null);
-        a.setTitle(title);
-        IconUtil.decorateAlert(a);
-        a.showAndWait();
+        BigDecimal total = requestItems.stream()
+                .map(RequestItem::getSubtotal)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        totalAmountLabel.setText(String.format("%.2f TL", total.doubleValue()));
     }
 }

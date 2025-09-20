@@ -10,9 +10,11 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
+/** Talepler için DAO. Onay işlemi atomik; reddetme yalnızca statü değiştirir. */
 public class RequestDAO {
 
-    /** Eski: yalın liste (JOIN yok). Kalan kodların bozulmaması için bırakıyoruz. */
+    /** Eski: yalın liste (JOIN yok). Yeni kodlarda {@link #findAllSummaries()} tercih edin. */
+    @Deprecated
     public static List<Request> findAll() {
         List<Request> list = new ArrayList<>();
         String sql = """
@@ -30,7 +32,7 @@ public class RequestDAO {
         return list;
     }
 
-    /** YENİ: N+1’i bitirmek için müşteri adıyla birlikte getirir. */
+    /** JOIN ile müşteri adını da getirir; liste ekranları için önerilen yöntem. */
     public static List<RequestSummary> findAllSummaries() throws SQLException {
         List<RequestSummary> list = new ArrayList<>();
         String sql = """
@@ -59,7 +61,7 @@ public class RequestDAO {
         return list;
     }
 
-    /** Yeni talep başlığı ekle – durum 'Onay Bekliyor' */
+    /** Yeni talep başlığı ekler – durum 'Onay Bekliyor'. */
     public static int addRequest(int customerId) throws SQLException {
         String sql = """
             INSERT INTO dbo.Talepler (MusteriId, TalepTarihi, Durum)
@@ -76,7 +78,7 @@ public class RequestDAO {
         return -1;
     }
 
-    /** Talep kalemi ekle (fiyat = iskontolu) */
+    /** Talep kalemi ekler (fiyat = iskontolu). */
     public static void addRequestItem(int requestId, int productId, int qty, double fiyat) throws SQLException {
         String sql = """
             INSERT INTO dbo.TalepKalemleri (TalepId, UrunId, Miktar, TeklifFiyati)
@@ -92,7 +94,7 @@ public class RequestDAO {
         }
     }
 
-    /** Bekleyenler */
+    /** Bekleyen talepler. */
     public static ObservableList<Request> getPendingRequests() throws SQLException {
         ObservableList<Request> list = FXCollections.observableArrayList();
         String sql = """
@@ -109,7 +111,7 @@ public class RequestDAO {
         return list;
     }
 
-    /** Rapor: onaylanmışlar */
+    /** Raporlar için: onaylanmış talepler. */
     public static ObservableList<Request> getApprovedRequests() throws SQLException {
         ObservableList<Request> list = FXCollections.observableArrayList();
         String sql = """
@@ -126,7 +128,7 @@ public class RequestDAO {
         return list;
     }
 
-    /** Talep kalemleri (görüntüleme için) */
+    /** Talep kalemleri (görüntüleme için). */
     public static ObservableList<RequestItem> getRequestItemsByRequestId(int requestId) throws SQLException {
         ObservableList<RequestItem> items = FXCollections.observableArrayList();
         String sql = """
@@ -157,41 +159,7 @@ public class RequestDAO {
         return items;
     }
 
-    /** Onayla */
-    public static void approveRequest(int requestId, int userId) throws SQLException {
-        String sql = """
-            UPDATE dbo.Talepler
-               SET Durum = N'Onaylandı',
-                   OnaylayanKullaniciId = ?,
-                   OnayTarihi = GETDATE()
-             WHERE Id = ?
-        """;
-        try (Connection c = DatabaseManager.getConnection();
-             PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setInt(1, userId);
-            ps.setInt(2, requestId);
-            ps.executeUpdate();
-        }
-    }
-
-    /** Reddet */
-    public static void rejectRequest(int requestId, int userId) throws SQLException {
-        String sql = """
-            UPDATE dbo.Talepler
-               SET Durum = N'Reddedildi',
-                   OnaylayanKullaniciId = ?,
-                   OnayTarihi = NULL
-             WHERE Id = ?
-        """;
-        try (Connection c = DatabaseManager.getConnection();
-             PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setInt(1, userId);
-            ps.setInt(2, requestId);
-            ps.executeUpdate();
-        }
-    }
-
-    /** Tekli silme (transaction) */
+    /** Tekli silme (transaction). */
     public static int deleteRequestById(int id) throws SQLException {
         try (Connection c = DatabaseManager.getConnection()) {
             boolean old = c.getAutoCommit();
@@ -216,7 +184,7 @@ public class RequestDAO {
         }
     }
 
-    /** Toplam (iskontolu) */
+    /** Talebin toplam (iskontolu) tutarı. */
     public static double getRequestTotal(int requestId) throws SQLException {
         String sql = """
             SELECT COALESCE(SUM(Miktar * TeklifFiyati), 0)
@@ -233,6 +201,7 @@ public class RequestDAO {
     }
 
     // =================== ATOMİK ONAY ===================
+    /** Stok düşme + müşteri bakiyesi artırma + talebi onaylama işlemlerini TEK transaction'da yapar. */
     public static void approveRequestTransactionally(int requestId, int approverId) throws SQLException {
         try (Connection c = DatabaseManager.getConnection()) {
             boolean old = c.getAutoCommit();
@@ -311,7 +280,28 @@ public class RequestDAO {
         }
     }
 
-    // --- yardımcı modeller ---
+    // =================== REDDET ===================
+    /** Yalnızca durumu 'Reddedildi' yapar; stok/bakiye değişmez. Sadece 'Onay Bekliyor' için çalışır. */
+    public static void rejectRequest(int requestId, int approverId) throws SQLException {
+        String sql = """
+            UPDATE dbo.Talepler
+               SET Durum = N'Reddedildi',
+                   OnaylayanKullaniciId = ?,
+                   OnayTarihi = GETDATE()
+             WHERE Id = ? AND Durum = N'Onay Bekliyor'
+        """;
+        try (Connection c = DatabaseManager.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, approverId);
+            ps.setInt(2, requestId);
+            int affected = ps.executeUpdate();
+            if (affected == 0) {
+                throw new SQLException("Talep beklemede değil veya bulunamadı.");
+            }
+        }
+    }
+
+    // --- yardımcılar ---
     private static Request mapRowToRequest(ResultSet rs) throws SQLException {
         int id = rs.getInt("Id");
         int customerId = rs.getInt("MusteriId");

@@ -59,10 +59,7 @@ public class RequestController {
 
             refresh();
         } catch (IOException ex) {
-            Alert a = new Alert(Alert.AlertType.ERROR, "Pencere açılamadı: " + ex.getMessage(), ButtonType.OK);
-            a.setHeaderText(null); a.setTitle("Hata");
-            IconUtil.decorateAlert(a);
-            a.showAndWait();
+            AppDialogs.unexpectedError("Talep oluşturma penceresi açma", ex);
         }
     }
 
@@ -70,10 +67,7 @@ public class RequestController {
     private void viewRequest() {
         Row sel = tblRequests.getSelectionModel().getSelectedItem();
         if (sel == null) {
-            Alert a = new Alert(Alert.AlertType.WARNING, "Lütfen bir talep seçin.", ButtonType.OK);
-            a.setHeaderText(null); a.setTitle("Uyarı");
-            IconUtil.decorateAlert(a);
-            a.showAndWait();
+            AppDialogs.warn("Lütfen bir talep seçin.");
             return;
         }
         try {
@@ -91,23 +85,14 @@ public class RequestController {
             IconUtil.setAppIcon(dlg);
             dlg.showAndWait();
         } catch (IOException ex) {
-            Alert a = new Alert(Alert.AlertType.ERROR, "Pencere açılamadı: " + ex.getMessage(), ButtonType.OK);
-            a.setHeaderText(null); a.setTitle("Hata");
-            IconUtil.decorateAlert(a);
-            a.showAndWait();
+            AppDialogs.unexpectedError("Talep detayı penceresi açma", ex);
         }
     }
 
     @FXML
     private void deleteSingleRequest() {
         Row sel = tblRequests.getSelectionModel().getSelectedItem();
-        if (sel == null) {
-            Alert a = new Alert(Alert.AlertType.WARNING, "Silmek için bir talep seçin.", ButtonType.OK);
-            a.setHeaderText(null); a.setTitle("Uyarı");
-            IconUtil.decorateAlert(a);
-            a.showAndWait();
-            return;
-        }
+        if (sel == null) { AppDialogs.warn("Silmek için bir talep seçin."); return; }
 
         Alert q = new Alert(Alert.AlertType.CONFIRMATION,
                 "Talep #" + sel.getId() + " silinsin mi?", ButtonType.YES, ButtonType.NO);
@@ -119,16 +104,10 @@ public class RequestController {
 
         try {
             RequestDAO.deleteRequestById(sel.getId());
-            Alert a = new Alert(Alert.AlertType.INFORMATION, "Talep silindi.", ButtonType.OK);
-            a.setHeaderText(null); a.setTitle("Bilgi");
-            IconUtil.decorateAlert(a);
-            a.showAndWait();
+            AppDialogs.info("Talep silindi.");
             refresh();
         } catch (SQLException ex) {
-            Alert a = new Alert(Alert.AlertType.ERROR, "Silme işlemi başarısız: " + ex.getMessage(), ButtonType.OK);
-            a.setHeaderText(null); a.setTitle("Hata");
-            IconUtil.decorateAlert(a);
-            a.showAndWait();
+            AppDialogs.dbError("Talep silme", ex);
         }
     }
 
@@ -136,16 +115,12 @@ public class RequestController {
         try {
             rows.clear();
 
-            // 1) Talep başlıklarını çek
             var all = RequestDAO.findAll();
 
-            // 2) Müşteri adlarını tek sorguda al
-            Set<Integer> ids = all.stream()
-                    .map(Request::getCustomerId)
+            Set<Integer> ids = all.stream().map(Request::getCustomerId)
                     .collect(Collectors.toCollection(LinkedHashSet::new));
             var nameMap = CustomerDAO.getCustomerNamesByIds(ids);
 
-            // 3) Tablo satırını doldur
             for (Request r : all) {
                 rows.add(new Row(
                         r.getId(),
@@ -156,10 +131,7 @@ public class RequestController {
                 ));
             }
         } catch (Exception ex) {
-            Alert a = new Alert(Alert.AlertType.ERROR, "Veriler yüklenemedi: " + ex.getMessage(), ButtonType.OK);
-            a.setHeaderText(null); a.setTitle("Hata");
-            IconUtil.decorateAlert(a);
-            a.showAndWait();
+            AppDialogs.unexpectedError("Taleplerin yüklenmesi", ex);
         }
     }
 
@@ -171,13 +143,8 @@ public class RequestController {
         private final LocalDate requestDate;
         private final String status;
 
-        public Row(int id, int customerId, String customerName,
-                   LocalDate requestDate, String status){
-            this.id = id;
-            this.customerId = customerId;
-            this.customerName = customerName;
-            this.requestDate = requestDate;
-            this.status = status;
+        public Row(int id, int customerId, String customerName, LocalDate requestDate, String status){
+            this.id = id; this.customerId = customerId; this.customerName = customerName; this.requestDate = requestDate; this.status = status;
         }
 
         public int getId(){ return id; }

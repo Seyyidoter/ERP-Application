@@ -1,8 +1,6 @@
 package com.example.erpdemo;
 
 import javafx.fxml.FXML;
-import javafx.scene.control.Alert;
-import javafx.scene.control.ButtonType;
 import javafx.scene.control.TextField;
 import javafx.stage.Stage;
 
@@ -36,48 +34,37 @@ public class NewProductController {
             String name = nameField.getText();
             String unit = unitField.getText();
 
-            if (name == null || name.isBlank()) { showAlert("Uyarı", "Ürün adı boş olamaz."); return; }
-            if (unit == null || unit.isBlank()) { showAlert("Uyarı", "Birim boş olamaz."); return; }
+            if (name == null || name.isBlank()) { AppDialogs.warn("Ürün adı boş olamaz."); return; }
+            if (unit == null || unit.isBlank()) { AppDialogs.warn("Birim boş olamaz."); return; }
 
             String priceText = priceField.getText().replace(",", ".");
             double price = Double.parseDouble(priceText);
-            if (price < 0) { showAlert("Uyarı", "Fiyat negatif olamaz."); return; }
+            if (price < 0) { AppDialogs.warn("Fiyat negatif olamaz."); return; }
 
             int stock;
-            try {
-                stock = Integer.parseInt(stockField.getText().trim());
-            } catch (NumberFormatException ex) {
-                showAlert("Hata", "Stok sayısal bir tam sayı olmalı."); return;
-            }
-            if (stock < 0) { showAlert("Uyarı", "Stok negatif olamaz."); return; }
+            try { stock = Integer.parseInt(stockField.getText().trim()); }
+            catch (NumberFormatException ex) { AppDialogs.warn("Stok sayısal bir tam sayı olmalı."); return; }
+            if (stock < 0) { AppDialogs.warn("Stok negatif olamaz."); return; }
 
             if (product == null) {
                 ProductDAO.addProduct(name, price, stock, unit);
-                showAlert("Başarılı", "Yeni ürün başarıyla eklendi.");
+                AppDialogs.info("Yeni ürün başarıyla eklendi.");
             } else {
                 product.setUrunAdi(name);
                 product.setFiyat(price);
                 product.setStok(stock);
                 product.setBirim(unit);
                 ProductDAO.updateProduct(product);
-                showAlert("Başarılı", "Ürün bilgileri başarıyla güncellendi.");
+                AppDialogs.info("Ürün bilgileri başarıyla güncellendi.");
             }
-            dialogStage.close();
+            if (dialogStage != null) dialogStage.close();
         } catch (NumberFormatException e) {
-            showAlert("Hata", "Fiyat sayısal olmalı.");
+            AppDialogs.warn("Fiyat sayısal olmalı.");
         } catch (SQLException e) {
-            showAlert("Hata", "İşlem sırasında bir hata oluştu: " + e.getMessage());
+            AppDialogs.dbError("Ürün kaydetme", e);
         }
     }
 
     @FXML
-    private void handleCancel() { dialogStage.close(); }
-
-    private void showAlert(String title, String message) {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION, message, ButtonType.OK);
-        alert.setTitle(title);
-        alert.setHeaderText(null);
-        IconUtil.decorateAlert(alert);
-        alert.showAndWait();
-    }
+    private void handleCancel() { if (dialogStage != null) dialogStage.close(); }
 }

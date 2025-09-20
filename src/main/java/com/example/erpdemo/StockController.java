@@ -1,6 +1,6 @@
 package com.example.erpdemo;
 
-import javafx.collections.ObservableList;
+import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
@@ -30,7 +30,6 @@ public class StockController {
         stockColumn.setCellValueFactory(new PropertyValueFactory<>("stok"));
         unitColumn.setCellValueFactory(new PropertyValueFactory<>("birim"));
 
-        // --- UI dokunuşu: sayı/para biçimlendirme + hizalama ---
         priceColumn.setCellFactory(col -> new TableCell<>() {
             @Override protected void updateItem(Double v, boolean empty) {
                 super.updateItem(v, empty);
@@ -52,15 +51,13 @@ public class StockController {
 
     private void loadProducts() {
         try {
-            ObservableList<Product> productList = ProductDAO.getAllProducts();
-            productTable.setItems(productList);
+            var productList = ProductDAO.getAllProducts();
+            productTable.setItems(FXCollections.observableArrayList(productList));
         } catch (SQLException e) {
-            e.printStackTrace();
-            showInfo("Hata", "Ürün verileri yüklenirken bir hata oluştu.");
+            AppDialogs.dbError("Ürün verileri yüklenmesi", e);
         }
     }
 
-    // --------- Ekle ----------
     @FXML
     private void handleAddButton() {
         try {
@@ -78,16 +75,14 @@ public class StockController {
             stage.showAndWait();
             loadProducts();
         } catch (IOException e) {
-            e.printStackTrace();
-            showInfo("Hata", "Yeni ürün penceresi açılamadı.");
+            AppDialogs.unexpectedError("Yeni ürün penceresi açma", e);
         }
     }
 
-    // --------- Düzenle ----------
     @FXML
     private void handleEditButton() {
         Product selectedProduct = productTable.getSelectionModel().getSelectedItem();
-        if (selectedProduct == null) { showInfo("Uyarı", "Lütfen düzenlemek için bir ürün seçin."); return; }
+        if (selectedProduct == null) { AppDialogs.warn("Lütfen düzenlemek için bir ürün seçin."); return; }
 
         try {
             FXMLLoader loader = new FXMLLoader(getClass().getResource("new-product.fxml"));
@@ -106,16 +101,14 @@ public class StockController {
             dialogStage.showAndWait();
             loadProducts();
         } catch (IOException e) {
-            e.printStackTrace();
-            showInfo("Hata", "Ürün düzenleme penceresi açılamadı.");
+            AppDialogs.unexpectedError("Ürün düzenleme penceresi açma", e);
         }
     }
 
-    // --------- Sil ----------
     @FXML
     private void handleDeleteButton() {
         Product selectedProduct = productTable.getSelectionModel().getSelectedItem();
-        if (selectedProduct == null) { showInfo("Uyarı", "Lütfen silmek için bir ürün seçin."); return; }
+        if (selectedProduct == null) { AppDialogs.warn("Lütfen silmek için bir ürün seçin."); return; }
 
         Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
                 "Ürün silinecek. Emin misiniz?", ButtonType.OK, ButtonType.CANCEL);
@@ -127,33 +120,19 @@ public class StockController {
             if (btn == ButtonType.OK) {
                 try {
                     ProductDAO.deleteProduct(selectedProduct.getId());
-                    showInfo("Başarılı", "Ürün başarıyla silindi.");
+                    AppDialogs.info("Ürün başarıyla silindi.");
                     loadProducts();
                 } catch (SQLException e) {
-                    e.printStackTrace();
-                    String msg = e.getMessage();
-                    if (msg != null && msg.toLowerCase().contains("foreign key")) {
-                        showInfo("Hata", "Bu ürün taleplerde kullanılıyor olabilir. Önce ilişkili kayıtları temizleyin.");
-                    } else {
-                        showInfo("Hata", "Ürün silinirken bir hata oluştu: " + e.getMessage());
-                    }
+                    AppDialogs.dbError("Ürün silme", e);
                 }
             }
         });
     }
 
-    // --------- Ürün Geçmişi ----------
     @FXML
     private void handleProductHistory() {
         Product sel = productTable.getSelectionModel().getSelectedItem();
-        if (sel == null) {
-            Alert a = new Alert(Alert.AlertType.WARNING, "Lütfen geçmişini görmek istediğiniz ürünü seçin.", ButtonType.OK);
-            a.setTitle("Uyarı");
-            a.setHeaderText(null);
-            IconUtil.decorateAlert(a);
-            a.showAndWait();
-            return;
-        }
+        if (sel == null) { AppDialogs.warn("Lütfen geçmişini görmek istediğiniz ürünü seçin."); return; }
 
         try {
             var url = getClass().getResource("product-history-view.fxml");
@@ -175,20 +154,7 @@ public class StockController {
 
             dlg.showAndWait();
         } catch (IOException ex) {
-            Alert a = new Alert(Alert.AlertType.ERROR, "Geçmiş penceresi açılamadı:\n" + ex.getMessage(), ButtonType.OK);
-            a.setTitle("Hata");
-            a.setHeaderText(null);
-            IconUtil.decorateAlert(a);
-            a.showAndWait();
+            AppDialogs.unexpectedError("Geçmiş penceresi açma", ex);
         }
-    }
-
-    // --------- Yardımcı ----------
-    private void showInfo(String title, String message) {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION, message, ButtonType.OK);
-        alert.setTitle(title);
-        alert.setHeaderText(null);
-        IconUtil.decorateAlert(alert);
-        alert.showAndWait();
     }
 }
