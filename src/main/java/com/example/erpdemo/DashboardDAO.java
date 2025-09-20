@@ -1,20 +1,23 @@
 package com.example.erpdemo;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Dashboard metrikleri – tarih filtresi indeks-dostu olacak şekilde güncellendi.
+ * NOT: Sunucu saatine göre "bugün" hesaplanır (GETDATE()).
+ */
 public class DashboardDAO {
 
     /** Bugün oluşturulan talep sayısı */
     public static int getTodayRequestCount() throws SQLException {
+        // Kolona CAST yok: SARGable aralık filtresi
         String sql = """
             SELECT COUNT(*)
             FROM dbo.Talepler
-            WHERE CAST(TalepTarihi AS date) = CAST(GETDATE() AS date)
+            WHERE TalepTarihi >= CAST(GETDATE() AS date)
+              AND TalepTarihi <  DATEADD(day, 1, CAST(GETDATE() AS date))
             """;
         try (Connection c = DatabaseManager.getConnection();
              PreparedStatement ps = c.prepareStatement(sql);
@@ -29,7 +32,8 @@ public class DashboardDAO {
             SELECT COALESCE(SUM(tk.Miktar), 0)
             FROM dbo.TalepKalemleri tk
             JOIN dbo.Talepler t ON t.Id = tk.TalepId
-            WHERE CAST(t.TalepTarihi AS date) = CAST(GETDATE() AS date)
+            WHERE t.TalepTarihi >= CAST(GETDATE() AS date)
+              AND t.TalepTarihi <  DATEADD(day, 1, CAST(GETDATE() AS date))
             """;
         try (Connection c = DatabaseManager.getConnection();
              PreparedStatement ps = c.prepareStatement(sql);
@@ -44,7 +48,8 @@ public class DashboardDAO {
             SELECT COALESCE(SUM(tk.Miktar * tk.TeklifFiyati), 0)
             FROM dbo.TalepKalemleri tk
             JOIN dbo.Talepler t ON t.Id = tk.TalepId
-            WHERE CAST(t.TalepTarihi AS date) = CAST(GETDATE() AS date)
+            WHERE t.TalepTarihi >= CAST(GETDATE() AS date)
+              AND t.TalepTarihi <  DATEADD(day, 1, CAST(GETDATE() AS date))
             """;
         try (Connection c = DatabaseManager.getConnection();
              PreparedStatement ps = c.prepareStatement(sql);
@@ -60,7 +65,8 @@ public class DashboardDAO {
             FROM dbo.TalepKalemleri tk
             JOIN dbo.Talepler t ON t.Id = tk.TalepId
             JOIN dbo.Stoklar  s ON s.Id = tk.UrunId
-            WHERE CAST(t.TalepTarihi AS date) = CAST(GETDATE() AS date)
+            WHERE t.TalepTarihi >= CAST(GETDATE() AS date)
+              AND t.TalepTarihi <  DATEADD(day, 1, CAST(GETDATE() AS date))
             GROUP BY s.UrunAdi
             ORDER BY s.UrunAdi
             """;
