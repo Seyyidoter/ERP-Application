@@ -19,10 +19,11 @@ import java.time.LocalDate;
 public class RequestController {
 
     @FXML private TableView<Row> tblRequests;
-    @FXML private TableColumn<Row, Integer> colId;
-    @FXML private TableColumn<Row, Integer> colCustomer;
+    @FXML private TableColumn<Row, Integer>   colId;
+    @FXML private TableColumn<Row, Integer>   colCustomer;
+    @FXML private TableColumn<Row, String>    colCustomerName;
     @FXML private TableColumn<Row, LocalDate> colDate;
-    @FXML private TableColumn<Row, String> colStatus;
+    @FXML private TableColumn<Row, String>    colStatus;
 
     private final ObservableList<Row> rows = FXCollections.observableArrayList();
 
@@ -30,6 +31,7 @@ public class RequestController {
     public void initialize() {
         colId.setCellValueFactory(new PropertyValueFactory<>("id"));
         colCustomer.setCellValueFactory(new PropertyValueFactory<>("customerId"));
+        colCustomerName.setCellValueFactory(new PropertyValueFactory<>("customerName"));
         colDate.setCellValueFactory(new PropertyValueFactory<>("requestDate"));
         colStatus.setCellValueFactory(new PropertyValueFactory<>("status"));
 
@@ -108,7 +110,19 @@ public class RequestController {
         try {
             rows.clear();
             for (Request r : RequestDAO.findAll()) {
-                rows.add(new Row(r.getId(), r.getCustomerId(), r.getRequestDate(), r.getStatus()));
+                String customerName = "";
+                try {
+                    Customer c = CustomerDAO.getCustomerById(r.getCustomerId());
+                    if (c != null) customerName = c.getCompanyName(); // Firma adı alanın
+                } catch (SQLException ignore) { /* adı boş kalabilir */ }
+
+                rows.add(new Row(
+                        r.getId(),
+                        r.getCustomerId(),
+                        customerName,
+                        r.getRequestDate(),
+                        r.getStatus()
+                ));
             }
         } catch (Exception ex) {
             error("Hata", "Veriler yüklenemedi: " + ex.getMessage());
@@ -121,14 +135,24 @@ public class RequestController {
 
     /** Liste satırı modeli. */
     public static class Row {
-        private final int id, customerId;
+        private final int id;
+        private final int customerId;
+        private final String customerName;
         private final LocalDate requestDate;
         private final String status;
-        public Row(int id, int customerId, LocalDate requestDate, String status){
-            this.id=id; this.customerId=customerId; this.requestDate=requestDate; this.status=status;
+
+        public Row(int id, int customerId, String customerName,
+                   LocalDate requestDate, String status){
+            this.id = id;
+            this.customerId = customerId;
+            this.customerName = customerName;
+            this.requestDate = requestDate;
+            this.status = status;
         }
+
         public int getId(){ return id; }
         public int getCustomerId(){ return customerId; }
+        public String getCustomerName(){ return customerName; }
         public LocalDate getRequestDate(){ return requestDate; }
         public String getStatus(){ return status; }
     }

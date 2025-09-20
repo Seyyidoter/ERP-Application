@@ -9,9 +9,6 @@ import javafx.scene.control.cell.PropertyValueFactory;
 import java.sql.SQLException;
 import java.time.LocalDate;
 
-import static jdk.internal.org.jline.utils.Log.warn;
-
-
 /**
  * Onay ekranı: bekleyen talepleri listeler, Onayla/Reddet işlemlerini yapar.
  * Onaylanınca talep toplamı kadar müşterinin bakiyesi DÜŞÜRÜLÜR (borç artar).
@@ -101,7 +98,6 @@ public class ApprovalController {
         }
     }
 
-
     @FXML
     private void handleReject() {
         RequestRow sel = pendingRequestsTable.getSelectionModel().getSelectedItem();
@@ -127,8 +123,25 @@ public class ApprovalController {
         }
     }
 
-    private void info(String t, String m){ Alert a=new Alert(Alert.AlertType.INFORMATION,m,ButtonType.OK);a.setHeaderText(null);a.setTitle(t);IconUtil.decorateAlert(a);a.showAndWait();}
-    private void error(String t, String m){ Alert a=new Alert(Alert.AlertType.ERROR,m,ButtonType.OK);a.setHeaderText(null);a.setTitle(t);IconUtil.decorateAlert(a);a.showAndWait();}
+    // ---- Basit alert yardımcıları ----
+    private void info(String t, String m){
+        Alert a = new Alert(Alert.AlertType.INFORMATION, m, ButtonType.OK);
+        a.setHeaderText(null); a.setTitle(t);
+        IconUtil.decorateAlert(a);
+        a.showAndWait();
+    }
+    private void warn(String t, String m){
+        Alert a = new Alert(Alert.AlertType.WARNING, m, ButtonType.OK);
+        a.setHeaderText(null); a.setTitle(t);
+        IconUtil.decorateAlert(a);
+        a.showAndWait();
+    }
+    private void error(String t, String m){
+        Alert a = new Alert(Alert.AlertType.ERROR, m, ButtonType.OK);
+        a.setHeaderText(null); a.setTitle(t);
+        IconUtil.decorateAlert(a);
+        a.showAndWait();
+    }
 
     /** Tablo satırı modeli */
     public static class RequestRow {
