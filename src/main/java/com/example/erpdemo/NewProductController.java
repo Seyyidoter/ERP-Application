@@ -8,7 +8,6 @@ import javafx.stage.Stage;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.sql.SQLException;
 import java.util.Locale;
 import java.util.function.UnaryOperator;
 
@@ -37,7 +36,13 @@ public class NewProductController {
 
         if (product != null) {
             nameField.setText(product.getUrunAdi());
-            priceField.setText(String.format(Locale.ROOT, "%.2f", product.getFiyat())); // BigDecimal->String
+
+            // BUG DÜZELTİLDİ: BigDecimal'ı %.2f ile formatlamak hata veriyordu
+            BigDecimal f = product.getFiyat() == null
+                    ? BigDecimal.ZERO
+                    : product.getFiyat().setScale(2, RoundingMode.HALF_UP);
+            priceField.setText(f.toPlainString());
+
             stockField.setText(String.valueOf(product.getStok()));
             unitField.setText(product.getBirim());
         }
@@ -60,11 +65,9 @@ public class NewProductController {
             if (stock < 0)     { AppDialogs.warn("Stok negatif olamaz.");              return; }
 
             if (product == null) {
-                // EKLE – DAO artık BigDecimal alıyor
                 ProductDAO.addProduct(name, price, stock, unit);
                 AppDialogs.info("Yeni ürün başarıyla eklendi.");
             } else {
-                // GÜNCELLE – Product#setFiyat de BigDecimal alıyor
                 product.setUrunAdi(name);
                 product.setFiyat(price);
                 product.setStok(stock);
@@ -75,10 +78,13 @@ public class NewProductController {
 
             closeWindowIfPossible();
 
-        } catch (SQLException e) {
-            AppDialogs.dbError("Ürün kaydetme", e);
         } catch (Exception e) {
-            AppDialogs.unexpectedError("Ürün kaydetme", e);
+            // SQLException dahil AppDialogs.* zaten dekorasyonlu
+            if (e instanceof java.sql.SQLException se) {
+                AppDialogs.dbError("Ürün kaydetme", se);
+            } else {
+                AppDialogs.unexpectedError("Ürün kaydetme", e);
+            }
         }
     }
 

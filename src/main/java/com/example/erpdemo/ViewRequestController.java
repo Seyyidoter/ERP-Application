@@ -10,7 +10,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Talep detay penceresi. */
+/** Talep detay penceresi (onaylama/reddetme destekli). */
 public class ViewRequestController {
 
     @FXML private Label requestIdLabel;
@@ -21,11 +21,13 @@ public class ViewRequestController {
     @FXML private TableView<ItemRow> requestItemsTable;
     @FXML private TableColumn<ItemRow, String>     productNameColumn;
     @FXML private TableColumn<ItemRow, Integer>    quantityColumn;
-    @FXML private TableColumn<ItemRow, BigDecimal> discountedPriceColumn; // BigDecimal
+    @FXML private TableColumn<ItemRow, BigDecimal> discountedPriceColumn;
 
-    @FXML private Button closeBtn;
+    @FXML private Button approveBtn;
+    @FXML private Button rejectBtn;
 
     private int requestId;
+    private Runnable onChange; // üst ekranı yenilemek için
 
     @FXML
     public void initialize() {
@@ -44,6 +46,9 @@ public class ViewRequestController {
         loadData();
     }
 
+    /** Üst taraftan (ApprovalController) yenileme için callback atanır. */
+    public void setOnChange(Runnable r) { this.onChange = r; }
+
     private void loadData() {
         try {
             Header h = fetchHeader(requestId);
@@ -57,6 +62,13 @@ public class ViewRequestController {
             dateLabel.setText(d == null ? "—" : DateUtil.fmt(d));
 
             requestItemsTable.getItems().setAll(items);
+
+            // Onay/Reddet butonlarını yalnızca 'Onay Bekliyor' ise göster
+            boolean canDecide = "Onay Bekliyor".equalsIgnoreCase(h.status());
+            approveBtn.setVisible(canDecide);
+            approveBtn.setManaged(canDecide);
+            rejectBtn.setVisible(canDecide);
+            rejectBtn.setManaged(canDecide);
 
         } catch (SQLException ex) {
             showError("Hata", "Talep detayı yüklenemedi:\n" + ex.getMessage());
@@ -97,9 +109,45 @@ public class ViewRequestController {
     }
 
     @FXML
+    private void handleApprove() {
+        approveReject(true);
+    }
+
+    @FXML
+    private void handleReject() {
+        approveReject(false);
+    }
+
+    private void approveReject(boolean approve) {
+        // butonları kilitleyelim
+        approveBtn.setDisable(true);
+        rejectBtn.setDisable(true);
+
+        Async.runVoid(() -> {
+            try {
+                if (approve) {
+                    RequestDAO.approveRequestTransactionally(requestId, HelloApplication.getLoggedInUserId());
+                } else {
+                    RequestDAO.rejectRequest(requestId, HelloApplication.getLoggedInUserId());
+                }
+            } catch (SQLException ex) {
+                throw new RuntimeException(ex);
+            }
+        }, () -> {
+            AppDialogs.info(approve ? "Talep onaylandı." : "Talep reddedildi.");
+            if (onChange != null) onChange.run(); // üst listeyi yenile
+            handleClose();
+        }, ex -> {
+            AppDialogs.dbError(approve ? "Talep onaylama" : "Talep reddetme", toSql(ex));
+            approveBtn.setDisable(false);
+            rejectBtn.setDisable(false);
+        }, null);
+    }
+
+    @FXML
     private void handleClose() {
-        if (closeBtn != null && closeBtn.getScene() != null) {
-            closeBtn.getScene().getWindow().hide();
+        if (requestItemsTable != null && requestItemsTable.getScene() != null) {
+            requestItemsTable.getScene().getWindow().hide();
         }
     }
 
@@ -126,6 +174,16 @@ public class ViewRequestController {
         public javafx.beans.property.SimpleStringProperty productNameProperty() { return productName; }
         public javafx.beans.property.SimpleIntegerProperty quantityProperty() { return quantity; }
         public javafx.beans.property.ObjectProperty<BigDecimal> discountedPriceProperty() { return discountedPrice; }
+    }
+
+    private static SQLException toSql(Throwable t) {
+        if (t instanceof SQLException se) return se;
+        Throwable c = t.getCause();
+        while (c != null && c != t) {
+            if (c instanceof SQLException se) return se;
+            c = c.getCause();
+        }
+        return new SQLException(t.getMessage(), t);
     }
 
     private void showError(String title, String msg) {

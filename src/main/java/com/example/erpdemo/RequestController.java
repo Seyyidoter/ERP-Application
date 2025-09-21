@@ -32,20 +32,57 @@ public class RequestController {
 
     @FXML
     public void initialize() {
+        // 1) Sütun–model bağları
         colId.setCellValueFactory(new PropertyValueFactory<>("id"));
         colCustomer.setCellValueFactory(new PropertyValueFactory<>("customerId"));
         colCustomerName.setCellValueFactory(new PropertyValueFactory<>("customerName"));
         colDate.setCellValueFactory(new PropertyValueFactory<>("requestDate"));
         colStatus.setCellValueFactory(new PropertyValueFactory<>("status"));
-        DateUtil.setDateColumnDMY(colDate);
+        try { DateUtil.setDateColumnDMY(colDate); } catch (Throwable ignore) {}
 
+        // 2) Tablo: placeholder + veri listesi
+        tblRequests.setPlaceholder(new Label("Kayıtlı talep yok"));
         tblRequests.setItems(rows);
 
-        // Seçim yokken butonları devre dışı bırak
-        var noSelection = tblRequests.getSelectionModel().selectedItemProperty().isNull();
-        viewBtn.disableProperty().bind(noSelection);
-        deleteBtn.disableProperty().bind(noSelection);
+        // 3) Seçim yokken butonları pasifleştir
+        var noSel = tblRequests.getSelectionModel().selectedItemProperty().isNull();
+        viewBtn.disableProperty().bind(noSel);
+        deleteBtn.disableProperty().bind(noSel);
 
+        // 4) Tablo içinde boş alana tıklayınca seçimi/odağı temizle, çift tık → görüntüle
+        tblRequests.setRowFactory(tv -> {
+            TableRow<Row> row = new TableRow<>();
+            row.setOnMouseClicked(e -> {
+                if (row.isEmpty()) {
+                    tblRequests.getSelectionModel().clearSelection();
+                    if (tblRequests.getParent() != null) tblRequests.getParent().requestFocus();
+                } else if (e.getClickCount() == 2) {
+                    tblRequests.getSelectionModel().select(row.getIndex());
+                    viewRequest();
+                }
+            });
+            return row;
+        });
+
+        // 5) Tablo DIŞINA tıklanınca da seçimi/odağı temizle (mavi çerçeve gitsin)
+        javafx.application.Platform.runLater(() -> {
+            var scene = tblRequests.getScene();
+            if (scene == null) return;
+            scene.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, e -> {
+                javafx.scene.Node n = e.getPickResult().getIntersectedNode();
+                boolean insideTable = false;
+                while (n != null) {
+                    if (n == tblRequests) { insideTable = true; break; }
+                    n = n.getParent();
+                }
+                if (!insideTable) {
+                    tblRequests.getSelectionModel().clearSelection();
+                    if (tblRequests.getParent() != null) tblRequests.getParent().requestFocus();
+                }
+            });
+        });
+
+        // 6) İlk yükleme
         refresh();
     }
 
@@ -123,13 +160,15 @@ public class RequestController {
                         var list = RequestDAO.findAllSummaries();
                         ObservableList<Row> tmp = FXCollections.observableArrayList();
                         for (RequestSummary s : list) {
-                            tmp.add(new Row(s.getId(), s.getCustomerId(), s.getCustomerName(), s.getRequestDate(), s.getStatus()));
+                            tmp.add(new Row(s.getId(), s.getCustomerId(), s.getCustomerName(),
+                                    s.getRequestDate(), s.getStatus()));
                         }
                         return tmp;
                     } catch (SQLException ex) {
                         throw new RuntimeException(ex);
                     }
-                }, tmp -> rows.setAll(tmp),
+                },
+                tmp -> rows.setAll(tmp),
                 ex -> AppDialogs.dbError("Taleplerin yüklenmesi", toSql(ex)),
                 () -> tblRequests.setDisable(false));
     }
@@ -142,7 +181,8 @@ public class RequestController {
         private final LocalDate requestDate;
         private final String status;
         public Row(int id, int customerId, String customerName, LocalDate requestDate, String status){
-            this.id = id; this.customerId = customerId; this.customerName = customerName; this.requestDate = requestDate; this.status = status;
+            this.id = id; this.customerId = customerId; this.customerName = customerName;
+            this.requestDate = requestDate; this.status = status;
         }
         public int getId(){ return id; }
         public int getCustomerId(){ return customerId; }

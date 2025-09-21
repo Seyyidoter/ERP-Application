@@ -28,7 +28,6 @@ public class NewCustomerController {
             discount = 0;
         } else {
             try {
-                // “12.5” gibi değer girilmişse yuvarlama yapmadan int gerekir -> sadece tam sayı kabul edelim:
                 if (discTxt.contains(".")) {
                     AppDialogs.warn("İskonto yüzdesi tam sayı olmalıdır (örn. 0, 5, 10…).");
                     return;
@@ -45,12 +44,10 @@ public class NewCustomerController {
         }
 
         try {
-            // DAO imzana göre uyarlayın; tipler: (String, String, String, String, int)
             CustomerDAO.addCustomer(company, contact, phone, email, discount);
             AppDialogs.info("Müşteri başarıyla eklendi.");
             closeWindow();
         } catch (SQLException e) {
-            // HATA MESAJI SIZDIRMA: kullanıcıya güvenli/arkaplanda loglanan mesaj göster
             AppDialogs.dbError("Müşteri ekleme", e);
         }
     }
@@ -58,7 +55,6 @@ public class NewCustomerController {
     @FXML
     private void handleCancel() { closeWindow(); }
 
-    /* ------------ küçük yardımcılar ------------ */
     private static String trim(String s) { return s == null ? "" : s.trim(); }
 
     private void closeWindow() {

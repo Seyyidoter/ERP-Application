@@ -25,8 +25,10 @@ public class MainController {
     @FXML private Label pageTitle;
     @FXML private MenuButton userMenu;
 
-    // Dashboard
+    // Dashboard kökü (FXML’de fx:id="dashboardRoot")
     @FXML private VBox dashboardRoot;
+
+    // Dashboard metrikleri
     @FXML private Label lblTodayRequests;
     @FXML private Label lblTodayProducts;
     @FXML private Label lblTodayRevenue;
@@ -37,29 +39,61 @@ public class MainController {
     @FXML private TableColumn<ProductDemandStat, Integer> colDemandQty;
 
     private User loggedInUser;
+    /** Dashboard görünümünün snapshot’ı (FXML’den gelen dashboardRoot’un ta kendisi). */
     private Node dashboardViewSnapshot;
 
     @FXML
     public void initialize() {
-        if (dashboardRoot != null) dashboardViewSnapshot = dashboardRoot;
+        // Snapshot’ı FXML’den gelen node ile HEMEN ata
+        if (dashboardRoot != null) {
+            dashboardViewSnapshot = dashboardRoot;
+        }
 
+        // Dashboard tablosu (varsa)
         if (tblTodayProductDemand != null) {
             colDemandProduct.setCellValueFactory(new PropertyValueFactory<>("productName"));
             colDemandQty.setCellValueFactory(new PropertyValueFactory<>("totalQuantity"));
             tblTodayProductDemand.setPlaceholder(new Label("Bugün ürün talebi yok"));
 
-            // Açılışta mavi odak çerçevesini engelle
-            tblTodayProductDemand.setFocusTraversable(false);
-            tblTodayProductDemand.getSelectionModel().clearSelection();
+            // Tablo içinde boş alana tıklanınca seçim/odak temizle
+            tblTodayProductDemand.setRowFactory(tv -> {
+                TableRow<ProductDemandStat> row = new TableRow<>();
+                row.setOnMouseClicked(e -> {
+                    if (row.isEmpty()) {
+                        tblTodayProductDemand.getSelectionModel().clearSelection();
+                        if (tblTodayProductDemand.getParent() != null)
+                            tblTodayProductDemand.getParent().requestFocus();
+                    }
+                });
+                return row;
+            });
+
+            // Tablo DIŞINA tıklanınca da seçim/odak temizle
+            Platform.runLater(() -> {
+                var scene = tblTodayProductDemand.getScene();
+                if (scene == null) return;
+                scene.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, e -> {
+                    javafx.scene.Node n = e.getPickResult().getIntersectedNode();
+                    boolean inside = false;
+                    while (n != null) {
+                        if (n == tblTodayProductDemand) { inside = true; break; }
+                        n = n.getParent();
+                    }
+                    if (!inside) {
+                        tblTodayProductDemand.getSelectionModel().clearSelection();
+                        if (tblTodayProductDemand.getParent() != null)
+                            tblTodayProductDemand.getParent().requestFocus();
+                    }
+                });
+            });
         }
 
+        // Dashboard verilerini yükle ve ekrana getir
         loadDashboardMetrics();
         loadTodayDemandTable();
         goDashboard();
 
-        Platform.runLater(() -> {
-            if (contentRoot != null) contentRoot.requestFocus();
-        });
+        Platform.runLater(() -> { if (contentRoot != null) contentRoot.requestFocus(); });
     }
 
     public void setUser(User user) {
@@ -71,14 +105,23 @@ public class MainController {
 
     @FXML public void logout() { LogoutUtil.performLogout(contentRoot); }
 
+    // ===================== NAV =====================
+
     @FXML
     public void goDashboard() {
         pageTitle.setText("Gösterge Paneli");
-        if (dashboardViewSnapshot != null) contentRoot.getChildren().setAll(dashboardViewSnapshot);
-        selectNav("Gösterge Paneli");
-        loadDashboardMetrics();
-        loadTodayDemandTable();
-        contentRoot.requestFocus();
+
+        if (dashboardViewSnapshot != null) {
+            contentRoot.getChildren().setAll(dashboardViewSnapshot);
+            loadDashboardMetrics();
+            loadTodayDemandTable();
+            selectNav("Gösterge Paneli");
+            contentRoot.requestFocus();
+        } else {
+            // Güvence: olağan dışı bir durumda bilgi mesajı
+            loadInlineMessage("Gösterge Paneli yüklenemedi.");
+            selectNav("Gösterge Paneli");
+        }
     }
 
     @FXML public void goCustomers() { loadContent("customer-view.fxml", "Müşteri İşlemleri", "Müşteri İşlemleri"); }
@@ -178,7 +221,7 @@ public class MainController {
         return null;
     }
 
-    // ---- Dashboard veri yükleme ----
+    // ================= Dashboard veri yükleme =================
     private void loadDashboardMetrics() {
         if (lblTodayRequests == null || lblTodayProducts == null || lblTodayRevenue == null) return;
         try {
@@ -218,7 +261,6 @@ public class MainController {
         dlg.setTitle("Şifre Değiştir");
         dlg.setHeaderText(null);
 
-        // Logo
         Stage stage = (Stage) dlg.getDialogPane().getScene().getWindow();
         stage.getIcons().add(new Image(Objects.requireNonNull(
                 getClass().getResourceAsStream("assets/logo-32.png"))));
@@ -240,7 +282,7 @@ public class MainController {
         dlg.getDialogPane().setContent(gp);
 
         ButtonType btnTamam = new ButtonType("Tamam", ButtonBar.ButtonData.OK_DONE);
-        ButtonType btnIptal  = new ButtonType("İptal", ButtonBar.ButtonData.CANCEL_CLOSE);
+        ButtonType btnIptal = new ButtonType("İptal", ButtonBar.ButtonData.CANCEL_CLOSE);
         dlg.getDialogPane().getButtonTypes().addAll(btnTamam, btnIptal);
 
         dlg.setResultConverter(bt -> bt);

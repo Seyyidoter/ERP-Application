@@ -7,39 +7,12 @@
     -fx-background-color: linear-gradient(to right, #0e2a47, #1f4d6f);
     -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.12), 16, 0.2, 0, 2);
 }
-.appbar-title {
-    -fx-text-fill: white;
-    -fx-font-size: 18px;
-    -fx-font-weight: 700;
-}
-.icon-btn {
-    -fx-background-color: rgba(255,255,255,0.1);
-    -fx-text-fill: white;
-    -fx-background-radius: 10;
-    -fx-padding: 6 10;
-}
-.icon-btn:hover { -fx-background-color: rgba(255,255,255,0.18); }
-
-.user-menu {
-    -fx-background-color: rgba(255,255,255,0.15);
-    -fx-text-fill: white;
-    -fx-background-radius: 10;
-    -fx-padding: 6 10;
-}
+.appbar-title { -fx-text-fill: white; -fx-font-size: 18px; -fx-font-weight: 700; }
+.user-menu { -fx-background-color: rgba(255,255,255,0.15); -fx-text-fill: white; -fx-background-radius: 10; -fx-padding: 6 10; }
 
 /* ================== Sidebar ================== */
-.sidebar {
-    -fx-padding: 16 12;
-    -fx-pref-width: 220;
-    -fx-background-color: #142c45;
-}
-.brand { -fx-padding: 4 8 8 8; }
-.brand-title { -fx-text-fill: #eaf2ff; -fx-font-weight: 800; }
-.sidebar-foot {
-    -fx-text-fill: rgba(255,255,255,0.5);
-    -fx-font-size: 11px;
-    -fx-padding: 8 0 0 8;
-}
+.sidebar { -fx-padding: 16 12; -fx-pref-width: 220; -fx-background-color: #142c45; }
+.sidebar-foot { -fx-text-fill: rgba(255,255,255,0.5); -fx-font-size: 11px; -fx-padding: 8 0 0 8; }
 
 /* ================== Nav düğmeleri ================== */
 .nav-btn {
@@ -50,17 +23,9 @@
     -fx-background-radius: 10;
     -fx-font-weight: 600;
     -fx-cursor: hand;
-
-    /* Fokus klavye gezintisini tamamen kapat (FXML'de de false) */
     -fx-focus-traversable: false;
 }
-.nav-btn:hover {
-    -fx-background-color: rgba(255,255,255,0.08);
-    -fx-effect: none;
-    -fx-border-color: inherit;
-}
-
-/* Seçili görünüm (MainController styleClass 'selected' ekliyor) */
+.nav-btn:hover { -fx-background-color: rgba(255,255,255,0.08); }
 .nav-btn.selected {
     -fx-background-color: rgba(37,99,235,0.22);
     -fx-text-fill: white;
@@ -69,26 +34,17 @@
     -fx-border-radius: 10;
 }
 
-/* ===== Focus/armed HALO tamamen kapatma (garanti olsun) ===== */
-.toggle-button:focused,
-.toggle-button:focused:hover,
-.toggle-button:armed,
-.nav-btn:focused,
-.nav-btn:armed,
-.button:focused,
-.button:armed {
+/* Fokus halo’larını kapat */
+.button:focused, .button:armed,
+.nav-btn:focused, .nav-btn:armed {
     -fx-focus-color: transparent;
     -fx-faint-focus-color: transparent;
     -fx-background-insets: 0;
     -fx-effect: none;
-    -fx-border-color: inherit;
 }
 
 /* ================== İçerik alanı ================== */
-.content-root {
-    -fx-background-color: linear-gradient(to bottom right, #f6f8fb, #eef2f7);
-    -fx-padding: 16 22 22 22;
-}
+.content-root { -fx-background-color: linear-gradient(to bottom right, #f6f8fb, #eef2f7); -fx-padding: 16 22 22 22; }
 
 /* ================== Kartlar ================== */
 .card {
@@ -102,12 +58,4 @@
 }
 .card-title  { -fx-text-fill: #38536d; -fx-font-size: 12px; -fx-font-weight: 700; }
 .card-metric { -fx-text-fill: #111827; -fx-font-size: 28px; -fx-font-weight: 800; }
-.card-metric.warning { -fx-text-fill: #b42318; }
-
-.hero-title { -fx-text-fill: #1f2937; -fx-font-size: 22px; -fx-font-weight: 800; }
-
-/* ================== Küçük ekran uyumu ================== */
-@media screen and (max-width: 1100px) {
-    .sidebar { -fx-pref-width: 200; }
-    .card { -fx-min-width: 180; }
-}
+.hero-title  { -fx-text-fill: #1f2937; -fx-font-size: 22px; -fx-font-weight: 800; }

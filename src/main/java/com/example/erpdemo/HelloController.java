@@ -31,6 +31,14 @@ public class HelloController {
         final String username = txtUser.getText();
         final String password = txtPass.getText();
 
+        // basit doğrulama
+        if (username == null || username.isBlank() || password == null || password.isBlank()) {
+            showError("Hata", "Kullanıcı adı ve şifre zorunludur.");
+            return;
+        }
+
+        setBusy(true);
+
         var task = new Task<Boolean>() {
             @Override protected Boolean call() throws SQLException {
                 return DatabaseManager.validateLogin(username, password);
@@ -38,8 +46,8 @@ public class HelloController {
         };
 
         task.setOnSucceeded(ev -> {
-            if (Boolean.TRUE.equals(task.getValue())) {
-                try {
+            try {
+                if (Boolean.TRUE.equals(task.getValue())) {
                     FXMLLoader loader = new FXMLLoader(getClass().getResource("main-view.fxml"));
                     Parent root = loader.load();
 
@@ -59,24 +67,38 @@ public class HelloController {
 
                     // Login penceresini kapat
                     ((Stage) btnLogin.getScene().getWindow()).close();
-
-                } catch (IOException | SQLException ex) {
-                    showError("Hata", "Ana ekran açılamadı:\n" + ex.getMessage());
+                } else {
+                    showError("Hata", "Kullanıcı adı veya şifre yanlış!");
                 }
-            } else {
-                showError("Hata", "Kullanıcı adı veya şifre yanlış!");
+            } catch (IOException | SQLException ex) {
+                showError("Hata", "Ana ekran açılamadı:\n" + ex.getMessage());
+            } finally {
+                setBusy(false);
             }
         });
 
-        task.setOnFailed(ev ->
-                showError("Bağlantı Hatası", "Veritabanına bağlanılamadı.")
-        );
+        task.setOnFailed(ev -> {
+            try {
+                showError("Bağlantı Hatası", "Veritabanına bağlanılamadı.");
+            } finally {
+                setBusy(false);
+            }
+        });
 
         new Thread(task, "login-task").start();
     }
 
+    private void setBusy(boolean busy) {
+        if (txtUser != null) txtUser.setDisable(busy);
+        if (txtPass != null) txtPass.setDisable(busy);
+        if (btnLogin != null) btnLogin.setDisable(busy);
+    }
+
     private void showError(String title, String msg) {
         Alert a = new Alert(Alert.AlertType.ERROR, msg, ButtonType.OK);
-        a.setTitle(title); a.setHeaderText(null); a.showAndWait();
+        a.setTitle(title);
+        a.setHeaderText(null);
+        IconUtil.decorateAlert(a); // ← EKLENDİ: tüm uyarılar tutarlı
+        a.showAndWait();
     }
 }

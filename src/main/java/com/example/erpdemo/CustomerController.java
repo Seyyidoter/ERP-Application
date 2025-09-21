@@ -44,6 +44,7 @@ public class CustomerController {
 
     @FXML
     public void initialize() {
+        // sütun–model bağları
         idColumn.setCellValueFactory(new PropertyValueFactory<>("id"));
         nameColumn.setCellValueFactory(new PropertyValueFactory<>("companyName"));
         contactColumn.setCellValueFactory(new PropertyValueFactory<>("contactPerson"));
@@ -52,34 +53,72 @@ public class CustomerController {
         iskontoColumn.setCellValueFactory(new PropertyValueFactory<>("iskonto"));
         balanceColumn.setCellValueFactory(new PropertyValueFactory<>("balance"));
 
-        // hizalama ve para formatı
+        // hizalama ve para biçimlendirme
         iskontoColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
         balanceColumn.setCellFactory(col -> new TableCell<>() {
-            final NumberFormat nf = NumberFormat.getNumberInstance(new Locale("tr","TR"));
+            final java.text.NumberFormat nf =
+                    java.text.NumberFormat.getNumberInstance(new java.util.Locale("tr","TR"));
             { nf.setMinimumFractionDigits(2); nf.setMaximumFractionDigits(2); }
-            @Override protected void updateItem(BigDecimal v, boolean empty) {
+            @Override protected void updateItem(java.math.BigDecimal v, boolean empty) {
                 super.updateItem(v, empty);
                 if (empty || v == null) { setText(null); setStyle(""); }
                 else { setText(nf.format(v)); setStyle("-fx-alignment: CENTER-RIGHT;"); }
             }
         });
 
-        filtered = new FilteredList<>(master, x -> true);
-        SortedList<Customer> sorted = new SortedList<>(filtered);
+        // boş tablo mesajı
+        customerTable.setPlaceholder(new Label("Kayıtlı müşteri yok"));
+
+        // filtreleme + sıralama hattı
+        filtered = new javafx.collections.transformation.FilteredList<>(master, x -> true);
+        var sorted = new javafx.collections.transformation.SortedList<>(filtered);
         sorted.comparatorProperty().bind(customerTable.comparatorProperty());
         customerTable.setItems(sorted);
 
+        // arama kutusu
         searchField.textProperty().addListener((obs, old, q) -> applyFilter(q));
 
-        // Seçim yokken aksiyon butonlarını pasifleştir
+        // seçim yokken aksiyon butonlarını pasifleştir
         var noSelection = customerTable.getSelectionModel().selectedItemProperty().isNull();
         editButton.disableProperty().bind(noSelection);
         deleteButton.disableProperty().bind(noSelection);
         takePaymentButton.disableProperty().bind(noSelection);
         historyButton.disableProperty().bind(noSelection);
 
+        // TABLO İÇİNDE: boş alana tıklanınca seçimi/odağı temizle
+        customerTable.setRowFactory(tv -> {
+            TableRow<Customer> row = new TableRow<>();
+            row.setOnMouseClicked(e -> {
+                if (row.isEmpty()) {
+                    customerTable.getSelectionModel().clearSelection();
+                    if (customerTable.getParent() != null) customerTable.getParent().requestFocus();
+                }
+            });
+            return row;
+        });
+
+        // TABLO DIŞINA tıklanınca da seçimi/odağı temizle (mavi çerçeve gitsin)
+        javafx.application.Platform.runLater(() -> {
+            var scene = customerTable.getScene();
+            if (scene == null) return;
+            scene.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, e -> {
+                javafx.scene.Node n = e.getPickResult().getIntersectedNode();
+                boolean insideTable = false;
+                while (n != null) {
+                    if (n == customerTable) { insideTable = true; break; }
+                    n = n.getParent();
+                }
+                if (!insideTable) {
+                    customerTable.getSelectionModel().clearSelection();
+                    if (customerTable.getParent() != null) customerTable.getParent().requestFocus();
+                }
+            });
+        });
+
+        // veri yükle
         loadCustomers();
     }
+
 
     private void applyFilter(String query) {
         final String q = query == null ? "" : query.toLowerCase(Locale.ROOT).trim();

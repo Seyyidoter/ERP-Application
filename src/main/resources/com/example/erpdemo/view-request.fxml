@@ -7,6 +7,7 @@
             xmlns:fx="http://javafx.com/fxml/1"
             fx:controller="com.example.erpdemo.ViewRequestController">
 
+    <!-- Kenarlardan genel boşluk -->
     <padding>
         <Insets topRightBottomLeft="12"/>
     </padding>
@@ -38,18 +39,31 @@
         </VBox>
     </top>
 
+    <!-- Tablo + alttan boşluk -->
     <center>
-        <TableView fx:id="requestItemsTable">
-            <columns>
-                <TableColumn fx:id="productNameColumn"       text="Ürün"            prefWidth="280"/>
-                <TableColumn fx:id="quantityColumn"          text="Miktar"          prefWidth="120"/>
-                <TableColumn fx:id="discountedPriceColumn"   text="İskontolu Fiyat" prefWidth="160"/>
-            </columns>
-        </TableView>
+        <VBox spacing="8">
+            <padding>
+                <Insets top="0" right="0" bottom="8" left="0"/>
+            </padding>
+            <TableView fx:id="requestItemsTable" VBox.vgrow="ALWAYS">
+                <columns>
+                    <TableColumn fx:id="productNameColumn"       text="Ürün"            prefWidth="280"/>
+                    <TableColumn fx:id="quantityColumn"          text="Miktar"          prefWidth="120"/>
+                    <TableColumn fx:id="discountedPriceColumn"   text="İskontolu Fiyat" prefWidth="160"/>
+                </columns>
+            </TableView>
+        </VBox>
     </center>
 
+    <!-- Aksiyon butonları -->
     <bottom>
         <HBox alignment="CENTER_RIGHT" spacing="8">
+            <padding>
+                <Insets topRightBottomLeft="8"/>
+            </padding>
+            <!-- Bu ikisi controller'da enable/visible durumuna göre yönetilecek -->
+            <Button fx:id="approveBtn" text="Onayla" onAction="#handleApprove"/>
+            <Button fx:id="rejectBtn"  text="Reddet" onAction="#handleReject"/>
             <Button text="Kapat" onAction="#handleClose"/>
         </HBox>
     </bottom>

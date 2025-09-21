@@ -13,12 +13,13 @@ import java.util.List;
 /** Talepler için DAO */
 public class RequestDAO {
 
+    /** Tüm taleplerin özetleri (müşteri adı dahil) */
     public static List<RequestSummary> findAllSummaries() throws SQLException {
         List<RequestSummary> list = new ArrayList<>();
         String sql = """
             SELECT t.Id,
                    t.MusteriId,
-                   m.FirmaAdi       AS CustomerName,
+                   m.FirmaAdi                  AS CustomerName,
                    CAST(t.TalepTarihi AS date) AS TalepTarihi,
                    t.Durum
             FROM dbo.Talepler t
@@ -41,6 +42,7 @@ public class RequestDAO {
         return list;
     }
 
+    /** Yeni talep başlığı ekler ve kimliğini döndürür. */
     public static int addRequest(int customerId) throws SQLException {
         String sql = """
             INSERT INTO dbo.Talepler (MusteriId, TalepTarihi, Durum)
@@ -74,6 +76,7 @@ public class RequestDAO {
         }
     }
 
+    /** Bekleyen talepler (müşteri adı içermez; gerekirse getPendingSummaries kullan). */
     public static ObservableList<Request> getPendingRequests() throws SQLException {
         ObservableList<Request> list = FXCollections.observableArrayList();
         String sql = """
@@ -90,6 +93,7 @@ public class RequestDAO {
         return list;
     }
 
+    /** Onaylanmış talepler (müşteri adı içermez). */
     public static ObservableList<Request> getApprovedRequests() throws SQLException {
         ObservableList<Request> list = FXCollections.observableArrayList();
         String sql = """
@@ -106,7 +110,7 @@ public class RequestDAO {
         return list;
     }
 
-    /** Görüntüleme için talep kalemleri (liste ve iskontolu fiyat BigDecimal). */
+    /** Talep kalemleri (liste ve iskontolu fiyat BigDecimal) */
     public static ObservableList<RequestItem> getRequestItemsByRequestId(int requestId) throws SQLException {
         ObservableList<RequestItem> items = FXCollections.observableArrayList();
         String sql = """
@@ -140,6 +144,7 @@ public class RequestDAO {
         return items;
     }
 
+    /** Talebi ve tüm kalemlerini siler. */
     public static int deleteRequestById(int id) throws SQLException {
         try (Connection c = DatabaseManager.getConnection()) {
             boolean old = c.getAutoCommit();
@@ -184,9 +189,7 @@ public class RequestDAO {
     }
 
     /**
-     * Stok düşme + bakiye güncelleme + talebi onaylama işlemlerini
-     * TEK transaction içinde, yarışa kapalı ve deadlock'a dayanıklı şekilde yapar.
-     *
+     * Onay işlemi: stok düş, bakiyeyi düş, talebi onayla (tek transaction).
      * Durum geçişi: 'Onay Bekliyor' -> 'Onaylanıyor' -> 'Onaylandı'
      */
     public static void approveRequestTransactionally(int requestId, int approverId) throws SQLException {
@@ -205,7 +208,7 @@ public class RequestDAO {
                 }
 
                 try {
-                    // 0) Yalnız bir işlemci içeri girsin: Onay Bekliyor -> Onaylanıyor
+                    // 0) tek işlemci içeri girsin
                     int touched;
                     try (PreparedStatement ps = c.prepareStatement(
                             "UPDATE dbo.Talepler SET Durum=N'Onaylanıyor' WHERE Id=? AND Durum=N'Onay Bekliyor'")) {
@@ -216,7 +219,7 @@ public class RequestDAO {
                         throw new SQLException("Talep beklemede değil veya başka bir işlem tarafından alındı.");
                     }
 
-                    // 1) Müşteri id
+                    // 1) müşteri id
                     Integer customerId = null;
                     try (PreparedStatement ps = c.prepareStatement(
                             "SELECT MusteriId FROM dbo.Talepler WHERE Id=?")) {
@@ -227,7 +230,7 @@ public class RequestDAO {
                     }
                     if (customerId == null) throw new SQLException("Talep başlığı bulunamadı.");
 
-                    // 2) Kalemler (productId'e göre sırala → deadlock riski düşer)
+                    // 2) kalemler (ürün id’ye göre sırala)
                     List<ItemLite> items = new ArrayList<>();
                     try (PreparedStatement ps = c.prepareStatement(
                             "SELECT UrunId, Miktar, TeklifFiyati FROM dbo.TalepKalemleri WHERE TalepId=?")) {
@@ -244,7 +247,7 @@ public class RequestDAO {
                     if (items.isEmpty()) throw new SQLException("Talebe ait kalem bulunamadı.");
                     items.sort(java.util.Comparator.comparingInt(ItemLite::productId));
 
-                    // 3) Stok düş (koşullu)
+                    // 3) stok düş
                     try (PreparedStatement up = c.prepareStatement(
                             "UPDATE dbo.Stoklar SET Stok = Stok - ? WHERE Id = ? AND Stok >= ?")) {
                         for (ItemLite it : items) {
@@ -256,15 +259,10 @@ public class RequestDAO {
                         }
                     }
 
-                    // 4) Toplam
-                    BigDecimal total = BigDecimal.ZERO;
-                    for (ItemLite it : items) {
-                        BigDecimal sub = it.price().multiply(BigDecimal.valueOf(it.qty()));
-                        total = total.add(sub);
-                    }
-                    total = total.setScale(2, RoundingMode.HALF_UP);
+                    // 4) toplamı aynı tx içinde al
+                    BigDecimal total = getRequestTotalInTx(c, requestId);
 
-                    // 5) Bakiye (iş mantığına göre – sende müşteri bakiyesini düşürüyordu, korundu)
+                    // 5) bakiye düş
                     try (PreparedStatement bal = c.prepareStatement(
                             "UPDATE dbo.Musteriler SET Bakiye = Bakiye - ? WHERE Id = ?")) {
                         bal.setBigDecimal(1, total);
@@ -272,7 +270,7 @@ public class RequestDAO {
                         bal.executeUpdate();
                     }
 
-                    // 6) Onayla (yalnızca 'Onaylanıyor' ise)
+                    // 6) onayla
                     try (PreparedStatement ps = c.prepareStatement(
                             "UPDATE dbo.Talepler " +
                                     "SET Durum=N'Onaylandı', OnaylayanKullaniciId=?, OnayTarihi=GETDATE() " +
@@ -284,7 +282,7 @@ public class RequestDAO {
                     }
 
                     c.commit();
-                    return; // başarı
+                    return;
 
                 } catch (SQLException ex) {
                     try { c.rollback(); } catch (SQLException ignore) { }
@@ -292,7 +290,7 @@ public class RequestDAO {
                         try { Thread.sleep(backoff[attempt - 1]); } catch (InterruptedException ie) {
                             Thread.currentThread().interrupt();
                         }
-                        continue; // yeniden dene
+                        continue;
                     }
                     throw ex;
                 } finally {
@@ -301,10 +299,10 @@ public class RequestDAO {
                 }
             }
         }
-
         throw new SQLException("Onay işlemi tekrar denemelerine rağmen tamamlanamadı.");
     }
 
+    /** Reddetme işlemi */
     public static void rejectRequest(int requestId, int approverId) throws SQLException {
         String sql = """
             UPDATE dbo.Talepler
@@ -322,6 +320,8 @@ public class RequestDAO {
         }
     }
 
+    /* ---------------------- Yardımcılar ---------------------- */
+
     private static Request mapRowToRequest(ResultSet rs) throws SQLException {
         int id = rs.getInt("Id");
         int customerId = rs.getInt("MusteriId");
@@ -338,9 +338,57 @@ public class RequestDAO {
 
     /** SQL Server deadlock (1205) veya lock timeout (1222) tespiti */
     private static boolean isDeadlockOrTimeout(SQLException ex) {
-        int code = ex.getErrorCode();        // 1205: deadlock victim, 1222: lock timeout
+        int code = ex.getErrorCode();
         if (code == 1205 || code == 1222) return true;
-        String state = ex.getSQLState();     // bazı sürümlerde 40001 (serialization failure) gelebilir
+        String state = ex.getSQLState();
         return "40001".equals(state);
+    }
+
+    /** Aynı transaction içinde toplamı alır; 2 ondalık HALF_UP ile döndürür. */
+    private static BigDecimal getRequestTotalInTx(Connection c, int requestId) throws SQLException {
+        final String sql = """
+            SELECT COALESCE(
+                     SUM(CAST(Miktar AS decimal(18,4)) * CAST(TeklifFiyati AS decimal(18,4)))
+                   , 0)
+            FROM dbo.TalepKalemleri
+            WHERE TalepId = ?
+        """;
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, requestId);
+            try (ResultSet rs = ps.executeQuery()) {
+                BigDecimal v = rs.next() ? rs.getBigDecimal(1) : BigDecimal.ZERO;
+                return (v == null ? BigDecimal.ZERO : v).setScale(2, RoundingMode.HALF_UP);
+            }
+        }
+    }
+
+    /** Bekleyen taleplerin özetini (müşteri adı dahil) döndürür – onay ekranı burayı kullanır. */
+    public static List<RequestSummary> getPendingSummaries() throws SQLException {
+        List<RequestSummary> list = new ArrayList<>();
+        String sql = """
+            SELECT t.Id,
+                   t.MusteriId,
+                   m.FirmaAdi                  AS CustomerName,
+                   CAST(t.TalepTarihi AS date) AS TalepTarihi,
+                   t.Durum
+            FROM dbo.Talepler t
+            LEFT JOIN dbo.Musteriler m ON m.Id = t.MusteriId
+            WHERE t.Durum = N'Onay Bekliyor'
+            ORDER BY t.TalepTarihi DESC, t.Id DESC
+        """;
+        try (Connection c = DatabaseManager.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                int id = rs.getInt("Id");
+                int customerId = rs.getInt("MusteriId");
+                Date d = rs.getDate("TalepTarihi");
+                LocalDate date = (d != null ? d.toLocalDate() : null);
+                String status = rs.getString("Durum");
+                String customerName = rs.getString("CustomerName");
+                list.add(new RequestSummary(id, customerId, customerName, date, status));
+            }
+        }
+        return list;
     }
 }

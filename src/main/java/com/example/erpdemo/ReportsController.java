@@ -4,7 +4,9 @@ import javafx.fxml.FXML;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.font.PDFont;
 import org.apache.pdfbox.pdmodel.font.PDType0Font;
+import org.apache.pdfbox.pdmodel.font.PDType1Font;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -33,27 +35,16 @@ public class ReportsController {
 
     @FXML
     private void generateApprovedRequestsReport() {
-        // Ağır iş: DB + PDF → FX thread’ini bloklamayalım
         Async.runVoid(() -> {
             try (PDDocument document = new PDDocument()) {
-
-                PDType0Font font = loadPreferredFont(document);
-                if (font == null) {
-                    throw new IOException("""
-                        PDF yazı tipi bulunamadı.
-                        Lütfen 'resources/com/example/erpdemo/DejaVuSansMono.ttf'
-                        (veya classpath kökünde '/DejaVuSansMono.ttf') ekleyin.
-                        """);
-                }
-
+                PDFont font = loadFont(document); // güvenli fallback'li
                 try (PdfWriter w = new PdfWriter(document, font)) {
                     w.startPage();
-                    w.println("Onaylanmış Talepler Raporu");
-                    w.println("");
+                    w.printlnWrapBlock(List.of("Onaylanmış Talepler Raporu", "")); // blok halinde
 
                     var approved = RequestDAO.getApprovedRequests();
                     if (approved.isEmpty()) {
-                        w.println("Onaylanmış talep bulunamadı.");
+                        w.printlnWrapBlock(List.of("Onaylanmış talep bulunamadı.", ""));
                     } else {
                         DateTimeFormatter dateFmt = DateTimeFormatter.ofPattern("dd.MM.yyyy", TR);
 
@@ -66,58 +57,67 @@ public class ReportsController {
                             String cname = nameMap.getOrDefault(r.getCustomerId(), "Bilinmiyor");
                             String dateStr = (r.getRequestDate() != null) ? r.getRequestDate().format(dateFmt) : "";
 
-                            w.println("──────────────────────────────────────────────────────────────────────────");
-                            w.println("Talep ID      : " + r.getId());
-                            w.println("Müşteri Adı   : " + cname);
-                            w.println("Talep Tarihi  : " + dateStr);
-                            w.println("Durum         : " + r.getStatus());
-                            w.println("──────────────────────────────────────────────────────────────────────────");
-
-                            // HATA YUTMAK YOK — SQLException dışarı fırlayacak
-                            List<ItemRow> items = fetchItemsForRequest(r.getId());
-                            if (items.isEmpty()) {
-                                w.println("Kalem bulunamadı.");
-                                w.println("");
-                                continue;
-                            }
-
-                            // Başlık satırı
-                            w.println(
+                            // Üst bilgi + çizgiler + tablo başlığı blok olarak değerlensin
+                            List<String> headerBlock = new ArrayList<>();
+                            headerBlock.add(w.hrLine());
+                            headerBlock.add("Talep ID      : " + r.getId());
+                            headerBlock.addAll(w.kvLines("Müşteri Adı   : ", cname));
+                            headerBlock.add("Talep Tarihi  : " + dateStr);
+                            headerBlock.add("Durum         : " + r.getStatus());
+                            headerBlock.add(w.hrLine());
+                            // tablo başlığı
+                            headerBlock.add(
                                     padRight("Ürün", COL_W_PRODUCT) + " " +
                                             padLeft("Miktar", COL_W_QTY) + " " +
                                             padLeft("Liste F.", COL_W_LIST) + " " +
                                             padLeft("İsk. Fiyat", COL_W_DISC) + " " +
-                                            padLeft("Ara Toplam", COL_W_SUBTOTAL)
-                            );
-                            w.println("----------------------------------------------------------------------");
+                                            padLeft("Ara Toplam", COL_W_SUBTOTAL));
+                            headerBlock.add(w.hrLineAscii());
+
+                            // Kalemleri oku (SQLException dışarı)
+                            List<ItemRow> items = fetchItemsForRequest(r.getId());
+
+                            // Toplam satır sayısını önden tahmin et ve tek seferde yer ayır
+                            int itemLines = Math.max(items.size(), 1); // en az 1 satır "Kalem bulunamadı."
+                            int footerLines = 4; // çizgi + 3 toplam satırı
+                            int blockLines = headerBlock.size() + itemLines + footerLines + 1; // +1 boş satır
+                            w.ensureSpaceFor(blockLines);
+
+                            // Header'ı yaz
+                            w.printlnRawBlock(headerBlock);
 
                             int totalQty = 0;
                             BigDecimal totalList = BigDecimal.ZERO;
                             BigDecimal totalDisc = BigDecimal.ZERO;
 
-                            for (ItemRow it : items) {
-                                BigDecimal subList = it.listPrice.multiply(BigDecimal.valueOf(it.quantity));
-                                BigDecimal subDisc = it.discountedPrice.multiply(BigDecimal.valueOf(it.quantity));
+                            if (items.isEmpty()) {
+                                w.println("Kalem bulunamadı.");
+                            } else {
+                                for (ItemRow it : items) {
+                                    BigDecimal subList = it.listPrice.multiply(BigDecimal.valueOf(it.quantity));
+                                    BigDecimal subDisc = it.discountedPrice.multiply(BigDecimal.valueOf(it.quantity));
 
-                                totalQty += it.quantity;
-                                totalList = totalList.add(subList);
-                                totalDisc = totalDisc.add(subDisc);
+                                    totalQty += it.quantity;
+                                    totalList = totalList.add(subList);
+                                    totalDisc = totalDisc.add(subDisc);
 
-                                String line =
-                                        padRight(trim(it.productName, COL_W_PRODUCT), COL_W_PRODUCT) + " " +
-                                                padLeft(String.valueOf(it.quantity), COL_W_QTY) + " " +
-                                                padLeft(fmtMoney(it.listPrice), COL_W_LIST) + " " +
-                                                padLeft(fmtMoney(it.discountedPrice), COL_W_DISC) + " " +
-                                                padLeft(fmtMoney(subDisc), COL_W_SUBTOTAL);
+                                    String line =
+                                            padRight(trim(it.productName, COL_W_PRODUCT), COL_W_PRODUCT) + " " +
+                                                    padLeft(String.valueOf(it.quantity), COL_W_QTY) + " " +
+                                                    padLeft(fmtMoney(it.listPrice), COL_W_LIST) + " " +
+                                                    padLeft(fmtMoney(it.discountedPrice), COL_W_DISC) + " " +
+                                                    padLeft(fmtMoney(subDisc), COL_W_SUBTOTAL);
 
-                                w.println(line);
+                                    w.println(line);
+                                }
                             }
 
-                            w.println("----------------------------------------------------------------------");
+                            // Footer
+                            w.println(w.hrLineAscii());
                             w.println(String.format(TR, "Toplam Ürün Adedi   : %d", totalQty));
                             w.println(String.format(TR, "Toplam Liste Tutarı : %s TL", fmtMoney(totalList)));
                             w.println(String.format(TR, "Toplam İsk. Tutar   : %s TL", fmtMoney(totalDisc)));
-                            w.println("");
+                            w.println(""); // blok arası boş satır
                         }
                     }
                 }
@@ -140,7 +140,6 @@ public class ReportsController {
 
     /* -------------------- DB yardımcıları -------------------- */
 
-    // >>> DEĞİŞTİ: SQLException'ı yutmak yerine dışarı atıyoruz.
     private List<ItemRow> fetchItemsForRequest(int requestId) throws SQLException {
         String sql = """
             SELECT s.UrunAdi, tk.Miktar, s.Fiyat AS ListeFiyati, tk.TeklifFiyati AS IskontoluFiyat
@@ -169,24 +168,24 @@ public class ReportsController {
     }
 
     /* -------------------- Font yükleme -------------------- */
-    /** Sadece DejaVuSansMono.ttf yükler. Bulamazsa null döner. */
-    private PDType0Font loadPreferredFont(PDDocument doc) throws IOException {
-        // 1) resources/com/example/erpdemo/DejaVuSansMono.ttf
-        PDType0Font mono = tryLoadFont(doc, "/com/example/erpdemo/DejaVuSansMono.ttf");
-        if (mono != null) return mono;
-        // 2) classpath kökü /DejaVuSansMono.ttf
-        return tryLoadFont(doc, "/DejaVuSansMono.ttf");
+    /** Önce DejaVuSansMono/DejaVuSans; yoksa Courier. */
+    private PDFont loadFont(PDDocument doc) throws IOException {
+        PDFont f;
+        if ((f = tryLoadTtf(doc, "/com/example/erpdemo/DejaVuSansMono.ttf")) != null) return f;
+        if ((f = tryLoadTtf(doc, "/DejaVuSansMono.ttf")) != null) return f;
+        if ((f = tryLoadTtf(doc, "/com/example/erpdemo/DejaVuSans.ttf")) != null) return f;
+        if ((f = tryLoadTtf(doc, "/DejaVuSans.ttf")) != null) return f;
+        // Son çare: Type1 Courier (Türkçe'de eksik glif olabilir)
+        return PDType1Font.COURIER;
     }
-
-    private PDType0Font tryLoadFont(PDDocument doc, String path) throws IOException {
-        URL url = ReportsController.class.getResource(path);
-        if (url != null) {
+    private PDFont tryLoadTtf(PDDocument doc, String cpPath) {
+        try {
+            URL url = ReportsController.class.getResource(cpPath);
+            if (url == null) return null;
             try (InputStream in = url.openStream()) {
                 return PDType0Font.load(doc, in, true);
-            } catch (Exception ignore) {
-                // yut – bir sonrakini dene
             }
-        }
+        } catch (Exception ignore) { }
         return null;
     }
 
@@ -205,15 +204,21 @@ public class ReportsController {
     /* -------------------- PDF yardımcıları -------------------- */
     private static final class PdfWriter implements AutoCloseable {
         private final PDDocument doc;
-        private final PDType0Font font;
+        private final PDFont font;
         private PDPageContentStream cs;
         private float leading = 14.5f;
         private float marginLeft = 25f;
+        private float marginRight = 25f;
+        private float fontSize = 12f;
+        private float usableWidth;
         private float startY = 750f;
         private float cursorY = startY;
         private final float bottomMargin = 40f;
 
-        PdfWriter(PDDocument doc, PDType0Font font) { this.doc = doc; this.font = font; }
+        // çizgi için tercih edilen char – font'ta yoksa '-' kullanılacak
+        private String lineChar = "─";
+
+        PdfWriter(PDDocument doc, PDFont font) { this.doc = doc; this.font = font; }
 
         void startPage() throws IOException {
             if (cs != null) { cs.endText(); cs.close(); }
@@ -221,22 +226,141 @@ public class ReportsController {
             doc.addPage(page);
             cs = new PDPageContentStream(doc, page);
             cs.beginText();
-            cs.setFont(font, 12);
+            cs.setFont(font, fontSize);
             cs.setLeading(leading);
             cs.newLineAtOffset(marginLeft, startY);
             cursorY = startY;
+
+            float pageWidth = page.getMediaBox().getWidth();
+            usableWidth = pageWidth - marginLeft - marginRight;
+
+            // '─' glifi yoksa '-' kullan
+            if (!canDisplay(lineChar)) lineChar = "-";
         }
 
+        /** Bir blok dolusu string'i (wrap uygulanmaksızın) tek seferde yaz. */
+        void printlnRawBlock(List<String> lines) throws IOException {
+            ensureSpaceFor(lines.size());
+            for (String s : lines) {
+                cs.showText(s == null ? "" : s);
+                cs.newLine();
+                cursorY -= leading;
+            }
+        }
+
+        /** Basit satır yaz. */
         void println(String text) throws IOException {
-            ensureSpace(1);
+            ensureSpaceFor(1);
             cs.showText(text == null ? "" : text);
             cs.newLine();
             cursorY -= leading;
         }
 
-        private void ensureSpace(int lines) throws IOException {
-            if (cursorY - (lines * leading) < bottomMargin) {
-                startPage();
+        /** Yazmadan önce blok içeren teks'i satırlara böl ve tek seferde yaz. */
+        void printlnWrapBlock(List<String> texts) throws IOException {
+            List<String> lines = new ArrayList<>();
+            for (String t : texts) lines.addAll(wrapToWidth(t, usableWidth));
+            printlnRawBlock(lines);
+        }
+
+        /** "Label: value" satırını, value’yu genişliğe göre kırarak satır listesi halinde döndürür. */
+        List<String> kvLines(String label, String value) throws IOException {
+            if (label == null) label = "";
+            if (value == null) value = "";
+            float labelW = textWidth(label);
+            float wrapWidth = Math.max(usableWidth - labelW, usableWidth * 0.5f);
+            List<String> parts = wrapToWidth(value, wrapWidth);
+
+            List<String> lines = new ArrayList<>();
+            if (parts.isEmpty()) {
+                lines.add(label);
+                return lines;
+            }
+            lines.add(label + parts.get(0));
+            if (parts.size() > 1) {
+                String indent = spacesForWidth(labelW);
+                for (int i = 1; i < parts.size(); i++) {
+                    lines.add(indent + parts.get(i));
+                }
+            }
+            return lines;
+        }
+
+        /** Yatay çizgi metnini üretir (yazmaz). */
+        String hrLine() throws IOException {
+            float charW = Math.max(textWidth(lineChar), 1f);
+            int count = Math.max(40, (int) (usableWidth / charW));
+            return lineChar.repeat(Math.min(count, 180));
+        }
+        /** Sadece ASCII çizgi isteyen yerler için. */
+        String hrLineAscii() throws IOException {
+            float charW = Math.max(textWidth("-"), 1f);
+            int count = Math.max(40, (int) (usableWidth / charW));
+            return "-".repeat(Math.min(count, 180));
+        }
+
+        /** Bir seferde N satırlık yer vardır garantisi. */
+        void ensureSpaceFor(int lines) throws IOException {
+            if (cursorY - (lines * leading) < bottomMargin) startPage();
+        }
+
+        private float textWidth(String s) throws IOException {
+            if (s == null || s.isEmpty()) return 0f;
+            return font.getStringWidth(s) / 1000f * fontSize;
+        }
+
+        private List<String> wrapToWidth(String text, float maxWidth) throws IOException {
+            List<String> lines = new ArrayList<>();
+            if (text == null) { lines.add(""); return lines; }
+
+            String[] words = text.split("\\s+");
+            StringBuilder current = new StringBuilder();
+            for (String w : words) {
+                if (w.isEmpty()) continue;
+                String candidate = current.isEmpty() ? w : current + " " + w;
+                if (textWidth(candidate) <= maxWidth) {
+                    current.setLength(0);
+                    current.append(candidate);
+                } else {
+                    if (!current.isEmpty()) {
+                        lines.add(current.toString());
+                        current.setLength(0);
+                    }
+                    if (textWidth(w) <= maxWidth) {
+                        current.append(w);
+                    } else {
+                        int start = 0;
+                        while (start < w.length()) {
+                            int end = w.length();
+                            while (end > start && textWidth(w.substring(start, end)) > maxWidth) end--;
+                            if (end == start) end = Math.min(start + 1, w.length());
+                            lines.add(w.substring(start, end));
+                            start = end;
+                        }
+                    }
+                }
+            }
+            if (!current.isEmpty()) lines.add(current.toString());
+            if (lines.isEmpty()) lines.add("");
+            return lines;
+        }
+
+        private String spacesForWidth(float width) throws IOException {
+            float spaceW = Math.max(textWidth(" "), 1f);
+            int count = Math.max(0, (int) (width / spaceW));
+            return " ".repeat(count);
+        }
+
+        private boolean canDisplay(String ch) {
+            int cp = ch.codePointAt(0);
+            try {
+                if (font instanceof PDType0Font) {
+                    return ((PDType0Font) font).hasGlyph(cp);
+                }
+                // Type1 (Courier) vb. için: temel ASCII'yi destekli varsayalım
+                return cp < 0x80;
+            } catch (Exception ignore) {
+                return false;
             }
         }
 
