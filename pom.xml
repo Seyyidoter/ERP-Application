@@ -10,8 +10,10 @@
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <maven.compiler.source>21</maven.compiler.source>
-    <maven.compiler.target>21</maven.compiler.target>
+    <maven.compiler.release>21</maven.compiler.release>
+    <javafx.version>21</javafx.version>
+    <pdfbox.version>3.0.2</pdfbox.version>
+    <slf4j.version>2.0.9</slf4j.version>
   </properties>
 
   <dependencies>
@@ -19,61 +21,65 @@
     <dependency>
       <groupId>org.openjfx</groupId>
       <artifactId>javafx-base</artifactId>
-      <version>21</version>
+      <version>${javafx.version}</version>
       <classifier>win</classifier>
     </dependency>
     <dependency>
       <groupId>org.openjfx</groupId>
       <artifactId>javafx-graphics</artifactId>
-      <version>21</version>
+      <version>${javafx.version}</version>
       <classifier>win</classifier>
     </dependency>
     <dependency>
       <groupId>org.openjfx</groupId>
       <artifactId>javafx-controls</artifactId>
-      <version>21</version>
+      <version>${javafx.version}</version>
       <classifier>win</classifier>
     </dependency>
     <dependency>
       <groupId>org.openjfx</groupId>
       <artifactId>javafx-fxml</artifactId>
-      <version>21</version>
+      <version>${javafx.version}</version>
       <classifier>win</classifier>
     </dependency>
 
-    <!-- SQL Server JDBC driver (Java 11+; JDK 21 ile uyumlu) -->
+    <!-- SQL Server JDBC (Java 21 uyumlu sürüm) -->
     <dependency>
       <groupId>com.microsoft.sqlserver</groupId>
       <artifactId>mssql-jdbc</artifactId>
-      <version>12.6.1.jre11</version>
+      <version>13.2.0.jre11</version>
     </dependency>
 
     <!-- PDFBox -->
     <dependency>
       <groupId>org.apache.pdfbox</groupId>
       <artifactId>pdfbox</artifactId>
-      <version>2.0.29</version>
+      <version>${pdfbox.version}</version>
     </dependency>
 
-    <!-- HikariCP: bağlantı havuzu -->
+    <!-- HikariCP -->
     <dependency>
       <groupId>com.zaxxer</groupId>
       <artifactId>HikariCP</artifactId>
       <version>5.1.0</version>
     </dependency>
 
-    <!-- (opsiyonel) basit log çıktısı -->
+    <!-- SLF4J API + NOP (runtime’da logları susturur) -->
     <dependency>
       <groupId>org.slf4j</groupId>
-      <artifactId>slf4j-simple</artifactId>
-      <version>2.0.9</version>
+      <artifactId>slf4j-api</artifactId>
+      <version>${slf4j.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-nop</artifactId>
+      <version>${slf4j.version}</version>
       <scope>runtime</scope>
     </dependency>
   </dependencies>
 
   <build>
     <plugins>
-      <!-- Derleyici -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
@@ -83,7 +89,6 @@
         </configuration>
       </plugin>
 
-      <!-- Manifeste Main-Class yaz -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-jar-plugin</artifactId>
@@ -98,7 +103,6 @@
         </configuration>
       </plugin>
 
-      <!-- mvn exec:java -->
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>exec-maven-plugin</artifactId>
@@ -108,7 +112,6 @@
         </configuration>
       </plugin>
 
-      <!-- (opsiyonel) JavaFX plugin -->
       <plugin>
         <groupId>org.openjfx</groupId>
         <artifactId>javafx-maven-plugin</artifactId>

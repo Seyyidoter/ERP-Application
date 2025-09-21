@@ -10,7 +10,8 @@ public class ProductDAO {
 
     public static ObservableList<Product> getAllProducts() throws SQLException {
         ObservableList<Product> productList = FXCollections.observableArrayList();
-        String sql = "SELECT * FROM Stoklar";
+        // YALNIZ GEREKLİ KOLONLAR
+        String sql = "SELECT Id, UrunAdi, Fiyat, Stok, Birim FROM Stoklar";
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql);
              ResultSet rs = stmt.executeQuery()) {
@@ -28,7 +29,8 @@ public class ProductDAO {
     }
 
     public static Product getProductById(int productId) throws SQLException {
-        String sql = "SELECT * FROM Stoklar WHERE Id = ?";
+        // YALNIZ GEREKLİ KOLONLAR
+        String sql = "SELECT Id, UrunAdi, Fiyat, Stok, Birim FROM Stoklar WHERE Id = ?";
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, productId);

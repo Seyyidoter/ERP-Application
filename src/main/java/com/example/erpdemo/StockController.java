@@ -2,8 +2,6 @@ package com.example.erpdemo;
 
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
-import javafx.collections.transformation.FilteredList;
-import javafx.collections.transformation.SortedList;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
@@ -19,7 +17,7 @@ import java.sql.SQLException;
 import java.text.NumberFormat;
 import java.util.Locale;
 
-/** Ürün listesi + CRUD + Geçmiş + Filtreleme */
+/** Ürün listesi + CRUD + Geçmiş + Filtreleme (ASYNC yükleme) */
 public class StockController {
 
     @FXML private TableView<Product> productTable;
@@ -36,7 +34,7 @@ public class StockController {
     @FXML private Button productHistoryButton;
 
     private final ObservableList<Product> master = FXCollections.observableArrayList();
-    private FilteredList<Product> filtered;
+    private javafx.collections.transformation.FilteredList<Product> filtered;
 
     @FXML
     public void initialize() {
@@ -63,8 +61,8 @@ public class StockController {
         productTable.setPlaceholder(new Label("Kayıtlı ürün yok"));
 
         // 4) Filtreleme + sıralama hattı
-        filtered = new FilteredList<>(master, p -> true);
-        SortedList<Product> sorted = new SortedList<>(filtered);
+        filtered = new javafx.collections.transformation.FilteredList<>(master, p -> true);
+        var sorted = new javafx.collections.transformation.SortedList<>(filtered);
         sorted.comparatorProperty().bind(productTable.comparatorProperty());
         productTable.setItems(sorted);
 
@@ -108,11 +106,9 @@ public class StockController {
             });
         });
 
-        // 9) Veriyi yükle
+        // 9) Veriyi yükle (ASYNC)
         loadProducts();
     }
-
-
 
     private void applyFilter(String query) {
         final String q = query == null ? "" : query.toLowerCase(Locale.ROOT).trim();
@@ -139,12 +135,26 @@ public class StockController {
         return s != null && s.toLowerCase(Locale.ROOT).contains(q);
     }
 
+    /** Ürünleri arka planda yükler; UI donmaz. */
     private void loadProducts() {
-        try {
-            master.setAll(ProductDAO.getAllProducts());
-        } catch (SQLException e) {
-            AppDialogs.dbError("Ürün verileri yüklenmesi", e);
-        }
+        setBusy(true);
+        Async.run(
+                () -> {
+                    try {
+                        return ProductDAO.getAllProducts();
+                    } catch (SQLException e) {
+                        throw new RuntimeException(e);
+                    }
+                },
+                list -> master.setAll(list),
+                ex -> AppDialogs.dbError("Ürün verileri yüklenmesi", toSql(ex)),
+                ()  -> setBusy(false)
+        );
+    }
+
+    private void setBusy(boolean busy) {
+        if (productTable != null) productTable.setDisable(busy);
+        if (searchField != null)  searchField.setDisable(busy);
     }
 
     @FXML private void handleClearSearch() { searchField.clear(); }
@@ -164,7 +174,7 @@ public class StockController {
             IconUtil.setAppIcon(stage);
             stage.showAndWait();
 
-            loadProducts();
+            loadProducts(); // async
         } catch (IOException e) {
             AppDialogs.unexpectedError("Yeni ürün penceresi açma", e);
         }
@@ -189,7 +199,7 @@ public class StockController {
             IconUtil.setAppIcon(dialogStage);
             dialogStage.showAndWait();
 
-            loadProducts();
+            loadProducts(); // async
         } catch (IOException e) {
             AppDialogs.unexpectedError("Ürün düzenleme penceresi açma", e);
         }
@@ -208,13 +218,16 @@ public class StockController {
         confirm.showAndWait();
 
         if (confirm.getResult() == ButtonType.YES) {
-            try {
-                ProductDAO.deleteProduct(sel.getId());
-                AppDialogs.info("Ürün başarıyla silindi.");
-                loadProducts();
-            } catch (SQLException e) {
-                AppDialogs.dbError("Ürün silme", e);
-            }
+            setBusy(true);
+            Async.runVoid(
+                    () -> {
+                        try { ProductDAO.deleteProduct(sel.getId()); }
+                        catch (SQLException e) { throw new RuntimeException(e); }
+                    },
+                    () -> { AppDialogs.info("Ürün başarıyla silindi."); loadProducts(); },
+                    ex  -> AppDialogs.dbError("Ürün silme", toSql(ex)),
+                    ()  -> setBusy(false)
+            );
         }
     }
 
@@ -240,5 +253,15 @@ public class StockController {
         } catch (IOException e) {
             AppDialogs.unexpectedError("Ürün geçmişi penceresi açma", e);
         }
+    }
+
+    private static SQLException toSql(Throwable t) {
+        if (t instanceof SQLException se) return se;
+        Throwable c = t.getCause();
+        while (c != null && c != t) {
+            if (c instanceof SQLException se) return se;
+            c = c.getCause();
+        }
+        return new SQLException(t.getMessage(), t);
     }
 }

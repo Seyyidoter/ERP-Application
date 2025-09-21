@@ -7,6 +7,7 @@ import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.font.PDFont;
 import org.apache.pdfbox.pdmodel.font.PDType0Font;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.apache.pdfbox.pdmodel.font.Standard14Fonts;   // <-- YENİ
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -175,8 +176,8 @@ public class ReportsController {
         if ((f = tryLoadTtf(doc, "/DejaVuSansMono.ttf")) != null) return f;
         if ((f = tryLoadTtf(doc, "/com/example/erpdemo/DejaVuSans.ttf")) != null) return f;
         if ((f = tryLoadTtf(doc, "/DejaVuSans.ttf")) != null) return f;
-        // Son çare: Type1 Courier (Türkçe'de eksik glif olabilir)
-        return PDType1Font.COURIER;
+        // Son çare: Type1 Courier (PDFBox 3.x API)
+        return new PDType1Font(Standard14Fonts.FontName.COURIER);
     }
     private PDFont tryLoadTtf(PDDocument doc, String cpPath) {
         try {

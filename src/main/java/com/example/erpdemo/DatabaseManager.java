@@ -18,25 +18,28 @@ public class DatabaseManager {
 
     private static HikariDataSource dataSource;
 
+    /** İsteğe bağlı: yalnızca geliştirme için kısıtlı bağlantı bilgisi logla. */
+    private static boolean LOG_CONNECTION_INFO = false;
+
     static {
         Properties props = new Properties();
 
         // 1) Dış dosya
         try (InputStream in = new FileInputStream(EXTERNAL_FILE)) {
             props.load(in);
-            System.out.println("[DB] Using external " + EXTERNAL_FILE);
+            safeInfo("[DB] Using external " + EXTERNAL_FILE);
         } catch (IOException ex) {
-            System.err.println("[DB] " + EXTERNAL_FILE + " yok, application.properties deneniyor...");
+            safeWarn("[DB] " + EXTERNAL_FILE + " yok, application.properties deneniyor...");
             // 2) Gömülü
             try (InputStream in = DatabaseManager.class.getClassLoader().getResourceAsStream("application.properties")) {
                 if (in != null) {
                     props.load(in);
-                    System.out.println("[DB] Using embedded application.properties");
+                    safeInfo("[DB] Using embedded application.properties");
                 } else {
-                    System.err.println("[DB] application.properties da bulunamadı.");
+                    safeWarn("[DB] application.properties da bulunamadı.");
                 }
             } catch (IOException e) {
-                System.err.println("[DB] application.properties okunamadı: " + e.getMessage());
+                safeWarn("[DB] application.properties okunamadı: " + e.getMessage());
             }
         }
 
@@ -44,11 +47,19 @@ public class DatabaseManager {
         user     = props.getProperty("db.user", "");
         password = props.getProperty("db.password", "");
 
+        // İsteğe bağlı sınırlı loglama bayrağı (varsayılan: false)
+        LOG_CONNECTION_INFO = Boolean.parseBoolean(props.getProperty("db.logConnectionInfo", "false"));
+
         if (url.isBlank()) {
-            System.err.println("[DB] HATA: db.url boş. " + EXTERNAL_FILE + " dosyasını exe/jar ile aynı klasöre koy.");
+            safeError("[DB] HATA: db.url boş. " + EXTERNAL_FILE + " dosyasını exe/jar ile aynı klasöre koy.");
         } else {
-            System.out.println("[DB] url=" + url);
-            System.out.println("[DB] user=" + user);
+            // Güvenlik: URL ve kullanıcı adı artık loglanmıyor.
+            if (LOG_CONNECTION_INFO) {
+                // Sadece sürücü ve maskeli kullanıcı bilgisini kısa not olarak verelim.
+                String maskedUser = (user == null || user.isBlank()) ? "(integrated/blank)"
+                        : maskMiddle(user);
+                safeInfo("[DB] Connection properties yüklendi (driver=com.microsoft.sqlserver.jdbc.SQLServerDriver, user=" + maskedUser + ")");
+            }
             initPool(props);
         }
     }
@@ -94,7 +105,7 @@ public class DatabaseManager {
         }
     }
 
-    // Basit login doğrulama
+    // Basit login doğrulama (NOT: prod için hash’e geçin)
     public static boolean validateLogin(String kullanici, String sifre) throws SQLException {
         String sql = "SELECT COUNT(*) FROM Kullanicilar WHERE KullaniciAdi=? AND Sifre=?";
         try (Connection conn = getConnection();
@@ -106,4 +117,19 @@ public class DatabaseManager {
             }
         }
     }
+
+    /* ==================== küçük yardımcılar & güvenli log ==================== */
+
+    /** Kullanıcı adını ortasını maskeleyerek göster (abc****yz gibi). */
+    private static String maskMiddle(String s) {
+        if (s == null || s.length() <= 2) return "***";
+        int keep = Math.max(1, s.length() / 4);
+        String start = s.substring(0, keep);
+        String end = s.substring(s.length() - keep);
+        return start + "***" + end;
+    }
+
+    private static void safeInfo(String msg) { System.out.println(msg); }
+    private static void safeWarn(String msg) { System.out.println(msg); }
+    private static void safeError(String msg) { System.err.println(msg); }
 }

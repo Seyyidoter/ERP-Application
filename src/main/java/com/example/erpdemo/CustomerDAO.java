@@ -12,7 +12,8 @@ public class CustomerDAO {
 
     public static ObservableList<Customer> getAllCustomers() throws SQLException {
         ObservableList<Customer> customerList = FXCollections.observableArrayList();
-        String sql = "SELECT * FROM Musteriler";
+        // YALNIZ GEREKLİ KOLONLAR
+        String sql = "SELECT Id, FirmaAdi, IletisimKisi, Telefon, Eposta, Iskonto, Bakiye FROM Musteriler";
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql);
              ResultSet rs = stmt.executeQuery()) {
@@ -35,7 +36,8 @@ public class CustomerDAO {
     }
 
     public static Customer getCustomerById(int customerId) throws SQLException {
-        String sql = "SELECT * FROM Musteriler WHERE Id = ?";
+        // YALNIZ GEREKLİ KOLONLAR
+        String sql = "SELECT Id, FirmaAdi, IletisimKisi, Telefon, Eposta, Iskonto, Bakiye FROM Musteriler WHERE Id = ?";
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, customerId);

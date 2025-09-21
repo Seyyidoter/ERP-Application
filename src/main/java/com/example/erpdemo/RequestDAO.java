@@ -42,21 +42,27 @@ public class RequestDAO {
         return list;
     }
 
-    /** Yeni talep başlığı ekler ve kimliğini döndürür. */
+    /**
+     * Yeni talep başlığı ekler ve kimliğini döndürür.
+     * SCOPE_IDENTITY yerine JDBC RETURN_GENERATED_KEYS kullanılır.
+     */
     public static int addRequest(int customerId) throws SQLException {
         String sql = """
             INSERT INTO dbo.Talepler (MusteriId, TalepTarihi, Durum)
-            VALUES (?, GETDATE(), N'Onay Bekliyor');
-            SELECT SCOPE_IDENTITY();
+            VALUES (?, GETDATE(), N'Onay Bekliyor')
         """;
         try (Connection c = DatabaseManager.getConnection();
-             PreparedStatement ps = c.prepareStatement(sql)) {
+             PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setInt(1, customerId);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) return rs.getBigDecimal(1).intValue();
+            ps.executeUpdate();
+            try (ResultSet keys = ps.getGeneratedKeys()) {
+                if (keys.next()) {
+                    // SQL Server sürümüne göre 1. kolon BigDecimal/Long/Integer gelebilir
+                    return ((Number) keys.getObject(1)).intValue();
+                }
             }
         }
-        return -1;
+        throw new SQLException("Yeni talep Id alınamadı (generated keys boş).");
     }
 
     /** Talep kalemi ekler (fiyat = iskontolu, BigDecimal). */
@@ -190,7 +196,10 @@ public class RequestDAO {
 
     /**
      * Onay işlemi: stok düş, bakiyeyi düş, talebi onayla (tek transaction).
-     * Durum geçişi: 'Onay Bekliyor' -> 'Onaylanıyor' -> 'Onaylandı'
+     * Kilit ipuçları: SQL Server'da satır düzeyinde yarışları azaltmak için
+     *  - okumalarda WITH (UPDLOCK, ROWLOCK)
+     *  - güncellemelerde UPDATE ... WITH (ROWLOCK)
+     * kullanıldı.
      */
     public static void approveRequestTransactionally(int requestId, int approverId) throws SQLException {
         final int maxRetries = 3;
@@ -204,7 +213,7 @@ public class RequestDAO {
                 c.setTransactionIsolation(Connection.TRANSACTION_READ_COMMITTED);
 
                 try (Statement st = c.createStatement()) {
-                    st.execute("SET LOCK_TIMEOUT 5000"); // 5 sn
+                    st.execute("SET XACT_ABORT ON; SET LOCK_TIMEOUT 5000"); // daha deterministik hata & 5 sn kilit bekleme
                 }
 
                 try {
@@ -219,10 +228,10 @@ public class RequestDAO {
                         throw new SQLException("Talep beklemede değil veya başka bir işlem tarafından alındı.");
                     }
 
-                    // 1) müşteri id
+                    // 1) müşteri id (başlığı UPDLOCK ile oku)
                     Integer customerId = null;
                     try (PreparedStatement ps = c.prepareStatement(
-                            "SELECT MusteriId FROM dbo.Talepler WHERE Id=?")) {
+                            "SELECT MusteriId FROM dbo.Talepler WITH (UPDLOCK, ROWLOCK) WHERE Id=?")) {
                         ps.setInt(1, requestId);
                         try (ResultSet rs = ps.executeQuery()) {
                             if (rs.next()) customerId = rs.getInt(1);
@@ -230,10 +239,12 @@ public class RequestDAO {
                     }
                     if (customerId == null) throw new SQLException("Talep başlığı bulunamadı.");
 
-                    // 2) kalemler (ürün id’ye göre sırala)
+                    // 2) kalemler (UPDLOCK ile oku, ürün id’ye göre sırala)
                     List<ItemLite> items = new ArrayList<>();
                     try (PreparedStatement ps = c.prepareStatement(
-                            "SELECT UrunId, Miktar, TeklifFiyati FROM dbo.TalepKalemleri WHERE TalepId=?")) {
+                            "SELECT UrunId, Miktar, TeklifFiyati " +
+                                    "FROM dbo.TalepKalemleri WITH (UPDLOCK, ROWLOCK) " +
+                                    "WHERE TalepId=?")) {
                         ps.setInt(1, requestId);
                         try (ResultSet rs = ps.executeQuery()) {
                             while (rs.next()) {
@@ -247,9 +258,10 @@ public class RequestDAO {
                     if (items.isEmpty()) throw new SQLException("Talebe ait kalem bulunamadı.");
                     items.sort(java.util.Comparator.comparingInt(ItemLite::productId));
 
-                    // 3) stok düş
+                    // 3) stok düş (UPDATE sırasında ROWLOCK ipucu)
                     try (PreparedStatement up = c.prepareStatement(
-                            "UPDATE dbo.Stoklar SET Stok = Stok - ? WHERE Id = ? AND Stok >= ?")) {
+                            "UPDATE s WITH (ROWLOCK) SET s.Stok = s.Stok - ? " +
+                                    "FROM dbo.Stoklar s WHERE s.Id = ? AND s.Stok >= ?")) {
                         for (ItemLite it : items) {
                             up.setInt(1, it.qty());
                             up.setInt(2, it.productId());
@@ -262,9 +274,9 @@ public class RequestDAO {
                     // 4) toplamı aynı tx içinde al
                     BigDecimal total = getRequestTotalInTx(c, requestId);
 
-                    // 5) bakiye düş
+                    // 5) bakiye düş (müşteri satırına satır kilidi)
                     try (PreparedStatement bal = c.prepareStatement(
-                            "UPDATE dbo.Musteriler SET Bakiye = Bakiye - ? WHERE Id = ?")) {
+                            "UPDATE m WITH (ROWLOCK) SET m.Bakiye = m.Bakiye - ? FROM dbo.Musteriler m WHERE m.Id = ?")) {
                         bal.setBigDecimal(1, total);
                         bal.setInt(2, customerId);
                         bal.executeUpdate();

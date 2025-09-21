@@ -19,7 +19,7 @@ import java.sql.SQLException;
 import java.text.NumberFormat;
 import java.util.Locale;
 
-/** Müşteri listesi + CRUD + Ödeme alma + Geçmiş + Filtreleme */
+/** Müşteri listesi + CRUD + Ödeme alma + Geçmiş + Filtreleme (ASYNC yükleme) */
 public class CustomerController {
 
     @FXML private TableView<Customer> customerTable;
@@ -56,10 +56,10 @@ public class CustomerController {
         // hizalama ve para biçimlendirme
         iskontoColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
         balanceColumn.setCellFactory(col -> new TableCell<>() {
-            final java.text.NumberFormat nf =
-                    java.text.NumberFormat.getNumberInstance(new java.util.Locale("tr","TR"));
+            final NumberFormat nf =
+                    NumberFormat.getNumberInstance(new Locale("tr","TR"));
             { nf.setMinimumFractionDigits(2); nf.setMaximumFractionDigits(2); }
-            @Override protected void updateItem(java.math.BigDecimal v, boolean empty) {
+            @Override protected void updateItem(BigDecimal v, boolean empty) {
                 super.updateItem(v, empty);
                 if (empty || v == null) { setText(null); setStyle(""); }
                 else { setText(nf.format(v)); setStyle("-fx-alignment: CENTER-RIGHT;"); }
@@ -70,8 +70,8 @@ public class CustomerController {
         customerTable.setPlaceholder(new Label("Kayıtlı müşteri yok"));
 
         // filtreleme + sıralama hattı
-        filtered = new javafx.collections.transformation.FilteredList<>(master, x -> true);
-        var sorted = new javafx.collections.transformation.SortedList<>(filtered);
+        filtered = new FilteredList<>(master, x -> true);
+        var sorted = new SortedList<>(filtered);
         sorted.comparatorProperty().bind(customerTable.comparatorProperty());
         customerTable.setItems(sorted);
 
@@ -115,10 +115,9 @@ public class CustomerController {
             });
         });
 
-        // veri yükle
+        // veri yükle (ASYNC)
         loadCustomers();
     }
-
 
     private void applyFilter(String query) {
         final String q = query == null ? "" : query.toLowerCase(Locale.ROOT).trim();
@@ -142,12 +141,27 @@ public class CustomerController {
         return val != null && val.toLowerCase(Locale.ROOT).contains(q);
     }
 
+    /** Müşterileri arka planda yükler; UI donmaz. */
     private void loadCustomers() {
-        try {
-            master.setAll(CustomerDAO.getAllCustomers());
-        } catch (SQLException e) {
-            AppDialogs.dbError("Müşteri verileri yüklenmesi", e);
-        }
+        setBusy(true);
+        Async.run(
+                () -> {
+                    try {
+                        return CustomerDAO.getAllCustomers();
+                    } catch (SQLException e) {
+                        throw new RuntimeException(e);
+                    }
+                },
+                list -> master.setAll(list),
+                ex -> AppDialogs.dbError("Müşteri verileri yüklenmesi", toSql(ex)),
+                () -> setBusy(false)
+        );
+    }
+
+    private void setBusy(boolean busy) {
+        if (customerTable != null) customerTable.setDisable(busy);
+        if (searchField != null)   searchField.setDisable(busy);
+        // seçim butonları zaten selection’a bağlı; ayrıca kilitlemeye gerek yok
     }
 
     @FXML private void handleClearSearch() { searchField.clear(); }
@@ -166,7 +180,7 @@ public class CustomerController {
             IconUtil.setAppIcon(stage);
             stage.showAndWait();
 
-            loadCustomers();
+            loadCustomers(); // async
         } catch (IOException e) {
             AppDialogs.unexpectedError("Yeni müşteri penceresi açma", e);
         }
@@ -193,7 +207,7 @@ public class CustomerController {
             controller.setCustomer(selectedCustomer);
 
             dialogStage.showAndWait();
-            loadCustomers();
+            loadCustomers(); // async
         } catch (IOException e) {
             AppDialogs.unexpectedError("Müşteri düzenleme penceresi açma", e);
         }
@@ -212,14 +226,16 @@ public class CustomerController {
         confirm.showAndWait();
 
         if (confirm.getResult() == ButtonType.YES) {
-            try {
-                CustomerDAO.deleteCustomer(selectedCustomer.getId());
-                AppDialogs.info("Müşteri başarıyla silindi.");
-                loadCustomers();
-            } catch (SQLException e) {
-                String generic = "Bu müşteri ilişkili kayıtlar nedeniyle silinemedi.";
-                AppDialogs.dbError(generic, e);
-            }
+            setBusy(true);
+            Async.runVoid(
+                    () -> {
+                        try { CustomerDAO.deleteCustomer(selectedCustomer.getId()); }
+                        catch (SQLException e) { throw new RuntimeException(e); }
+                    },
+                    () -> { AppDialogs.info("Müşteri başarıyla silindi."); loadCustomers(); },
+                    ex  -> AppDialogs.dbError("Müşteri silme", toSql(ex)),
+                    ()  -> setBusy(false)
+            );
         }
     }
 
@@ -237,10 +253,10 @@ public class CustomerController {
         var res = td.showAndWait();
         if (res.isEmpty()) return;
 
-        java.math.BigDecimal amountBD;
+        BigDecimal amountBD;
         try {
             String txt = res.get().replace(",", ".").trim();
-            amountBD = new java.math.BigDecimal(txt);
+            amountBD = new BigDecimal(txt);
             if (amountBD.signum() <= 0) throw new NumberFormatException();
         } catch (NumberFormatException ex) {
             AppDialogs.warn("Geçerli bir tutar girin (0'dan büyük).");
@@ -254,13 +270,16 @@ public class CustomerController {
         IconUtil.decorateDialog(note);
         String desc = note.showAndWait().orElse("");
 
-        try {
-            PaymentDAO.addPayment(sel.getId(), amountBD, desc);
-            AppDialogs.info("Ödeme kaydedildi.");
-            loadCustomers();
-        } catch (SQLException e) {
-            AppDialogs.dbError("Ödeme kaydı", e);
-        }
+        setBusy(true);
+        Async.runVoid(
+                () -> {
+                    try { PaymentDAO.addPayment(sel.getId(), amountBD, desc); }
+                    catch (SQLException e) { throw new RuntimeException(e); }
+                },
+                () -> { AppDialogs.info("Ödeme kaydedildi."); loadCustomers(); },
+                ex  -> AppDialogs.dbError("Ödeme kaydı", toSql(ex)),
+                ()  -> setBusy(false)
+        );
     }
 
     // ---------- GEÇMİŞ ----------
@@ -289,5 +308,15 @@ public class CustomerController {
         } catch (Exception ex) {
             AppDialogs.unexpectedError("Geçmiş penceresi açma", ex);
         }
+    }
+
+    private static SQLException toSql(Throwable t) {
+        if (t instanceof SQLException se) return se;
+        Throwable c = t.getCause();
+        while (c != null && c != t) {
+            if (c instanceof SQLException se) return se;
+            c = c.getCause();
+        }
+        return new SQLException(t.getMessage(), t);
     }
 }
