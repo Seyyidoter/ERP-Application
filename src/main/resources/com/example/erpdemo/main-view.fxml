@@ -62,10 +62,13 @@
                 <!-- Ürün bazında bugünkü talep tablosu -->
                 <VBox spacing="8" style="-fx-padding: 6 0 0 0;">
                     <Label text="Bugün Ürün Bazında Talep" style="-fx-font-weight:700; -fx-text-fill:#38536d;"/>
-                    <TableView fx:id="tblTodayProductDemand" VBox.vgrow="ALWAYS" prefHeight="260">
+                    <TableView fx:id="tblTodayProductDemand"
+                               VBox.vgrow="ALWAYS"
+                               prefHeight="260"
+                               focusTraversable="false"> <!-- odak mavi çerçeve olmasın -->
                         <columns>
                             <TableColumn fx:id="colDemandProduct" text="Ürün" prefWidth="320"/>
-                            <TableColumn fx:id="colDemandQty" text="Toplam Miktar" prefWidth="160"/>
+                            <TableColumn fx:id="colDemandQty"     text="Toplam Miktar" prefWidth="160"/>
                         </columns>
                     </TableView>
                 </VBox>

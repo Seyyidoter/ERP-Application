@@ -23,15 +23,21 @@ import java.util.Locale;
 public class CustomerController {
 
     @FXML private TableView<Customer> customerTable;
-    @FXML private TableColumn<Customer, Integer> idColumn;
-    @FXML private TableColumn<Customer, String>  nameColumn;
-    @FXML private TableColumn<Customer, String>  contactColumn;
-    @FXML private TableColumn<Customer, String>  phoneColumn;
-    @FXML private TableColumn<Customer, String>  emailColumn;
-    @FXML private TableColumn<Customer, Integer> iskontoColumn;
-    @FXML private TableColumn<Customer, BigDecimal>  balanceColumn;
+    @FXML private TableColumn<Customer, Integer>    idColumn;
+    @FXML private TableColumn<Customer, String>     nameColumn;
+    @FXML private TableColumn<Customer, String>     contactColumn;
+    @FXML private TableColumn<Customer, String>     phoneColumn;
+    @FXML private TableColumn<Customer, String>     emailColumn;
+    @FXML private TableColumn<Customer, Integer>    iskontoColumn;
+    @FXML private TableColumn<Customer, BigDecimal> balanceColumn;
 
     @FXML private TextField searchField;
+
+    // Seçime bağlı butonlar
+    @FXML private Button editButton;
+    @FXML private Button deleteButton;
+    @FXML private Button takePaymentButton; // Ödeme Al
+    @FXML private Button historyButton;     // Geçmiş
 
     private final ObservableList<Customer> master = FXCollections.observableArrayList();
     private FilteredList<Customer> filtered;
@@ -46,23 +52,15 @@ public class CustomerController {
         iskontoColumn.setCellValueFactory(new PropertyValueFactory<>("iskonto"));
         balanceColumn.setCellValueFactory(new PropertyValueFactory<>("balance"));
 
-        // hizalama ve para formatı (BigDecimal için %f KULLANMA!)
+        // hizalama ve para formatı
         iskontoColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
         balanceColumn.setCellFactory(col -> new TableCell<>() {
             final NumberFormat nf = NumberFormat.getNumberInstance(new Locale("tr","TR"));
-            {
-                nf.setMinimumFractionDigits(2);
-                nf.setMaximumFractionDigits(2);
-            }
+            { nf.setMinimumFractionDigits(2); nf.setMaximumFractionDigits(2); }
             @Override protected void updateItem(BigDecimal v, boolean empty) {
                 super.updateItem(v, empty);
-                if (empty || v == null) {
-                    setText(null);
-                    setStyle("");
-                } else {
-                    setText(nf.format(v));
-                    setStyle("-fx-alignment: CENTER-RIGHT;");
-                }
+                if (empty || v == null) { setText(null); setStyle(""); }
+                else { setText(nf.format(v)); setStyle("-fx-alignment: CENTER-RIGHT;"); }
             }
         });
 
@@ -71,9 +69,14 @@ public class CustomerController {
         sorted.comparatorProperty().bind(customerTable.comparatorProperty());
         customerTable.setItems(sorted);
 
-        if (searchField != null) {
-            searchField.textProperty().addListener((obs, old, q) -> applyFilter(q));
-        }
+        searchField.textProperty().addListener((obs, old, q) -> applyFilter(q));
+
+        // Seçim yokken aksiyon butonlarını pasifleştir
+        var noSelection = customerTable.getSelectionModel().selectedItemProperty().isNull();
+        editButton.disableProperty().bind(noSelection);
+        deleteButton.disableProperty().bind(noSelection);
+        takePaymentButton.disableProperty().bind(noSelection);
+        historyButton.disableProperty().bind(noSelection);
 
         loadCustomers();
     }
@@ -133,39 +136,35 @@ public class CustomerController {
     @FXML
     private void handleEditButton() {
         Customer selectedCustomer = customerTable.getSelectionModel().getSelectedItem();
-        if (selectedCustomer != null) {
-            try {
-                FXMLLoader loader = new FXMLLoader(getClass().getResource("edit-customer.fxml"));
-                Parent parent = loader.load();
+        if (selectedCustomer == null) return; // buton zaten disabled
 
-                EditCustomerController controller = loader.getController();
+        try {
+            FXMLLoader loader = new FXMLLoader(getClass().getResource("edit-customer.fxml"));
+            Parent parent = loader.load();
 
-                Stage dialogStage = new Stage();
-                dialogStage.setTitle("Müşteri Düzenle");
-                dialogStage.initModality(Modality.APPLICATION_MODAL);
-                dialogStage.setScene(new Scene(parent));
-                IconUtil.setAppIcon(dialogStage);
+            EditCustomerController controller = loader.getController();
 
-                controller.setDialogStage(dialogStage);
-                controller.setCustomer(selectedCustomer);
+            Stage dialogStage = new Stage();
+            dialogStage.setTitle("Müşteri Düzenle");
+            dialogStage.initModality(Modality.APPLICATION_MODAL);
+            dialogStage.setScene(new Scene(parent));
+            IconUtil.setAppIcon(dialogStage);
 
-                dialogStage.showAndWait();
-                loadCustomers();
-            } catch (IOException e) {
-                AppDialogs.unexpectedError("Müşteri düzenleme penceresi açma", e);
-            }
-        } else {
-            AppDialogs.warn("Lütfen düzenlemek için bir müşteri seçin.");
+            controller.setDialogStage(dialogStage);
+            controller.setCustomer(selectedCustomer);
+
+            dialogStage.showAndWait();
+            loadCustomers();
+        } catch (IOException e) {
+            AppDialogs.unexpectedError("Müşteri düzenleme penceresi açma", e);
         }
     }
 
     @FXML
     private void handleDeleteButton() {
         Customer selectedCustomer = customerTable.getSelectionModel().getSelectedItem();
-        if (selectedCustomer == null) {
-            AppDialogs.warn("Lütfen silmek için bir müşteri seçin.");
-            return;
-        }
+        if (selectedCustomer == null) return; // buton zaten disabled
+
         Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
                 "Müşteriyi silmek istediğinizden emin misiniz?", ButtonType.YES, ButtonType.NO);
         confirm.setHeaderText(null);
@@ -189,10 +188,7 @@ public class CustomerController {
     @FXML
     private void handleTakePayment() {
         Customer sel = customerTable.getSelectionModel().getSelectedItem();
-        if (sel == null) {
-            AppDialogs.warn("Lütfen ödeme almak için bir müşteri seçin.");
-            return;
-        }
+        if (sel == null) return; // buton zaten disabled
 
         TextInputDialog td = new TextInputDialog();
         td.setTitle("Ödeme Al – " + sel.getCompanyName());
@@ -232,7 +228,7 @@ public class CustomerController {
     @FXML
     private void handleCustomerHistory() {
         Customer sel = customerTable.getSelectionModel().getSelectedItem();
-        if (sel == null) { AppDialogs.warn("Lütfen geçmişini görmek istediğiniz müşteriyi seçin."); return; }
+        if (sel == null) return; // buton zaten disabled
         try {
             var url = getClass().getResource("customer-history-view.fxml");
             FXMLLoader loader = new FXMLLoader(url);

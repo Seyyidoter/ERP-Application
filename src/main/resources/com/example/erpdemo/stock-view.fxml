@@ -32,7 +32,7 @@
                 <Button fx:id="addButton"            text="Yeni Ürün Ekle" onAction="#handleAddButton"/>
                 <Button fx:id="editButton"           text="Ürün Düzenle"  onAction="#handleEditButton"/>
                 <Button fx:id="deleteButton"         text="Ürün Sil"      onAction="#handleDeleteButton"/>
-                <!-- yeni: ürün sipariş geçmişi -->
+                <!-- seçim yokken devre dışı bırakılacak -->
                 <Button fx:id="productHistoryButton" text="Geçmiş"        onAction="#handleProductHistory"/>
             </children>
         </HBox>

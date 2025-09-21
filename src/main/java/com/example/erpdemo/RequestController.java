@@ -24,6 +24,10 @@ public class RequestController {
     @FXML private TableColumn<Row, LocalDate> colDate;
     @FXML private TableColumn<Row, String>    colStatus;
 
+    // Seçime bağlı butonlar
+    @FXML private Button viewBtn;
+    @FXML private Button deleteBtn;
+
     private final ObservableList<Row> rows = FXCollections.observableArrayList();
 
     @FXML
@@ -36,6 +40,12 @@ public class RequestController {
         DateUtil.setDateColumnDMY(colDate);
 
         tblRequests.setItems(rows);
+
+        // Seçim yokken butonları devre dışı bırak
+        var noSelection = tblRequests.getSelectionModel().selectedItemProperty().isNull();
+        viewBtn.disableProperty().bind(noSelection);
+        deleteBtn.disableProperty().bind(noSelection);
+
         refresh();
     }
 
@@ -62,7 +72,7 @@ public class RequestController {
     @FXML
     private void viewRequest() {
         Row sel = tblRequests.getSelectionModel().getSelectedItem();
-        if (sel == null) { AppDialogs.warn("Lütfen bir talep seçin."); return; }
+        if (sel == null) return; // buton zaten disabled
         try {
             FXMLLoader fxml = new FXMLLoader(getClass().getResource("view-request.fxml"));
             Parent view = fxml.load();
@@ -85,7 +95,7 @@ public class RequestController {
     @FXML
     private void deleteSingleRequest() {
         Row sel = tblRequests.getSelectionModel().getSelectedItem();
-        if (sel == null) { AppDialogs.warn("Silmek için bir talep seçin."); return; }
+        if (sel == null) return; // buton zaten disabled
 
         Alert q = new Alert(Alert.AlertType.CONFIRMATION,
                 "Talep #" + sel.getId() + " silinsin mi?", ButtonType.YES, ButtonType.NO);
@@ -97,15 +107,11 @@ public class RequestController {
 
         tblRequests.setDisable(true);
         Async.runVoid(() -> {
-                    try {
-                        RequestDAO.deleteRequestById(sel.getId());
-                    } catch (SQLException ex) {
-                        throw new RuntimeException(ex);
-                    }
-                }, () -> {
-                    AppDialogs.info("Talep silindi.");
-                    refresh();
-                }, ex -> AppDialogs.dbError("Talep silme", toSql(ex)),
+                    try { RequestDAO.deleteRequestById(sel.getId()); }
+                    catch (SQLException ex) { throw new RuntimeException(ex); }
+                },
+                () -> { AppDialogs.info("Talep silindi."); refresh(); },
+                ex -> AppDialogs.dbError("Talep silme", toSql(ex)),
                 () -> tblRequests.setDisable(false));
     }
 

@@ -46,8 +46,9 @@
             <Button fx:id="editButton"   text="Müşteri Düzenle"   onAction="#handleEditButton"/>
             <Button fx:id="deleteButton" text="Müşteri Sil"       onAction="#handleDeleteButton"/>
             <Separator orientation="VERTICAL"/>
-            <Button text="Ödeme Al"      onAction="#handleTakePayment"/>
-            <Button text="Geçmiş"        onAction="#handleCustomerHistory"/>
+            <!-- SEÇİM BAĞLANTISI İÇİN fx:id EKLENDİ -->
+            <Button fx:id="takePaymentButton" text="Ödeme Al" onAction="#handleTakePayment"/>
+            <Button fx:id="historyButton"     text="Geçmiş"   onAction="#handleCustomerHistory"/>
         </children>
     </HBox>
 </VBox>

@@ -1,19 +1,18 @@
 package com.example.erpdemo;
 
+import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Node;
 import javafx.scene.Parent;
-import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.image.Image;
 import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.GridPane;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
-import javafx.scene.image.Image;
 
 import java.io.IOException;
 import java.net.URL;
@@ -48,20 +47,25 @@ public class MainController {
             colDemandProduct.setCellValueFactory(new PropertyValueFactory<>("productName"));
             colDemandQty.setCellValueFactory(new PropertyValueFactory<>("totalQuantity"));
             tblTodayProductDemand.setPlaceholder(new Label("Bugün ürün talebi yok"));
+
+            // Açılışta mavi odak çerçevesini engelle
+            tblTodayProductDemand.setFocusTraversable(false);
+            tblTodayProductDemand.getSelectionModel().clearSelection();
         }
 
         loadDashboardMetrics();
         loadTodayDemandTable();
         goDashboard();
+
+        Platform.runLater(() -> {
+            if (contentRoot != null) contentRoot.requestFocus();
+        });
     }
 
     public void setUser(User user) {
         this.loggedInUser = user;
-        if (user != null && user.getRole() != null && !user.getRole().isBlank()) {
-            userMenu.setText(user.getRole());
-        } else {
-            userMenu.setText("Kullanıcı");
-        }
+        userMenu.setText(user != null && user.getRole() != null && !user.getRole().isBlank()
+                ? user.getRole() : "Kullanıcı");
         updateApprovalsVisibility();
     }
 
@@ -134,7 +138,7 @@ public class MainController {
 
     private boolean isAdmin() {
         return loggedInUser != null &&
-                "Yonetici".equalsIgnoreCase(Objects.toString(loggedInUser.getRole(), ""));
+                "Yonetici".equalsIgnoreCase(String.valueOf(loggedInUser.getRole()));
     }
 
     // ---- Nav yardımcıları ----
@@ -214,23 +218,20 @@ public class MainController {
         dlg.setTitle("Şifre Değiştir");
         dlg.setHeaderText(null);
 
-        // === Logo ekle ===
+        // Logo
         Stage stage = (Stage) dlg.getDialogPane().getScene().getWindow();
-        stage.getIcons().add(
-                new Image(
-                        Objects.requireNonNull(getClass().getResourceAsStream("assets/logo-32.png"))
-                )
-        );
+        stage.getIcons().add(new Image(Objects.requireNonNull(
+                getClass().getResourceAsStream("assets/logo-32.png"))));
 
         PasswordField currentPwd = new PasswordField();
-        PasswordField newPwd = new PasswordField();
-        PasswordField newPwd2 = new PasswordField();
+        PasswordField newPwd     = new PasswordField();
+        PasswordField newPwd2    = new PasswordField();
 
         currentPwd.setPromptText("Mevcut şifre");
         newPwd.setPromptText("Yeni şifre");
         newPwd2.setPromptText("Yeni şifre (tekrar)");
 
-        GridPane gp = new GridPane();
+        var gp = new javafx.scene.layout.GridPane();
         gp.setHgap(10); gp.setVgap(10);
         gp.addRow(0, new Label("Mevcut Şifre:"), currentPwd);
         gp.addRow(1, new Label("Yeni Şifre:"),   newPwd);
@@ -239,7 +240,7 @@ public class MainController {
         dlg.getDialogPane().setContent(gp);
 
         ButtonType btnTamam = new ButtonType("Tamam", ButtonBar.ButtonData.OK_DONE);
-        ButtonType btnIptal = new ButtonType("İptal", ButtonBar.ButtonData.CANCEL_CLOSE);
+        ButtonType btnIptal  = new ButtonType("İptal", ButtonBar.ButtonData.CANCEL_CLOSE);
         dlg.getDialogPane().getButtonTypes().addAll(btnTamam, btnIptal);
 
         dlg.setResultConverter(bt -> bt);
@@ -256,12 +257,8 @@ public class MainController {
         }
 
         try {
-            // Tek DB çağrısı: mevcut şifre kontrol + güncelleme
             boolean updated = UserDAO.updatePassword(loggedInUser.getId(), cur, np1);
-            if (!updated) {
-                showAlert(Alert.AlertType.ERROR, "Hata", "Mevcut şifre yanlış.");
-                return;
-            }
+            if (!updated) { showAlert(Alert.AlertType.ERROR, "Hata", "Mevcut şifre yanlış."); return; }
             showAlert(Alert.AlertType.INFORMATION, "Başarılı", "Şifreniz güncellendi.");
         } catch (SQLException e) {
             showAlert(Alert.AlertType.ERROR, "Hata", "Şifre güncellenemedi: " + e.getMessage());

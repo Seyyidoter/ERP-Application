@@ -1,5 +1,6 @@
 package com.example.erpdemo;
 
+import javafx.beans.binding.BooleanBinding;
 import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
@@ -16,12 +17,17 @@ import java.sql.SQLException;
 
 public class StockController {
 
-    @FXML private TableView<Product> productTable;
-    @FXML private TableColumn<Product, Integer>    idColumn;
-    @FXML private TableColumn<Product, String>     nameColumn;
+    @FXML private TableView<Product>              productTable;
+    @FXML private TableColumn<Product, Integer>   idColumn;
+    @FXML private TableColumn<Product, String>    nameColumn;
     @FXML private TableColumn<Product, BigDecimal> priceColumn; // BigDecimal
-    @FXML private TableColumn<Product, Integer>    stockColumn;
-    @FXML private TableColumn<Product, String>     unitColumn;
+    @FXML private TableColumn<Product, Integer>   stockColumn;
+    @FXML private TableColumn<Product, String>    unitColumn;
+
+    // Seçim yokken devre dışı bırakılacak butonlar
+    @FXML private Button editButton;
+    @FXML private Button deleteButton;
+    @FXML private Button productHistoryButton;
 
     @FXML
     public void initialize() {
@@ -42,6 +48,12 @@ public class StockController {
             }
         });
         unitColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
+
+        // Seçim yokken butonları devre dışı bırak
+        BooleanBinding noSelection = productTable.getSelectionModel().selectedItemProperty().isNull();
+        editButton.disableProperty().bind(noSelection);
+        deleteButton.disableProperty().bind(noSelection);
+        productHistoryButton.disableProperty().bind(noSelection);
 
         loadProducts();
     }
@@ -79,8 +91,7 @@ public class StockController {
     @FXML
     private void handleEditButton() {
         Product selectedProduct = productTable.getSelectionModel().getSelectedItem();
-        if (selectedProduct == null) { AppDialogs.warn("Lütfen düzenlemek için bir ürün seçin."); return; }
-
+        if (selectedProduct == null) return; // buton zaten disabled
         try {
             FXMLLoader loader = new FXMLLoader(getClass().getResource("new-product.fxml"));
             Parent parent = loader.load();
@@ -105,7 +116,7 @@ public class StockController {
     @FXML
     private void handleDeleteButton() {
         Product selectedProduct = productTable.getSelectionModel().getSelectedItem();
-        if (selectedProduct == null) { AppDialogs.warn("Lütfen silmek için bir ürün seçin."); return; }
+        if (selectedProduct == null) return; // buton zaten disabled
 
         Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
                 "Ürün silinecek. Emin misiniz?", ButtonType.OK, ButtonType.CANCEL);
@@ -129,7 +140,7 @@ public class StockController {
     @FXML
     private void handleProductHistory() {
         Product sel = productTable.getSelectionModel().getSelectedItem();
-        if (sel == null) { AppDialogs.warn("Lütfen geçmişini görmek istediğiniz ürünü seçin."); return; }
+        if (sel == null) return; // buton zaten disabled
 
         try {
             var url = getClass().getResource("product-history-view.fxml");
