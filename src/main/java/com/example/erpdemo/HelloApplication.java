@@ -27,7 +27,7 @@ public class HelloApplication extends Application {
         Scene scene = new Scene(root);
         stage.setScene(scene);
         stage.setTitle("Omnis");
-        IconUtil.setAppIcon(stage); // (opsiyonel) uygulama ikonu
+        IconUtil.setAppIcon(stage);
 
         stage.show();
     }

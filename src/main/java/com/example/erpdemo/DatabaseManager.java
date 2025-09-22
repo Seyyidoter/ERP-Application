@@ -105,7 +105,6 @@ public class DatabaseManager {
         }
     }
 
-    // Basit login doğrulama (NOT: prod için hash’e geçin)
     public static boolean validateLogin(String kullanici, String sifre) throws SQLException {
         String sql = "SELECT COUNT(*) FROM Kullanicilar WHERE KullaniciAdi=? AND Sifre=?";
         try (Connection conn = getConnection();

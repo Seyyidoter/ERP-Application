@@ -31,7 +31,6 @@ public class ApprovalController {
     @FXML private Button approveBtn;
     @FXML private Button rejectBtn;
 
-    // Butonları saran bar: tablo dışına tıklama filtresinde hariç tutacağız
     @FXML private HBox actionsBar;
 
     private final ObservableList<RequestRow> rows = FXCollections.observableArrayList();

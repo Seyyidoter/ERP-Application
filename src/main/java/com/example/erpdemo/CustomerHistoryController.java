@@ -44,9 +44,9 @@ public class CustomerHistoryController {
         colReqId.setCellValueFactory(new PropertyValueFactory<>("requestId"));
         colDate.setCellValueFactory(new PropertyValueFactory<>("date"));
         colStatus.setCellValueFactory(new PropertyValueFactory<>("status"));
-        colProduct.setCellValueFactory(new PropertyValueFactory<>("productName")); // changed
-        colQty.setCellValueFactory(new PropertyValueFactory<>("quantity"));        // changed
-        colUnit.setCellValueFactory(new PropertyValueFactory<>("unitPrice"));      // changed
+        colProduct.setCellValueFactory(new PropertyValueFactory<>("productName"));
+        colQty.setCellValueFactory(new PropertyValueFactory<>("quantity"));
+        colUnit.setCellValueFactory(new PropertyValueFactory<>("unitPrice"));
         colSubtotal.setCellValueFactory(new PropertyValueFactory<>("subtotal"));
 
         // Görünüm: hizalama + para biçimlendirme (TR)
@@ -65,7 +65,6 @@ public class CustomerHistoryController {
 
     public void setCustomer(Customer c) {
         this.customer = c;
-        // Customer#getCompanyName ile uyumlu
         lblCustomer.setText(c != null ? c.getCompanyName() : "—"); // changed
         loadData();
     }
