@@ -119,6 +119,7 @@ public class ReportsController {
                             w.println(String.format(TR, "Toplam Liste Tutarı : %s TL", fmtMoney(totalList)));
                             w.println(String.format(TR, "Toplam İsk. Tutar   : %s TL", fmtMoney(totalDisc)));
                             w.println(""); // blok arası boş satır
+                            w.println("");
                         }
                     }
                 }
