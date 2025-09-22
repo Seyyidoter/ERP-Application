@@ -24,10 +24,10 @@
     </center>
 
     <bottom>
-        <HBox alignment="CENTER_RIGHT" spacing="8">
+        <!-- BUTON ÇUBUĞU: tablo dışına tıklamayı filtrlerken burayı HARİÇ tutacağız -->
+        <HBox fx:id="actionsBar" alignment="CENTER_RIGHT" spacing="8">
             <padding><Insets topRightBottomLeft="8"/></padding>
             <Button text="Yeni Talep Oluştur" onAction="#createRequest"/>
-            <!-- YENİ: fx:id atandı; Controller'da disable binding yapılıyor -->
             <Button fx:id="viewBtn"   text="Talebi Görüntüle" onAction="#viewRequest"/>
             <Button fx:id="deleteBtn" text="Talebi Sil"       onAction="#deleteSingleRequest"/>
         </HBox>

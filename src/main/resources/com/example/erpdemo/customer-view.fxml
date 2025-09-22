@@ -40,13 +40,13 @@
     </TableView>
 
     <!-- Aksiyon butonları -->
-    <HBox spacing="10.0" alignment="CENTER_RIGHT">
+    <!-- ⚠️ fx:id eklendi: actionsBar -->
+    <HBox fx:id="actionsBar" spacing="10.0" alignment="CENTER_RIGHT">
         <children>
             <Button fx:id="addButton"    text="Yeni Müşteri Ekle" onAction="#handleAddButton" />
             <Button fx:id="editButton"   text="Müşteri Düzenle"   onAction="#handleEditButton"/>
             <Button fx:id="deleteButton" text="Müşteri Sil"       onAction="#handleDeleteButton"/>
             <Separator orientation="VERTICAL"/>
-            <!-- SEÇİM BAĞLANTISI İÇİN fx:id EKLENDİ -->
             <Button fx:id="takePaymentButton" text="Ödeme Al" onAction="#handleTakePayment"/>
             <Button fx:id="historyButton"     text="Geçmiş"   onAction="#handleCustomerHistory"/>
         </children>

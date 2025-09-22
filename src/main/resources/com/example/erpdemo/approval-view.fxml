@@ -22,7 +22,8 @@
             </columns>
         </TableView>
 
-        <HBox spacing="10.0" alignment="CENTER_RIGHT">
+        <!-- BUTON BARI: tablo dışı tıklama filtresinde hariç tutulması için fx:id eklendi -->
+        <HBox fx:id="actionsBar" spacing="10.0" alignment="CENTER_RIGHT">
             <children>
                 <Button fx:id="viewBtn"    text="Görüntüle" onAction="#handleView"/>
                 <Button fx:id="approveBtn" text="Onayla"    onAction="#handleApprove"/>

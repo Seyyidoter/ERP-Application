@@ -1,6 +1,7 @@
 package com.example.erpdemo;
 
 import javafx.fxml.FXML;
+import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
 
@@ -10,7 +11,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Talep detay penceresi (onaylama/reddetme destekli). */
+/** Talep detay penceresi (onaylama/reddetme destekli) */
 public class ViewRequestController {
 
     @FXML private Label requestIdLabel;
@@ -25,6 +26,8 @@ public class ViewRequestController {
 
     @FXML private Button approveBtn;
     @FXML private Button rejectBtn;
+    @FXML private Button closeBtn;
+    @FXML private javafx.scene.layout.HBox actionsBar;
 
     private int requestId;
     private Runnable onChange; // üst ekranı yenilemek için
@@ -39,6 +42,48 @@ public class ViewRequestController {
         discountedPriceColumn.setCellFactory(MoneyCells.twoDecimalsTR());
 
         requestItemsTable.setPlaceholder(new Label("Kalem bulunmuyor."));
+
+        // Tablo içinde boş alana tıklanınca seçimi/odağı temizle
+        requestItemsTable.setRowFactory(tv -> {
+            TableRow<ItemRow> row = new TableRow<>();
+            row.setOnMouseClicked(e -> {
+                if (row.isEmpty()) {
+                    requestItemsTable.getSelectionModel().clearSelection();
+                    if (requestItemsTable.getParent() != null) requestItemsTable.getParent().requestFocus();
+                }
+            });
+            return row;
+        });
+
+        // Pencere açıldığında tablo fokus almasın, dış tıklamalarda seçimi temizle
+        javafx.application.Platform.runLater(() -> {
+            // mavi çerçeve görünmesin
+            if (requestItemsTable.getParent() != null) {
+                requestItemsTable.getParent().requestFocus();
+            }
+            var scene = requestItemsTable.getScene();
+            if (scene == null) return;
+
+            scene.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, e -> {
+                Node n = e.getPickResult().getIntersectedNode();
+                boolean insideTable   = isChildOf(n, requestItemsTable);
+                boolean insideActions = isChildOf(n, actionsBar);
+                if (!insideTable && !insideActions) {
+                    requestItemsTable.getSelectionModel().clearSelection();
+                    if (requestItemsTable.getParent() != null) requestItemsTable.getParent().requestFocus();
+                }
+            });
+        });
+    }
+
+    /** n düğümü root’un altındaysa true */
+    private static boolean isChildOf(Node n, Node root) {
+        if (n == null || root == null) return false;
+        while (n != null) {
+            if (n == root) return true;
+            n = n.getParent();
+        }
+        return false;
     }
 
     public void setRequestId(int requestId) {
@@ -46,7 +91,7 @@ public class ViewRequestController {
         loadData();
     }
 
-    /** Üst taraftan (ApprovalController) yenileme için callback atanır. */
+    /** Üst taraftan (RequestController/ApprovalController) yenileme için callback atanır. */
     public void setOnChange(Runnable r) { this.onChange = r; }
 
     private void loadData() {
@@ -65,10 +110,8 @@ public class ViewRequestController {
 
             // Onay/Reddet butonlarını yalnızca 'Onay Bekliyor' ise göster
             boolean canDecide = "Onay Bekliyor".equalsIgnoreCase(h.status());
-            approveBtn.setVisible(canDecide);
-            approveBtn.setManaged(canDecide);
-            rejectBtn.setVisible(canDecide);
-            rejectBtn.setManaged(canDecide);
+            approveBtn.setVisible(canDecide);  approveBtn.setManaged(canDecide);
+            rejectBtn.setVisible(canDecide);   rejectBtn.setManaged(canDecide);
 
         } catch (SQLException ex) {
             showError("Hata", "Talep detayı yüklenemedi:\n" + ex.getMessage());
@@ -108,18 +151,10 @@ public class ViewRequestController {
         return list;
     }
 
-    @FXML
-    private void handleApprove() {
-        approveReject(true);
-    }
-
-    @FXML
-    private void handleReject() {
-        approveReject(false);
-    }
+    @FXML private void handleApprove() { approveReject(true); }
+    @FXML private void handleReject()  { approveReject(false); }
 
     private void approveReject(boolean approve) {
-        // butonları kilitleyelim
         approveBtn.setDisable(true);
         rejectBtn.setDisable(true);
 
@@ -130,9 +165,7 @@ public class ViewRequestController {
                 } else {
                     RequestDAO.rejectRequest(requestId, HelloApplication.getLoggedInUserId());
                 }
-            } catch (SQLException ex) {
-                throw new RuntimeException(ex);
-            }
+            } catch (SQLException ex) { throw new RuntimeException(ex); }
         }, () -> {
             AppDialogs.info(approve ? "Talep onaylandı." : "Talep reddedildi.");
             if (onChange != null) onChange.run(); // üst listeyi yenile
@@ -156,8 +189,8 @@ public class ViewRequestController {
 
     /** Tablo satırı modeli */
     public static class ItemRow {
-        private final javafx.beans.property.SimpleStringProperty  productName     = new javafx.beans.property.SimpleStringProperty();
-        private final javafx.beans.property.SimpleIntegerProperty quantity        = new javafx.beans.property.SimpleIntegerProperty();
+        private final javafx.beans.property.SimpleStringProperty  productName = new javafx.beans.property.SimpleStringProperty();
+        private final javafx.beans.property.SimpleIntegerProperty quantity    = new javafx.beans.property.SimpleIntegerProperty();
         private final javafx.beans.property.ObjectProperty<BigDecimal> discountedPrice =
                 new javafx.beans.property.SimpleObjectProperty<>(BigDecimal.ZERO);
 
@@ -171,8 +204,8 @@ public class ViewRequestController {
         public int getQuantity() { return quantity.get(); }
         public BigDecimal getDiscountedPrice() { return discountedPrice.get(); }
 
-        public javafx.beans.property.SimpleStringProperty productNameProperty() { return productName; }
-        public javafx.beans.property.SimpleIntegerProperty quantityProperty() { return quantity; }
+        public javafx.beans.property.StringProperty productNameProperty() { return productName; }
+        public javafx.beans.property.IntegerProperty quantityProperty() { return quantity; }
         public javafx.beans.property.ObjectProperty<BigDecimal> discountedPriceProperty() { return discountedPrice; }
     }
 

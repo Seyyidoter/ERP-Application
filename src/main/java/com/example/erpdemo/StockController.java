@@ -4,12 +4,12 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
+import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
-import javafx.stage.Modality;
-import javafx.stage.Stage;
+import javafx.scene.layout.HBox;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -33,6 +33,9 @@ public class StockController {
     @FXML private Button deleteButton;
     @FXML private Button productHistoryButton;
 
+    // Butonların olduğu HBox: dış tıklama filtresinde HARİÇ tutulur
+    @FXML private HBox actionsBar;
+
     private final ObservableList<Product> master = FXCollections.observableArrayList();
     private javafx.collections.transformation.FilteredList<Product> filtered;
 
@@ -41,11 +44,11 @@ public class StockController {
         // 1) Sütun–model bağları
         idColumn.setCellValueFactory(new PropertyValueFactory<>("id"));
         nameColumn.setCellValueFactory(new PropertyValueFactory<>("urunAdi"));
-        priceColumn.setCellValueFactory(new PropertyValueFactory<>("fiyat"));   // BigDecimal
+        priceColumn.setCellValueFactory(new PropertyValueFactory<>("fiyat"));
         stockColumn.setCellValueFactory(new PropertyValueFactory<>("stok"));
         unitColumn.setCellValueFactory(new PropertyValueFactory<>("birim"));
 
-        // 2) Hizalama + TR para biçimlendirme
+        // 2) Hücre hizalama/biçim
         stockColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
         priceColumn.setCellFactory(col -> new TableCell<>() {
             final NumberFormat nf = NumberFormat.getNumberInstance(new Locale("tr", "TR"));
@@ -57,25 +60,24 @@ public class StockController {
             }
         });
 
-        // 3) Boş tablo mesajı
         productTable.setPlaceholder(new Label("Kayıtlı ürün yok"));
 
-        // 4) Filtreleme + sıralama hattı
+        // 3) Filtreleme + sıralama
         filtered = new javafx.collections.transformation.FilteredList<>(master, p -> true);
         var sorted = new javafx.collections.transformation.SortedList<>(filtered);
         sorted.comparatorProperty().bind(productTable.comparatorProperty());
         productTable.setItems(sorted);
 
-        // 5) Arama kutusu
+        // 4) Arama
         searchField.textProperty().addListener((obs, old, q) -> applyFilter(q));
 
-        // 6) Seçim yokken butonları pasifleştir
+        // 5) Seçim yokken butonları kapat
         var noSel = productTable.getSelectionModel().selectedItemProperty().isNull();
         editButton.disableProperty().bind(noSel);
         deleteButton.disableProperty().bind(noSel);
         productHistoryButton.disableProperty().bind(noSel);
 
-        // 7) TABLO İÇİNDE boş alana tıklanınca seçimi temizle (mavi çerçeveyi de kaldır)
+        // 6) Tablo içinde boş alana tıklanınca seçimi/odağı temizle
         productTable.setRowFactory(tv -> {
             TableRow<Product> row = new TableRow<>();
             row.setOnMouseClicked(e -> {
@@ -87,27 +89,36 @@ public class StockController {
             return row;
         });
 
-        // 8) TABLO DIŞINDA herhangi bir yere tıklanınca seçimi/odakı temizle
+        // 7) Tablo DIŞINA tıklanınca seçimi/odağı temizle — actionsBar HARİÇ
         javafx.application.Platform.runLater(() -> {
-            var scene = productTable.getScene();
-            if (scene == null) return; // güvenlik
+            // mavi çerçeve ile açılmasın
+            if (productTable.getParent() != null) productTable.getParent().requestFocus();
+
+            Scene scene = productTable.getScene();
+            if (scene == null) return;
 
             scene.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, e -> {
-                javafx.scene.Node n = e.getPickResult().getIntersectedNode();
-                boolean insideTable = false;
-                while (n != null) {
-                    if (n == productTable) { insideTable = true; break; }
-                    n = n.getParent();
-                }
-                if (!insideTable) {
+                Node n = e.getPickResult().getIntersectedNode();
+                boolean insideTable   = isChildOf(n, productTable);
+                boolean insideActions = isChildOf(n, actionsBar);
+                if (!insideTable && !insideActions) {
                     productTable.getSelectionModel().clearSelection();
                     if (productTable.getParent() != null) productTable.getParent().requestFocus();
                 }
             });
         });
 
-        // 9) Veriyi yükle (ASYNC)
+        // 8) Veriyi yükle (ASYNC)
         loadProducts();
+    }
+
+    private static boolean isChildOf(Node n, Node root) {
+        if (n == null || root == null) return false;
+        while (n != null) {
+            if (n == root) return true;
+            n = n.getParent();
+        }
+        return false;
     }
 
     private void applyFilter(String query) {
@@ -118,7 +129,6 @@ public class StockController {
             if (contains(p.getUrunAdi(), q)) return true;
             if (contains(p.getBirim(), q)) return true;
 
-            // fiyat & stok serbest metin eşleşmesi
             BigDecimal fiyat = p.getFiyat() == null ? BigDecimal.ZERO : p.getFiyat();
             if (fiyat.toPlainString().toLowerCase(Locale.ROOT).contains(q)) return true;
             String f2 = String.format(Locale.ROOT, "%.2f", fiyat);
@@ -155,22 +165,23 @@ public class StockController {
     private void setBusy(boolean busy) {
         if (productTable != null) productTable.setDisable(busy);
         if (searchField != null)  searchField.setDisable(busy);
+        if (actionsBar != null)   actionsBar.setDisable(busy);
     }
 
     @FXML private void handleClearSearch() { searchField.clear(); }
 
-    /* ----------------- mevcut CRUD/Geçmiş aksiyonları ----------------- */
+    /* ----------------- CRUD / Geçmiş ----------------- */
 
     @FXML
     private void handleAddButton() {
         try {
             FXMLLoader loader = new FXMLLoader(getClass().getResource("new-product.fxml"));
-            Parent parent = loader.load();
+            Parent root = loader.load();
 
-            Stage stage = new Stage();
-            stage.initModality(Modality.APPLICATION_MODAL);
+            var stage = new javafx.stage.Stage();
+            stage.initModality(javafx.stage.Modality.APPLICATION_MODAL);
             stage.setTitle("Yeni Ürün Ekle");
-            stage.setScene(new Scene(parent));
+            stage.setScene(new Scene(root));
             IconUtil.setAppIcon(stage);
             stage.showAndWait();
 
@@ -187,15 +198,15 @@ public class StockController {
 
         try {
             FXMLLoader loader = new FXMLLoader(getClass().getResource("new-product.fxml"));
-            Parent parent = loader.load();
+            Parent root = loader.load();
 
             NewProductController controller = loader.getController();
-            controller.setProduct(sel); // aynı diyalog: düzenleme
+            controller.setProduct(sel); // aynı dialog: düzenleme
 
-            Stage dialogStage = new Stage();
+            var dialogStage = new javafx.stage.Stage();
             dialogStage.setTitle("Ürün Düzenle");
-            dialogStage.initModality(Modality.APPLICATION_MODAL);
-            dialogStage.setScene(new Scene(parent));
+            dialogStage.initModality(javafx.stage.Modality.APPLICATION_MODAL);
+            dialogStage.setScene(new Scene(root));
             IconUtil.setAppIcon(dialogStage);
             dialogStage.showAndWait();
 
@@ -243,9 +254,9 @@ public class StockController {
             ProductHistoryController c = loader.getController();
             c.setProduct(sel);
 
-            Stage dlg = new Stage();
+            var dlg = new javafx.stage.Stage();
             dlg.setTitle("Ürün Geçmişi – " + sel.getUrunAdi());
-            dlg.initModality(Modality.WINDOW_MODAL);
+            dlg.initModality(javafx.stage.Modality.WINDOW_MODAL);
             dlg.initOwner(productTable.getScene().getWindow());
             dlg.setScene(new Scene(view));
             IconUtil.setAppIcon(dlg);

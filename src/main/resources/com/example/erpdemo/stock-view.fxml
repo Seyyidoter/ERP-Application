@@ -26,8 +26,8 @@
         </children>
     </HBox>
 
-    <!-- Tablo -->
-    <TableView fx:id="productTable" VBox.vgrow="ALWAYS">
+    <!-- Tablo: ilk açılışta fokus almasın -->
+    <TableView fx:id="productTable" VBox.vgrow="ALWAYS" focusTraversable="false">
         <columns>
             <TableColumn fx:id="idColumn"    prefWidth="60.0"  text="ID"/>
             <TableColumn fx:id="nameColumn"  prefWidth="260.0" text="Ürün Adı"/>
@@ -37,8 +37,8 @@
         </columns>
     </TableView>
 
-    <!-- Aksiyonlar -->
-    <HBox spacing="10.0" alignment="CENTER_RIGHT">
+    <!-- Aksiyonlar: HARİÇ tutulması için fx:id eklendi -->
+    <HBox fx:id="actionsBar" spacing="10.0" alignment="CENTER_RIGHT">
         <children>
             <Button fx:id="addButton"            text="Yeni Ürün Ekle" onAction="#handleAddButton"/>
             <Button fx:id="editButton"           text="Ürün Düzenle"  onAction="#handleEditButton"/>

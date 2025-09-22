@@ -45,7 +45,8 @@
             <padding>
                 <Insets top="0" right="0" bottom="8" left="0"/>
             </padding>
-            <TableView fx:id="requestItemsTable" VBox.vgrow="ALWAYS">
+            <!-- İlk açılışta fokus almasın (mavi çerçeve görünmesin) -->
+            <TableView fx:id="requestItemsTable" VBox.vgrow="ALWAYS" focusTraversable="false">
                 <columns>
                     <TableColumn fx:id="productNameColumn"       text="Ürün"            prefWidth="280"/>
                     <TableColumn fx:id="quantityColumn"          text="Miktar"          prefWidth="120"/>
@@ -57,14 +58,14 @@
 
     <!-- Aksiyon butonları -->
     <bottom>
-        <HBox alignment="CENTER_RIGHT" spacing="8">
+        <!-- actionsBar: dış tıklama filtresinde tablo dışı olarak sayılacak -->
+        <HBox fx:id="actionsBar" alignment="CENTER_RIGHT" spacing="8">
             <padding>
                 <Insets topRightBottomLeft="8"/>
             </padding>
-            <!-- Bu ikisi controller'da enable/visible durumuna göre yönetilecek -->
             <Button fx:id="approveBtn" text="Onayla" onAction="#handleApprove"/>
             <Button fx:id="rejectBtn"  text="Reddet" onAction="#handleReject"/>
-            <Button text="Kapat" onAction="#handleClose"/>
+            <Button fx:id="closeBtn"   text="Kapat"  onAction="#handleClose"/>
         </HBox>
     </bottom>
 </BorderPane>

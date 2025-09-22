@@ -6,10 +6,12 @@ import javafx.collections.transformation.FilteredList;
 import javafx.collections.transformation.SortedList;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
+import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.layout.HBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 
@@ -39,6 +41,9 @@ public class CustomerController {
     @FXML private Button takePaymentButton; // Ödeme Al
     @FXML private Button historyButton;     // Geçmiş
 
+    // 🔧 Alt buton çubuğu (FXML'de fx:id="actionsBar")
+    @FXML private HBox actionsBar;
+
     private final ObservableList<Customer> master = FXCollections.observableArrayList();
     private FilteredList<Customer> filtered;
 
@@ -56,8 +61,7 @@ public class CustomerController {
         // hizalama ve para biçimlendirme
         iskontoColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
         balanceColumn.setCellFactory(col -> new TableCell<>() {
-            final NumberFormat nf =
-                    NumberFormat.getNumberInstance(new Locale("tr","TR"));
+            final NumberFormat nf = NumberFormat.getNumberInstance(new Locale("tr","TR"));
             { nf.setMinimumFractionDigits(2); nf.setMaximumFractionDigits(2); }
             @Override protected void updateItem(BigDecimal v, boolean empty) {
                 super.updateItem(v, empty);
@@ -97,18 +101,15 @@ public class CustomerController {
             return row;
         });
 
-        // TABLO DIŞINA tıklanınca da seçimi/odağı temizle (mavi çerçeve gitsin)
+        // SAHNE GENELİ: tablo DA değilse VE actionsBar DA değilse → seçimi temizle
         javafx.application.Platform.runLater(() -> {
-            var scene = customerTable.getScene();
+            Scene scene = customerTable.getScene();
             if (scene == null) return;
             scene.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, e -> {
-                javafx.scene.Node n = e.getPickResult().getIntersectedNode();
-                boolean insideTable = false;
-                while (n != null) {
-                    if (n == customerTable) { insideTable = true; break; }
-                    n = n.getParent();
-                }
-                if (!insideTable) {
+                Node n = e.getPickResult().getIntersectedNode();
+                boolean insideTable   = isChildOf(n, customerTable);
+                boolean insideActions = isChildOf(n, actionsBar);
+                if (!insideTable && !insideActions) {
                     customerTable.getSelectionModel().clearSelection();
                     if (customerTable.getParent() != null) customerTable.getParent().requestFocus();
                 }
@@ -117,6 +118,16 @@ public class CustomerController {
 
         // veri yükle (ASYNC)
         loadCustomers();
+    }
+
+    /** n düğümü root’un altındaysa true. */
+    private static boolean isChildOf(Node n, Node root) {
+        if (n == null || root == null) return false;
+        while (n != null) {
+            if (n == root) return true;
+            n = n.getParent();
+        }
+        return false;
     }
 
     private void applyFilter(String query) {
@@ -146,22 +157,19 @@ public class CustomerController {
         setBusy(true);
         Async.run(
                 () -> {
-                    try {
-                        return CustomerDAO.getAllCustomers();
-                    } catch (SQLException e) {
-                        throw new RuntimeException(e);
-                    }
+                    try { return CustomerDAO.getAllCustomers(); }
+                    catch (SQLException e) { throw new RuntimeException(e); }
                 },
                 list -> master.setAll(list),
                 ex -> AppDialogs.dbError("Müşteri verileri yüklenmesi", toSql(ex)),
-                () -> setBusy(false)
+                ()  -> setBusy(false)
         );
     }
 
     private void setBusy(boolean busy) {
         if (customerTable != null) customerTable.setDisable(busy);
         if (searchField != null)   searchField.setDisable(busy);
-        // seçim butonları zaten selection’a bağlı; ayrıca kilitlemeye gerek yok
+        if (actionsBar != null)    actionsBar.setDisable(busy);
     }
 
     @FXML private void handleClearSearch() { searchField.clear(); }

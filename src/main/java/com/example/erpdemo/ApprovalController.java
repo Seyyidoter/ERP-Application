@@ -4,10 +4,12 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
+import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.layout.HBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 
@@ -29,6 +31,9 @@ public class ApprovalController {
     @FXML private Button approveBtn;
     @FXML private Button rejectBtn;
 
+    // Butonları saran bar: tablo dışına tıklama filtresinde hariç tutacağız
+    @FXML private HBox actionsBar;
+
     private final ObservableList<RequestRow> rows = FXCollections.observableArrayList();
 
     @FXML
@@ -42,6 +47,7 @@ public class ApprovalController {
         try { DateUtil.setDateColumnDMY(dateColumn); } catch (Throwable ignore) {}
 
         pendingRequestsTable.setItems(rows);
+        pendingRequestsTable.setPlaceholder(new Label("Bekleyen talep yok"));
 
         // Seçime bağlı butonlar
         var noSel = pendingRequestsTable.getSelectionModel().selectedItemProperty().isNull();
@@ -66,18 +72,20 @@ public class ApprovalController {
             return row;
         });
 
-        // TABLO DIŞINA tıklanınca da seçimi/odağı temizle
+        // TABLO DIŞINA tıklanınca da seçimi/odağı temizle — AMA actionsBar'i hariç tut
         javafx.application.Platform.runLater(() -> {
-            var scene = pendingRequestsTable.getScene();
+            // Açılışta mavi çerçeve görünmesin
+            if (pendingRequestsTable.getParent() != null)
+                pendingRequestsTable.getParent().requestFocus();
+
+            Scene scene = pendingRequestsTable.getScene();
             if (scene == null) return;
+
             scene.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, e -> {
-                javafx.scene.Node n = e.getPickResult().getIntersectedNode();
-                boolean insideTable = false;
-                while (n != null) {
-                    if (n == pendingRequestsTable) { insideTable = true; break; }
-                    n = n.getParent();
-                }
-                if (!insideTable) {
+                Node n = e.getPickResult().getIntersectedNode();
+                boolean insideTable   = isChildOf(n, pendingRequestsTable);
+                boolean insideActions = isChildOf(n, actionsBar);
+                if (!insideTable && !insideActions) {
                     pendingRequestsTable.getSelectionModel().clearSelection();
                     if (pendingRequestsTable.getParent() != null)
                         pendingRequestsTable.getParent().requestFocus();
@@ -88,6 +96,14 @@ public class ApprovalController {
         refresh();
     }
 
+    private static boolean isChildOf(Node n, Node root) {
+        if (n == null || root == null) return false;
+        while (n != null) {
+            if (n == root) return true;
+            n = n.getParent();
+        }
+        return false;
+    }
 
     @FXML
     private void handleView() {
@@ -99,7 +115,7 @@ public class ApprovalController {
             Parent view = fxml.load();
 
             ViewRequestController c = fxml.getController();
-            c.setOnChange(this::refresh);          // <- onay/red sonrası listeyi yenile
+            c.setOnChange(this::refresh);          // onay/red sonrası listeyi yenile
             c.setRequestId(sel.getId());           // veriyi yükle
 
             Stage dlg = new Stage();
@@ -113,7 +129,6 @@ public class ApprovalController {
             AppDialogs.unexpectedError("Talep detayı penceresi açma", ex);
         }
     }
-
 
     @FXML
     private void handleApprove() {
@@ -163,11 +178,13 @@ public class ApprovalController {
         setBusy(true);
         Async.run(() -> {
                     try {
-                        var list = RequestDAO.getPendingSummaries(); // müşteri adı dahil
+                        var list = RequestDAO.getPendingSummaries();
                         ObservableList<RequestRow> tmp = FXCollections.observableArrayList();
                         for (RequestSummary s : list) {
-                            tmp.add(new RequestRow(s.getId(), s.getCustomerId(), s.getCustomerName(),
-                                    s.getRequestDate(), s.getStatus()));
+                            tmp.add(new RequestRow(
+                                    s.getId(), s.getCustomerId(), s.getCustomerName(),
+                                    s.getRequestDate(), s.getStatus()
+                            ));
                         }
                         return tmp;
                     } catch (SQLException ex) {
@@ -184,7 +201,6 @@ public class ApprovalController {
 
     private void setBusy(boolean busy) {
         pendingRequestsTable.setDisable(busy);
-        // Butonlar selection’a bağlı olduğu için ekstra bir şey gerekmiyor.
     }
 
     private static SQLException toSql(Throwable t) {

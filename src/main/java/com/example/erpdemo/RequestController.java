@@ -4,10 +4,12 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
+import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.layout.HBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 
@@ -15,6 +17,7 @@ import java.io.IOException;
 import java.sql.SQLException;
 import java.time.LocalDate;
 
+/** Talep listesi ekranı (Görüntüle/Sil butonları, seçim koruma ve asenkron yükleme) */
 public class RequestController {
 
     @FXML private TableView<Row> tblRequests;
@@ -27,6 +30,9 @@ public class RequestController {
     // Seçime bağlı butonlar
     @FXML private Button viewBtn;
     @FXML private Button deleteBtn;
+
+    // Alt buton çubuğu (FXML’de fx:id="actionsBar")
+    @FXML private HBox actionsBar;
 
     private final ObservableList<Row> rows = FXCollections.observableArrayList();
 
@@ -64,18 +70,15 @@ public class RequestController {
             return row;
         });
 
-        // 5) Tablo DIŞINA tıklanınca da seçimi/odağı temizle (mavi çerçeve gitsin)
+        // 5) SAHNE GENELİ: Tablonun DA, actionsBar'ın DA dışında tıklanırsa seçimi temizle
         javafx.application.Platform.runLater(() -> {
-            var scene = tblRequests.getScene();
+            Scene scene = tblRequests.getScene();
             if (scene == null) return;
             scene.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, e -> {
-                javafx.scene.Node n = e.getPickResult().getIntersectedNode();
-                boolean insideTable = false;
-                while (n != null) {
-                    if (n == tblRequests) { insideTable = true; break; }
-                    n = n.getParent();
-                }
-                if (!insideTable) {
+                Node n = e.getPickResult().getIntersectedNode();
+                boolean insideTable   = isChildOf(n, tblRequests);
+                boolean insideActions = isChildOf(n, actionsBar);
+                if (!insideTable && !insideActions) {
                     tblRequests.getSelectionModel().clearSelection();
                     if (tblRequests.getParent() != null) tblRequests.getParent().requestFocus();
                 }
@@ -84,6 +87,16 @@ public class RequestController {
 
         // 6) İlk yükleme
         refresh();
+    }
+
+    /** n düğümü root’un altındaysa true. */
+    private static boolean isChildOf(Node n, Node root) {
+        if (n == null || root == null) return false;
+        while (n != null) {
+            if (n == root) return true;
+            n = n.getParent();
+        }
+        return false;
     }
 
     @FXML
@@ -142,19 +155,19 @@ public class RequestController {
 
         if (q.getResult() != ButtonType.YES) return;
 
-        tblRequests.setDisable(true);
+        setControlsDisabled(true);
         Async.runVoid(() -> {
                     try { RequestDAO.deleteRequestById(sel.getId()); }
                     catch (SQLException ex) { throw new RuntimeException(ex); }
                 },
                 () -> { AppDialogs.info("Talep silindi."); refresh(); },
                 ex -> AppDialogs.dbError("Talep silme", toSql(ex)),
-                () -> tblRequests.setDisable(false));
+                () -> setControlsDisabled(false));
     }
 
     /** JOIN’li özet sorgu kullanılıyor; arka planda yükle. */
     private void refresh() {
-        tblRequests.setDisable(true);
+        setControlsDisabled(true);
         Async.run(() -> {
                     try {
                         var list = RequestDAO.findAllSummaries();
@@ -169,8 +182,13 @@ public class RequestController {
                     }
                 },
                 tmp -> rows.setAll(tmp),
-                ex -> AppDialogs.dbError("Taleplerin yüklenmesi", toSql(ex)),
-                () -> tblRequests.setDisable(false));
+                ex  -> AppDialogs.dbError("Taleplerin yüklenmesi", toSql(ex)),
+                ()  -> setControlsDisabled(false));
+    }
+
+    private void setControlsDisabled(boolean disabled) {
+        if (tblRequests != null) tblRequests.setDisable(disabled);
+        if (actionsBar != null)  actionsBar.setDisable(disabled);
     }
 
     /** Liste satırı modeli. */
