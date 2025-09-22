@@ -6,6 +6,7 @@ import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 public class Product {
 
@@ -36,7 +37,9 @@ public class Product {
     public SimpleStringProperty birimProperty() { return birim; }
 
     public void setUrunAdi(String urunAdi) { this.urunAdi.set(norm(urunAdi)); }
-    public void setFiyat(BigDecimal fiyat) { this.fiyat.set(fiyat == null ? BigDecimal.ZERO : fiyat); }
+    public void setFiyat(BigDecimal fiyat) {
+        this.fiyat.set((fiyat == null ? BigDecimal.ZERO : fiyat.setScale(2, RoundingMode.HALF_UP)));
+    }
     public void setStok(int stok) { this.stok.set(stok); }
     public void setBirim(String birim) { this.birim.set(norm(birim)); }
 

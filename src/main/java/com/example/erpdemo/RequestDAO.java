@@ -68,6 +68,7 @@ public class RequestDAO {
     /** Talep kalemi ekler (fiyat = iskontolu, BigDecimal). */
     public static void addRequestItem(int requestId, int productId, int qty, BigDecimal fiyat) throws SQLException {
         if (fiyat == null) fiyat = BigDecimal.ZERO;
+        fiyat = fiyat.setScale(2, RoundingMode.HALF_UP);
         String sql = """
             INSERT INTO dbo.TalepKalemleri (TalepId, UrunId, Miktar, TeklifFiyati)
             VALUES (?, ?, ?, ?)
