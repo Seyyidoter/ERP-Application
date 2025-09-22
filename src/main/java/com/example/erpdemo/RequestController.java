@@ -129,6 +129,8 @@ public class RequestController {
 
             ViewRequestController c = fxml.getController();
             c.setRequestId(sel.getId());
+            // --- DÜZELTME: Detayda onay/reddet sonrası listeyi yenile ---
+            c.setOnChange(this::refresh);
 
             Stage dlg = new Stage();
             dlg.setTitle("Talep Detayı – #" + sel.getId());

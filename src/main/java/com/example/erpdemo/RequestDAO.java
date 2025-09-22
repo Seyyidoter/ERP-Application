@@ -175,9 +175,15 @@ public class RequestDAO {
         }
     }
 
-    /** Toplamı BigDecimal olarak döndürür (2 ondalık, HALF_UP). */
+    /** Toplamı BigDecimal olarak döndürür (2 ondalık, HALF_UP) — CAST ile güvenli. */
     public static BigDecimal getRequestTotal(int requestId) throws SQLException {
-        String sql = "SELECT COALESCE(SUM(Miktar * TeklifFiyati), 0) FROM dbo.TalepKalemleri WHERE TalepId = ?";
+        final String sql = """
+            SELECT COALESCE(
+                     SUM(CAST(Miktar AS decimal(18,4)) * CAST(TeklifFiyati AS decimal(18,4)))
+                   , 0)
+            FROM dbo.TalepKalemleri
+            WHERE TalepId = ?
+        """;
         try (Connection c = DatabaseManager.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setInt(1, requestId);
