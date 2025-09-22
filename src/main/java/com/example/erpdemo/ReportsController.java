@@ -7,7 +7,7 @@ import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.font.PDFont;
 import org.apache.pdfbox.pdmodel.font.PDType0Font;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
-import org.apache.pdfbox.pdmodel.font.Standard14Fonts;   // <-- YENİ
+import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -25,7 +25,6 @@ import java.util.*;
 /** Onaylanmış talepleri PDF'e, sayfa taşırmadan çok sayfalı olarak yazar. */
 public class ReportsController {
 
-    // --- Kolon genişlikleri (monospace ile hizalanır) ---
     private static final int COL_W_PRODUCT  = 32;
     private static final int COL_W_QTY      = 8;
     private static final int COL_W_LIST     = 12;
@@ -38,10 +37,10 @@ public class ReportsController {
     private void generateApprovedRequestsReport() {
         Async.runVoid(() -> {
             try (PDDocument document = new PDDocument()) {
-                PDFont font = loadFont(document); // güvenli fallback'li
+                PDFont font = loadFont(document);
                 try (PdfWriter w = new PdfWriter(document, font)) {
                     w.startPage();
-                    w.printlnWrapBlock(List.of("Onaylanmış Talepler Raporu", "")); // blok halinde
+                    w.printlnWrapBlock(List.of("Onaylanmış Talepler Raporu", ""));
 
                     var approved = RequestDAO.getApprovedRequests();
                     if (approved.isEmpty()) {
@@ -49,16 +48,19 @@ public class ReportsController {
                     } else {
                         DateTimeFormatter dateFmt = DateTimeFormatter.ofPattern("dd.MM.yyyy", TR);
 
-                        // müşteri adlarını toplu çek (tek sefer)
                         Set<Integer> customerIds = new LinkedHashSet<>();
-                        for (Request r : approved) customerIds.add(r.getCustomerId());
-                        Map<Integer, String> nameMap = CustomerDAO.getCustomerNamesByIds(customerIds);
+                        Set<Integer> requestIds  = new LinkedHashSet<>();
+                        for (Request r : approved) {
+                            customerIds.add(r.getCustomerId());
+                            requestIds.add(r.getId());
+                        }
+                        Map<Integer, String> nameMap  = CustomerDAO.getCustomerNamesByIds(customerIds);
+                        Map<Integer, List<ItemRow>> itemsMap = fetchItemsForRequests(requestIds);
 
                         for (Request r : approved) {
-                            String cname = nameMap.getOrDefault(r.getCustomerId(), "Bilinmiyor");
-                            String dateStr = (r.getRequestDate() != null) ? r.getRequestDate().format(dateFmt) : "";
+                            String cname  = nameMap.getOrDefault(r.getCustomerId(), "Bilinmiyor");
+                            String dateStr = r.getRequestDate() != null ? r.getRequestDate().format(dateFmt) : "";
 
-                            // Üst bilgi + çizgiler + tablo başlığı blok olarak değerlensin
                             List<String> headerBlock = new ArrayList<>();
                             headerBlock.add(w.hrLine());
                             headerBlock.add("Talep ID      : " + r.getId());
@@ -66,7 +68,6 @@ public class ReportsController {
                             headerBlock.add("Talep Tarihi  : " + dateStr);
                             headerBlock.add("Durum         : " + r.getStatus());
                             headerBlock.add(w.hrLine());
-                            // tablo başlığı
                             headerBlock.add(
                                     padRight("Ürün", COL_W_PRODUCT) + " " +
                                             padLeft("Miktar", COL_W_QTY) + " " +
@@ -75,16 +76,12 @@ public class ReportsController {
                                             padLeft("Ara Toplam", COL_W_SUBTOTAL));
                             headerBlock.add(w.hrLineAscii());
 
-                            // Kalemleri oku (SQLException dışarı)
-                            List<ItemRow> items = fetchItemsForRequest(r.getId());
-
-                            // Toplam satır sayısını önden tahmin et ve tek seferde yer ayır
-                            int itemLines = Math.max(items.size(), 1); // en az 1 satır "Kalem bulunamadı."
-                            int footerLines = 4; // çizgi + 3 toplam satırı
-                            int blockLines = headerBlock.size() + itemLines + footerLines + 1; // +1 boş satır
+                            List<ItemRow> items = itemsMap.getOrDefault(r.getId(), List.of());
+                            int itemLines = Math.max(items.size(), 1);
+                            int footerLines = 4;
+                            int blockLines = headerBlock.size() + itemLines + footerLines + 1;
                             w.ensureSpaceFor(blockLines);
 
-                            // Header'ı yaz
                             w.printlnRawBlock(headerBlock);
 
                             int totalQty = 0;
@@ -108,17 +105,15 @@ public class ReportsController {
                                                     padLeft(fmtMoney(it.listPrice), COL_W_LIST) + " " +
                                                     padLeft(fmtMoney(it.discountedPrice), COL_W_DISC) + " " +
                                                     padLeft(fmtMoney(subDisc), COL_W_SUBTOTAL);
-
                                     w.println(line);
                                 }
                             }
 
-                            // Footer
                             w.println(w.hrLineAscii());
                             w.println(String.format(TR, "Toplam Ürün Adedi   : %d", totalQty));
                             w.println(String.format(TR, "Toplam Liste Tutarı : %s TL", fmtMoney(totalList)));
                             w.println(String.format(TR, "Toplam İsk. Tutar   : %s TL", fmtMoney(totalDisc)));
-                            w.println(""); // blok arası boş satır
+                            w.println("");
                             w.println("");
                         }
                     }
@@ -140,44 +135,44 @@ public class ReportsController {
         }, null, null, null);
     }
 
-    /* -------------------- DB yardımcıları -------------------- */
-
-    private List<ItemRow> fetchItemsForRequest(int requestId) throws SQLException {
+    /** Tüm talep kalemlerini tek seferde çekip requestId'ye göre gruplar */
+    private Map<Integer, List<ItemRow>> fetchItemsForRequests(Collection<Integer> requestIds) throws SQLException {
+        if (requestIds.isEmpty()) return Map.of();
+        String placeholders = String.join(",", Collections.nCopies(requestIds.size(), "?"));
         String sql = """
-            SELECT s.UrunAdi, tk.Miktar, s.Fiyat AS ListeFiyati, tk.TeklifFiyati AS IskontoluFiyat
+            SELECT tk.TalepId, s.UrunAdi, tk.Miktar, s.Fiyat AS ListeFiyati, tk.TeklifFiyati AS IskontoluFiyat
             FROM dbo.TalepKalemleri tk
             JOIN dbo.Stoklar s ON s.Id = tk.UrunId
-            WHERE tk.TalepId = ?
-            ORDER BY tk.Id
-            """;
+            WHERE tk.TalepId IN (""" + placeholders + ") ORDER BY tk.TalepId, tk.Id";
 
-        List<ItemRow> list = new ArrayList<>();
+        Map<Integer, List<ItemRow>> map = new LinkedHashMap<>();
         try (Connection c = DatabaseManager.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setInt(1, requestId);
+            int i = 1;
+            for (Integer id : requestIds) ps.setInt(i++, id);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    list.add(new ItemRow(
-                            rs.getString("UrunAdi"),
-                            rs.getInt("Miktar"),
-                            rs.getBigDecimal("ListeFiyati"),
-                            rs.getBigDecimal("IskontoluFiyat")
-                    ));
+                    int rid = rs.getInt("TalepId");
+                    map.computeIfAbsent(rid, k -> new ArrayList<>()).add(
+                            new ItemRow(
+                                    rs.getString("UrunAdi"),
+                                    rs.getInt("Miktar"),
+                                    rs.getBigDecimal("ListeFiyati"),
+                                    rs.getBigDecimal("IskontoluFiyat")
+                            )
+                    );
                 }
             }
         }
-        return list;
+        return map;
     }
 
-    /* -------------------- Font yükleme -------------------- */
-    /** Önce DejaVuSansMono/DejaVuSans; yoksa Courier. */
     private PDFont loadFont(PDDocument doc) throws IOException {
         PDFont f;
         if ((f = tryLoadTtf(doc, "/com/example/erpdemo/DejaVuSansMono.ttf")) != null) return f;
         if ((f = tryLoadTtf(doc, "/DejaVuSansMono.ttf")) != null) return f;
         if ((f = tryLoadTtf(doc, "/com/example/erpdemo/DejaVuSans.ttf")) != null) return f;
         if ((f = tryLoadTtf(doc, "/DejaVuSans.ttf")) != null) return f;
-        // Son çare: Type1 Courier (PDFBox 3.x API)
         return new PDType1Font(Standard14Fonts.FontName.COURIER);
     }
     private PDFont tryLoadTtf(PDDocument doc, String cpPath) {
@@ -187,23 +182,22 @@ public class ReportsController {
             try (InputStream in = url.openStream()) {
                 return PDType0Font.load(doc, in, true);
             }
-        } catch (Exception ignore) { }
+        } catch (Exception ignore) {}
         return null;
     }
 
-    /* -------------------- İç modeller -------------------- */
     private static final class ItemRow {
         final String productName; final int quantity;
         final BigDecimal listPrice; final BigDecimal discountedPrice;
         ItemRow(String productName, int quantity, BigDecimal listPrice, BigDecimal discountedPrice) {
             this.productName = productName;
             this.quantity = quantity;
-            this.listPrice = (listPrice == null ? BigDecimal.ZERO : listPrice);
-            this.discountedPrice = (discountedPrice == null ? BigDecimal.ZERO : discountedPrice);
+            this.listPrice = listPrice == null ? BigDecimal.ZERO : listPrice;
+            this.discountedPrice = discountedPrice == null ? BigDecimal.ZERO : discountedPrice;
         }
     }
 
-    /* -------------------- PDF yardımcıları -------------------- */
+    /** PDF yazımını kolaylaştıran yardımcı sınıf */
     private static final class PdfWriter implements AutoCloseable {
         private final PDDocument doc;
         private final PDFont font;
@@ -216,8 +210,6 @@ public class ReportsController {
         private float startY = 750f;
         private float cursorY = startY;
         private final float bottomMargin = 40f;
-
-        // çizgi için tercih edilen char – font'ta yoksa '-' kullanılacak
         private String lineChar = "─";
 
         PdfWriter(PDDocument doc, PDFont font) { this.doc = doc; this.font = font; }
@@ -236,11 +228,9 @@ public class ReportsController {
             float pageWidth = page.getMediaBox().getWidth();
             usableWidth = pageWidth - marginLeft - marginRight;
 
-            // '─' glifi yoksa '-' kullan
             if (!canDisplay(lineChar)) lineChar = "-";
         }
 
-        /** Bir blok dolusu string'i (wrap uygulanmaksızın) tek seferde yaz. */
         void printlnRawBlock(List<String> lines) throws IOException {
             ensureSpaceFor(lines.size());
             for (String s : lines) {
@@ -250,7 +240,6 @@ public class ReportsController {
             }
         }
 
-        /** Basit satır yaz. */
         void println(String text) throws IOException {
             ensureSpaceFor(1);
             cs.showText(text == null ? "" : text);
@@ -258,14 +247,12 @@ public class ReportsController {
             cursorY -= leading;
         }
 
-        /** Yazmadan önce blok içeren teks'i satırlara böl ve tek seferde yaz. */
         void printlnWrapBlock(List<String> texts) throws IOException {
             List<String> lines = new ArrayList<>();
             for (String t : texts) lines.addAll(wrapToWidth(t, usableWidth));
             printlnRawBlock(lines);
         }
 
-        /** "Label: value" satırını, value’yu genişliğe göre kırarak satır listesi halinde döndürür. */
         List<String> kvLines(String label, String value) throws IOException {
             if (label == null) label = "";
             if (value == null) value = "";
@@ -288,20 +275,17 @@ public class ReportsController {
             return lines;
         }
 
-        /** Yatay çizgi metnini üretir (yazmaz). */
         String hrLine() throws IOException {
             float charW = Math.max(textWidth(lineChar), 1f);
             int count = Math.max(40, (int) (usableWidth / charW));
             return lineChar.repeat(Math.min(count, 180));
         }
-        /** Sadece ASCII çizgi isteyen yerler için. */
         String hrLineAscii() throws IOException {
             float charW = Math.max(textWidth("-"), 1f);
             int count = Math.max(40, (int) (usableWidth / charW));
             return "-".repeat(Math.min(count, 180));
         }
 
-        /** Bir seferde N satırlık yer vardır garantisi. */
         void ensureSpaceFor(int lines) throws IOException {
             if (cursorY - (lines * leading) < bottomMargin) startPage();
         }
@@ -359,7 +343,6 @@ public class ReportsController {
                 if (font instanceof PDType0Font) {
                     return ((PDType0Font) font).hasGlyph(cp);
                 }
-                // Type1 (Courier) vb. için: temel ASCII'yi destekli varsayalım
                 return cp < 0x80;
             } catch (Exception ignore) {
                 return false;
@@ -371,7 +354,6 @@ public class ReportsController {
         }
     }
 
-    // --- küçük yardımcılar ---
     private static String trim(String s, int max) { if (s == null) return ""; return s.length() <= max ? s : s.substring(0, max - 1) + "…"; }
     private static String padRight(String s, int width) { if (s == null) s = ""; return s.length() >= width ? s : s + " ".repeat(width - s.length()); }
     private static String padLeft(String s, int width) { if (s == null) s = ""; return s.length() >= width ? s : " ".repeat(width - s.length()) + s; }
