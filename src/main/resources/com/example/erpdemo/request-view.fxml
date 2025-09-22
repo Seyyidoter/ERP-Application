@@ -2,29 +2,49 @@
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
+<?import javafx.scene.text.Font?>
 
 <BorderPane xmlns="http://javafx.com/javafx/21"
             xmlns:fx="http://javafx.com/fxml/1"
             fx:controller="com.example.erpdemo.RequestController">
 
+    <!-- Kenar boşlukları: customer-view ile uyumlu -->
     <padding>
-        <Insets topRightBottomLeft="12"/>
+        <Insets topRightBottomLeft="20"/>
     </padding>
 
+    <!-- Üst: Başlık -->
+    <top>
+        <VBox spacing="8" BorderPane.alignment="CENTER_LEFT">
+            <!-- Başlığın altına margin: tabloyla araya boşluk bırakır -->
+            <BorderPane.margin>
+                <Insets bottom="10"/>
+            </BorderPane.margin>
+            <children>
+                <Label text="Talep / Teklif">
+                    <font>
+                        <Font name="System Bold" size="24.0"/>
+                    </font>
+                </Label>
+            </children>
+        </VBox>
+    </top>
+
+    <!-- Orta: Tablo -->
     <center>
         <TableView fx:id="tblRequests" BorderPane.alignment="CENTER">
             <columns>
-                <TableColumn fx:id="colId"              text="ID"            prefWidth="90.0"/>
-                <TableColumn fx:id="colCustomer"        text="Müşteri ID"    prefWidth="110.0"/>
-                <TableColumn fx:id="colCustomerName"    text="Müşteri Adı"   prefWidth="240.0"/>
-                <TableColumn fx:id="colDate"            text="Talep Tarihi"  prefWidth="160.0"/>
-                <TableColumn fx:id="colStatus"          text="Durum"         prefWidth="180.0"/>
+                <TableColumn fx:id="colId"             text="ID"           prefWidth="90.0"/>
+                <TableColumn fx:id="colCustomer"       text="Müşteri ID"   prefWidth="110.0"/>
+                <TableColumn fx:id="colCustomerName"   text="Müşteri Adı"  prefWidth="240.0"/>
+                <TableColumn fx:id="colDate"           text="Talep Tarihi" prefWidth="160.0"/>
+                <TableColumn fx:id="colStatus"         text="Durum"        prefWidth="180.0"/>
             </columns>
         </TableView>
     </center>
 
+    <!-- Alt: Buton çubuğu -->
     <bottom>
-        <!-- BUTON ÇUBUĞU: tablo dışına tıklamayı filtrlerken burayı HARİÇ tutacağız -->
         <HBox fx:id="actionsBar" alignment="CENTER_RIGHT" spacing="8">
             <padding><Insets topRightBottomLeft="8"/></padding>
             <Button text="Yeni Talep Oluştur" onAction="#createRequest"/>
