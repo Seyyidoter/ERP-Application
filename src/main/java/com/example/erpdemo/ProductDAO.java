@@ -11,8 +11,8 @@ public class ProductDAO {
 
     public static ObservableList<Product> getAllProducts() throws SQLException {
         ObservableList<Product> productList = FXCollections.observableArrayList();
-        // YALNIZ GEREKLİ KOLONLAR
-        String sql = "SELECT Id, UrunAdi, Fiyat, Stok, Birim FROM Stoklar";
+        // YALNIZ GEREKLİ KOLONLAR (Stok yok)
+        String sql = "SELECT Id, UrunAdi, Fiyat, Birim FROM Stoklar";
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql);
              ResultSet rs = stmt.executeQuery()) {
@@ -21,7 +21,6 @@ public class ProductDAO {
                         rs.getInt("Id"),
                         norm(rs.getString("UrunAdi")),
                         rs.getBigDecimal("Fiyat"),
-                        rs.getInt("Stok"),
                         norm(rs.getString("Birim"))
                 ));
             }
@@ -30,8 +29,8 @@ public class ProductDAO {
     }
 
     public static Product getProductById(int productId) throws SQLException {
-        // YALNIZ GEREKLİ KOLONLAR
-        String sql = "SELECT Id, UrunAdi, Fiyat, Stok, Birim FROM Stoklar WHERE Id = ?";
+        // YALNIZ GEREKLİ KOLONLAR (Stok yok)
+        String sql = "SELECT Id, UrunAdi, Fiyat, Birim FROM Stoklar WHERE Id = ?";
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, productId);
@@ -41,7 +40,6 @@ public class ProductDAO {
                             rs.getInt("Id"),
                             norm(rs.getString("UrunAdi")),
                             rs.getBigDecimal("Fiyat"),
-                            rs.getInt("Stok"),
                             norm(rs.getString("Birim"))
                     );
                 }
@@ -50,16 +48,15 @@ public class ProductDAO {
         return null;
     }
 
-    public static void addProduct(String urunAdi, BigDecimal fiyat, int stok, String birim) throws SQLException {
+    public static void addProduct(String urunAdi, BigDecimal fiyat, String birim) throws SQLException {
         if (fiyat == null) fiyat = BigDecimal.ZERO;
         fiyat = fiyat.setScale(2, RoundingMode.HALF_UP);
-        String sql = "INSERT INTO Stoklar (UrunAdi, Fiyat, Stok, Birim) VALUES (?, ?, ?, ?)";
+        String sql = "INSERT INTO Stoklar (UrunAdi, Fiyat, Birim) VALUES (?, ?, ?)";
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, norm(urunAdi));
             stmt.setBigDecimal(2, fiyat);
-            stmt.setInt(3, stok);
-            stmt.setString(4, norm(birim));
+            stmt.setString(3, norm(birim));
             stmt.executeUpdate();
         }
     }
@@ -70,33 +67,14 @@ public class ProductDAO {
                 ? BigDecimal.ZERO
                 : product.getFiyat().setScale(2, RoundingMode.HALF_UP);
 
-        String sql = "UPDATE Stoklar SET UrunAdi=?, Fiyat=?, Stok=?, Birim=? WHERE Id=?";
+        String sql = "UPDATE Stoklar SET UrunAdi=?, Fiyat=?, Birim=? WHERE Id=?";
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, norm(product.getUrunAdi()));
             stmt.setBigDecimal(2, fiyat);
-            stmt.setInt(3, product.getStok());
-            stmt.setString(4, norm(product.getBirim()));
-            stmt.setInt(5, product.getId());
+            stmt.setString(3, norm(product.getBirim()));
+            stmt.setInt(4, product.getId());
             stmt.executeUpdate();
-        }
-    }
-
-    /**
-     * Güvenli stok güncellemesi.
-     * quantityChange < 0 ise: negatifleşmeyi engellemek için WHERE koşulu eklenir.
-     */
-    public static void updateProductStock(int productId, int quantityChange) throws SQLException {
-        String sql = "UPDATE Stoklar SET Stok = Stok + ? WHERE Id = ? AND Stok + ? >= 0";
-        try (Connection conn = DatabaseManager.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setInt(1, quantityChange);
-            stmt.setInt(2, productId);
-            stmt.setInt(3, quantityChange);
-            int affected = stmt.executeUpdate();
-            if (affected != 1) {
-                throw new SQLException("Yetersiz stok veya ürün bulunamadı (Id=" + productId + ").");
-            }
         }
     }
 

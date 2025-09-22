@@ -8,7 +8,6 @@ import javafx.stage.Stage;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.Locale;
 import java.util.function.UnaryOperator;
 
 public class NewProductController {
@@ -16,7 +15,6 @@ public class NewProductController {
     @FXML private Label     titleLabel;
     @FXML private TextField nameField;
     @FXML private TextField priceField;
-    @FXML private TextField stockField;
     @FXML private TextField unitField;
 
     private Stage   dialogStage;
@@ -27,7 +25,6 @@ public class NewProductController {
     @FXML
     public void initialize() {
         priceField.setTextFormatter(new TextFormatter<>(numericDecimalFilter()));
-        stockField.setTextFormatter(new TextFormatter<>(numericIntFilter()));
     }
 
     public void setProduct(Product product) {
@@ -37,13 +34,11 @@ public class NewProductController {
         if (product != null) {
             nameField.setText(product.getUrunAdi());
 
-            // BUG DÜZELTİLDİ: BigDecimal'ı %.2f ile formatlamak hata veriyordu
             BigDecimal f = product.getFiyat() == null
                     ? BigDecimal.ZERO
                     : product.getFiyat().setScale(2, RoundingMode.HALF_UP);
             priceField.setText(f.toPlainString());
 
-            stockField.setText(String.valueOf(product.getStok()));
             unitField.setText(product.getBirim());
         }
     }
@@ -60,17 +55,12 @@ public class NewProductController {
             if (price == null) { AppDialogs.warn("Fiyat girin (örn. 12,50)."); return; }
             if (price.signum() < 0) { AppDialogs.warn("Fiyat negatif olamaz."); return; }
 
-            Integer stock = parseInt(stockField.getText());
-            if (stock == null) { AppDialogs.warn("Stok sayısal bir tam sayı olmalı."); return; }
-            if (stock < 0)     { AppDialogs.warn("Stok negatif olamaz.");              return; }
-
             if (product == null) {
-                ProductDAO.addProduct(name, price, stock, unit);
+                ProductDAO.addProduct(name, price, unit);
                 AppDialogs.info("Yeni ürün başarıyla eklendi.");
             } else {
                 product.setUrunAdi(name);
                 product.setFiyat(price);
-                product.setStok(stock);
                 product.setBirim(unit);
                 ProductDAO.updateProduct(product);
                 AppDialogs.info("Ürün bilgileri başarıyla güncellendi.");
@@ -79,7 +69,6 @@ public class NewProductController {
             closeWindowIfPossible();
 
         } catch (Exception e) {
-            // SQLException dahil AppDialogs.* zaten dekorasyonlu
             if (e instanceof java.sql.SQLException se) {
                 AppDialogs.dbError("Ürün kaydetme", se);
             } else {
@@ -111,17 +100,6 @@ public class NewProductController {
         } catch (NumberFormatException ex) {
             return null;
         }
-    }
-
-    private static Integer parseInt(String raw) {
-        if (raw == null) return null;
-        String t = raw.trim();
-        if (t.isEmpty()) return null;
-        try { return Integer.parseInt(t); } catch (NumberFormatException ex) { return null; }
-    }
-
-    private static UnaryOperator<TextFormatter.Change> numericIntFilter() {
-        return change -> change.getControlNewText().matches("\\d*") ? change : null;
     }
 
     private static UnaryOperator<TextFormatter.Change> numericDecimalFilter() {

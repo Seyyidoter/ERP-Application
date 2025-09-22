@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<?import javafx.geometry.Insets?>
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 <?import javafx.scene.text.Font?>
@@ -11,16 +10,14 @@
 
     <!-- Başlık -->
     <Label text="Müşteri İşlemleri">
-        <font>
-            <Font name="System Bold" size="24.0" />
-        </font>
+        <font><Font name="System Bold" size="24.0" /></font>
     </Label>
 
     <!-- Filtre satırı -->
     <HBox spacing="8">
         <children>
             <TextField fx:id="searchField"
-                       promptText="Ara (firma, kişi, telefon, e-posta, iskonto, bakiye)"/>
+                       promptText="Ara (firma, kişi, telefon, e-posta, iskonto)"/>
             <Region HBox.hgrow="ALWAYS"/>
             <Button text="Temizle" onAction="#handleClearSearch"/>
         </children>
@@ -35,20 +32,19 @@
             <TableColumn fx:id="phoneColumn"    prefWidth="140.0" text="Telefon" />
             <TableColumn fx:id="emailColumn"    prefWidth="220.0" text="E-Posta" />
             <TableColumn fx:id="iskontoColumn"  prefWidth="110.0" text="İskonto (%)" />
-            <TableColumn fx:id="balanceColumn"  prefWidth="120.0" text="Bakiye" />
+            <!-- Bakiye sütunu kaldırıldı -->
         </columns>
     </TableView>
 
     <!-- Aksiyon butonları -->
-    <!-- ⚠️ fx:id eklendi: actionsBar -->
     <HBox fx:id="actionsBar" spacing="10.0" alignment="CENTER_RIGHT">
         <children>
             <Button fx:id="addButton"    text="Yeni Müşteri Ekle" onAction="#handleAddButton" />
             <Button fx:id="editButton"   text="Müşteri Düzenle"   onAction="#handleEditButton"/>
             <Button fx:id="deleteButton" text="Müşteri Sil"       onAction="#handleDeleteButton"/>
             <Separator orientation="VERTICAL"/>
-            <Button fx:id="takePaymentButton" text="Ödeme Al" onAction="#handleTakePayment"/>
-            <Button fx:id="historyButton"     text="Geçmiş"   onAction="#handleCustomerHistory"/>
+            <!-- Ödeme Al butonu kaldırıldı -->
+            <Button fx:id="historyButton" text="Geçmiş" onAction="#handleCustomerHistory"/>
         </children>
     </HBox>
 </VBox>

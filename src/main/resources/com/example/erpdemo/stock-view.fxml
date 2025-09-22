@@ -20,7 +20,7 @@
     <HBox spacing="8">
         <children>
             <TextField fx:id="searchField"
-                       promptText="Ara (ürün adı, fiyat, stok, birim)"/>
+                       promptText="Ara (ürün adı, fiyat, birim)"/>
             <Region HBox.hgrow="ALWAYS"/>
             <Button text="Temizle" onAction="#handleClearSearch"/>
         </children>
@@ -32,7 +32,6 @@
             <TableColumn fx:id="idColumn"    prefWidth="60.0"  text="ID"/>
             <TableColumn fx:id="nameColumn"  prefWidth="260.0" text="Ürün Adı"/>
             <TableColumn fx:id="priceColumn" prefWidth="140.0" text="Fiyat"/>
-            <TableColumn fx:id="stockColumn" prefWidth="120.0" text="Stok"/>
             <TableColumn fx:id="unitColumn"  prefWidth="140.0" text="Birim"/>
         </columns>
     </TableView>

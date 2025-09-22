@@ -16,32 +16,28 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 
 import java.io.IOException;
-import java.math.BigDecimal;
 import java.sql.SQLException;
-import java.text.NumberFormat;
 import java.util.Locale;
 
-/** Müşteri listesi + CRUD + Ödeme alma + Geçmiş + Filtreleme (ASYNC yükleme) */
+/** Müşteri listesi + CRUD + Geçmiş + Filtreleme (ASYNC yükleme) — bakiye/ödeme yok */
 public class CustomerController {
 
     @FXML private TableView<Customer> customerTable;
-    @FXML private TableColumn<Customer, Integer>    idColumn;
-    @FXML private TableColumn<Customer, String>     nameColumn;
-    @FXML private TableColumn<Customer, String>     contactColumn;
-    @FXML private TableColumn<Customer, String>     phoneColumn;
-    @FXML private TableColumn<Customer, String>     emailColumn;
-    @FXML private TableColumn<Customer, Integer>    iskontoColumn;
-    @FXML private TableColumn<Customer, BigDecimal> balanceColumn;
+    @FXML private TableColumn<Customer, Integer> idColumn;
+    @FXML private TableColumn<Customer, String>  nameColumn;
+    @FXML private TableColumn<Customer, String>  contactColumn;
+    @FXML private TableColumn<Customer, String>  phoneColumn;
+    @FXML private TableColumn<Customer, String>  emailColumn;
+    @FXML private TableColumn<Customer, Integer> iskontoColumn;
 
     @FXML private TextField searchField;
 
     // Seçime bağlı butonlar
     @FXML private Button editButton;
     @FXML private Button deleteButton;
-    @FXML private Button takePaymentButton; // Ödeme Al
-    @FXML private Button historyButton;     // Geçmiş
+    @FXML private Button historyButton;
 
-    // 🔧 Alt buton çubuğu (FXML'de fx:id="actionsBar")
+    // Alt buton çubuğu (FXML'de fx:id="actionsBar")
     @FXML private HBox actionsBar;
 
     private final ObservableList<Customer> master = FXCollections.observableArrayList();
@@ -56,21 +52,8 @@ public class CustomerController {
         phoneColumn.setCellValueFactory(new PropertyValueFactory<>("phone"));
         emailColumn.setCellValueFactory(new PropertyValueFactory<>("email"));
         iskontoColumn.setCellValueFactory(new PropertyValueFactory<>("iskonto"));
-        balanceColumn.setCellValueFactory(new PropertyValueFactory<>("balance"));
-
-        // hizalama ve para biçimlendirme
         iskontoColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
-        balanceColumn.setCellFactory(col -> new TableCell<>() {
-            final NumberFormat nf = NumberFormat.getNumberInstance(new Locale("tr","TR"));
-            { nf.setMinimumFractionDigits(2); nf.setMaximumFractionDigits(2); }
-            @Override protected void updateItem(BigDecimal v, boolean empty) {
-                super.updateItem(v, empty);
-                if (empty || v == null) { setText(null); setStyle(""); }
-                else { setText(nf.format(v)); setStyle("-fx-alignment: CENTER-RIGHT;"); }
-            }
-        });
 
-        // boş tablo mesajı
         customerTable.setPlaceholder(new Label("Kayıtlı müşteri yok"));
 
         // filtreleme + sıralama hattı
@@ -86,10 +69,9 @@ public class CustomerController {
         var noSelection = customerTable.getSelectionModel().selectedItemProperty().isNull();
         editButton.disableProperty().bind(noSelection);
         deleteButton.disableProperty().bind(noSelection);
-        takePaymentButton.disableProperty().bind(noSelection);
         historyButton.disableProperty().bind(noSelection);
 
-        // TABLO İÇİNDE: boş alana tıklanınca seçimi/odağı temizle
+        // tablo içinde boş alana tıklanınca seçimi/odağı temizle
         customerTable.setRowFactory(tv -> {
             TableRow<Customer> row = new TableRow<>();
             row.setOnMouseClicked(e -> {
@@ -101,7 +83,7 @@ public class CustomerController {
             return row;
         });
 
-        // SAHNE GENELİ: tablo DA değilse VE actionsBar DA değilse → seçimi temizle
+        // tablo DIŞI tıklamada seçimi temizle — actionsBar HARİÇ
         javafx.application.Platform.runLater(() -> {
             Scene scene = customerTable.getScene();
             if (scene == null) return;
@@ -134,18 +116,13 @@ public class CustomerController {
         final String q = query == null ? "" : query.toLowerCase(Locale.ROOT).trim();
         if (q.isEmpty()) { filtered.setPredicate(x -> true); return; }
 
-        filtered.setPredicate(c -> {
-            if (contains(c.getCompanyName(), q)) return true;
-            if (contains(c.getContactPerson(), q)) return true;
-            if (contains(c.getPhone(), q)) return true;
-            if (contains(c.getEmail(), q)) return true;
-            if (String.valueOf(c.getIskonto()).contains(q)) return true;
-
-            BigDecimal bal = c.getBalance() == null ? BigDecimal.ZERO : c.getBalance();
-            if (bal.toPlainString().toLowerCase(Locale.ROOT).contains(q)) return true;
-            String bal2 = String.format(Locale.ROOT, "%.2f", bal);
-            return bal2.contains(q);
-        });
+        filtered.setPredicate(c ->
+                contains(c.getCompanyName(), q) ||
+                        contains(c.getContactPerson(), q) ||
+                        contains(c.getPhone(), q) ||
+                        contains(c.getEmail(), q) ||
+                        String.valueOf(c.getIskonto()).contains(q)
+        );
     }
 
     private boolean contains(String val, String q) {
@@ -197,7 +174,7 @@ public class CustomerController {
     @FXML
     private void handleEditButton() {
         Customer selectedCustomer = customerTable.getSelectionModel().getSelectedItem();
-        if (selectedCustomer == null) return; // buton zaten disabled
+        if (selectedCustomer == null) return;
 
         try {
             FXMLLoader loader = new FXMLLoader(getClass().getResource("edit-customer.fxml"));
@@ -224,7 +201,7 @@ public class CustomerController {
     @FXML
     private void handleDeleteButton() {
         Customer selectedCustomer = customerTable.getSelectionModel().getSelectedItem();
-        if (selectedCustomer == null) return; // buton zaten disabled
+        if (selectedCustomer == null) return;
 
         Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
                 "Müşteriyi silmek istediğinizden emin misiniz?", ButtonType.YES, ButtonType.NO);
@@ -247,54 +224,11 @@ public class CustomerController {
         }
     }
 
-    // ---------- ÖDEME AL ----------
-    @FXML
-    private void handleTakePayment() {
-        Customer sel = customerTable.getSelectionModel().getSelectedItem();
-        if (sel == null) return; // buton zaten disabled
-
-        TextInputDialog td = new TextInputDialog();
-        td.setTitle("Ödeme Al – " + sel.getCompanyName());
-        td.setHeaderText(null);
-        td.setContentText("Tutar (TL):");
-        IconUtil.decorateDialog(td);
-        var res = td.showAndWait();
-        if (res.isEmpty()) return;
-
-        BigDecimal amountBD;
-        try {
-            String txt = res.get().replace(",", ".").trim();
-            amountBD = new BigDecimal(txt);
-            if (amountBD.signum() <= 0) throw new NumberFormatException();
-        } catch (NumberFormatException ex) {
-            AppDialogs.warn("Geçerli bir tutar girin (0'dan büyük).");
-            return;
-        }
-
-        TextInputDialog note = new TextInputDialog();
-        note.setTitle("Ödeme Açıklaması");
-        note.setHeaderText(null);
-        note.setContentText("Açıklama (opsiyonel):");
-        IconUtil.decorateDialog(note);
-        String desc = note.showAndWait().orElse("");
-
-        setBusy(true);
-        Async.runVoid(
-                () -> {
-                    try { PaymentDAO.addPayment(sel.getId(), amountBD, desc); }
-                    catch (SQLException e) { throw new RuntimeException(e); }
-                },
-                () -> { AppDialogs.info("Ödeme kaydedildi."); loadCustomers(); },
-                ex  -> AppDialogs.dbError("Ödeme kaydı", toSql(ex)),
-                ()  -> setBusy(false)
-        );
-    }
-
     // ---------- GEÇMİŞ ----------
     @FXML
     private void handleCustomerHistory() {
         Customer sel = customerTable.getSelectionModel().getSelectedItem();
-        if (sel == null) return; // buton zaten disabled
+        if (sel == null) return;
         try {
             var url = getClass().getResource("customer-history-view.fxml");
             FXMLLoader loader = new FXMLLoader(url);

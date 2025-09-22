@@ -10,8 +10,7 @@ import javafx.stage.Stage;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.sql.SQLException;
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.function.UnaryOperator;
 
 public class NewRequestController {
 
@@ -22,8 +21,8 @@ public class NewRequestController {
     @FXML private TableView<RequestItem> productTable;
     @FXML private TableColumn<RequestItem, String>     productNameColumn;
     @FXML private TableColumn<RequestItem, Integer>    quantityColumn;
-    @FXML private TableColumn<RequestItem, BigDecimal> priceColumn;           // BigDecimal
-    @FXML private TableColumn<RequestItem, BigDecimal> discountedPriceColumn; // BigDecimal
+    @FXML private TableColumn<RequestItem, BigDecimal> priceColumn;           // ListPrice
+    @FXML private TableColumn<RequestItem, BigDecimal> discountedPriceColumn; // DiscountedPrice
 
     @FXML private Label totalAmountLabel;
 
@@ -42,6 +41,7 @@ public class NewRequestController {
             AppDialogs.dbError("Müşteri/ürün verileri yükleme", e);
         }
 
+        // kolon–model bağları
         productNameColumn.setCellValueFactory(new PropertyValueFactory<>("productName"));
         quantityColumn.setCellValueFactory(new PropertyValueFactory<>("quantity"));
         priceColumn.setCellValueFactory(new PropertyValueFactory<>("listPrice"));
@@ -49,28 +49,26 @@ public class NewRequestController {
 
         productTable.setItems(requestItems);
 
+        // fiyat kolonlarını TR formatında göster
         priceColumn.setCellFactory(col -> new TableCell<>() {
             @Override protected void updateItem(BigDecimal v, boolean empty) {
                 super.updateItem(v, empty);
-                setText(empty || v == null ? null : String.format(java.util.Locale.forLanguageTag("tr-TR"), "%.2f", v));
+                setText(empty || v == null ? null :
+                        String.format(java.util.Locale.forLanguageTag("tr-TR"), "%.2f", v));
             }
         });
         discountedPriceColumn.setCellFactory(col -> new TableCell<>() {
             @Override protected void updateItem(BigDecimal v, boolean empty) {
                 super.updateItem(v, empty);
-                setText(empty || v == null ? null : String.format(java.util.Locale.forLanguageTag("tr-TR"), "%.2f", v));
+                setText(empty || v == null ? null :
+                        String.format(java.util.Locale.forLanguageTag("tr-TR"), "%.2f", v));
             }
         });
 
         quantityColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
-    }
 
-    private Map<Integer, Integer> collectQuantitiesByProduct() {
-        Map<Integer, Integer> map = new HashMap<>();
-        for (RequestItem it : requestItems) {
-            map.merge(it.getProductId(), it.getQuantity(), Integer::sum);
-        }
-        return map;
+        // miktar alanına sadece tam sayı filtresi
+        quantityField.setTextFormatter(new TextFormatter<>(numericIntFilter()));
     }
 
     @FXML
@@ -88,20 +86,24 @@ public class NewRequestController {
         catch (NumberFormatException e) { AppDialogs.warn("Miktar sayısal olmalı."); return; }
         if (qty <= 0) { AppDialogs.warn("Miktar 0'dan büyük olmalı."); return; }
 
-        int alreadyAdded = collectQuantitiesByProduct().getOrDefault(prd.getId(), 0);
-        if (qty + alreadyAdded > prd.getStok()) {
-            AppDialogs.warn("Stok yetersiz! (Stok: " + prd.getStok() +
-                    ", Listede mevcut: " + alreadyAdded + ", Eklemek istediğiniz: " + qty + ")");
-            return;
-        }
+        // Stoksuz sürüm: stok yeterliliği kontrolü YOK
 
-        BigDecimal price = prd.getFiyat(); // BigDecimal
-        BigDecimal discountPct = BigDecimal.valueOf(cus.getIskonto()); // % int
-        BigDecimal discounted = price
+        BigDecimal listPrice   = prd.getFiyat() == null ? BigDecimal.ZERO
+                : prd.getFiyat().setScale(2, RoundingMode.HALF_UP);
+        BigDecimal discountPct = BigDecimal.valueOf(cus.getIskonto()); // yüzde (int)
+        BigDecimal discounted  = listPrice
                 .multiply(BigDecimal.ONE.subtract(discountPct.divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP)))
                 .setScale(2, RoundingMode.HALF_UP);
 
-        requestItems.add(new RequestItem(0, 0, prd.getId(), prd.getUrunAdi(), qty, price, discounted));
+        requestItems.add(new RequestItem(
+                0,                // itemId (DB henüz yok)
+                0,                // requestId (DB henüz yok)
+                prd.getId(),
+                prd.getUrunAdi(),
+                qty,
+                listPrice,
+                discounted
+        ));
 
         quantityField.clear();
         updateTotalAmount();
@@ -116,27 +118,7 @@ public class NewRequestController {
         }
 
         try {
-            Map<Integer, Integer> totals = collectQuantitiesByProduct();
-
-            List<String> insuff = new ArrayList<>();
-            for (Map.Entry<Integer, Integer> e : totals.entrySet()) {
-                int productId = e.getKey();
-                int requested = e.getValue();
-
-                Product latest = ProductDAO.getProductById(productId);
-                if (latest == null) { insuff.add("Ürün bulunamadı (ID: " + productId + ")"); continue; }
-                if (latest.getStok() < requested) {
-                    insuff.add(latest.getUrunAdi() + " — İstenen: " + requested +
-                            ", Güncel Stok: " + latest.getStok());
-                }
-            }
-            if (!insuff.isEmpty()) {
-                String msg = "Aşağıdaki kalemlerde stok yetersiz olduğu için talep kaydedilmedi:\n\n" +
-                        insuff.stream().collect(Collectors.joining("\n"));
-                AppDialogs.warn(msg);
-                return;
-            }
-
+            // Stoksuz sürüm: güncel stok/doğrulama YOK, doğrudan kaydet
             int requestId = RequestDAO.addRequest(cus.getId());
             if (requestId != -1) {
                 for (RequestItem it : requestItems) {
@@ -177,5 +159,9 @@ public class NewRequestController {
                 .map(RequestItem::getSubtotal)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         totalAmountLabel.setText(String.format(java.util.Locale.forLanguageTag("tr-TR"), "%.2f TL", total));
+    }
+
+    private static UnaryOperator<TextFormatter.Change> numericIntFilter() {
+        return change -> change.getControlNewText().matches("\\d*") ? change : null;
     }
 }

@@ -43,7 +43,6 @@ public class ViewRequestController {
 
         requestItemsTable.setPlaceholder(new Label("Kalem bulunmuyor."));
 
-        // Tablo içinde boş alana tıklanınca seçimi/odağı temizle
         requestItemsTable.setRowFactory(tv -> {
             TableRow<ItemRow> row = new TableRow<>();
             row.setOnMouseClicked(e -> {
@@ -55,9 +54,7 @@ public class ViewRequestController {
             return row;
         });
 
-        // Pencere açıldığında tablo fokus almasın, dış tıklamalarda seçimi temizle
         javafx.application.Platform.runLater(() -> {
-            // mavi çerçeve görünmesin
             if (requestItemsTable.getParent() != null) {
                 requestItemsTable.getParent().requestFocus();
             }
@@ -76,7 +73,6 @@ public class ViewRequestController {
         });
     }
 
-    /** n düğümü root’un altındaysa true */
     private static boolean isChildOf(Node n, Node root) {
         if (n == null || root == null) return false;
         while (n != null) {
@@ -91,7 +87,7 @@ public class ViewRequestController {
         loadData();
     }
 
-    /** Üst taraftan (RequestController/ApprovalController) yenileme için callback atanır. */
+    /** Üst taraftan (ApprovalController) yenileme için callback atanır. */
     public void setOnChange(Runnable r) { this.onChange = r; }
 
     private void loadData() {
@@ -108,7 +104,6 @@ public class ViewRequestController {
 
             requestItemsTable.getItems().setAll(items);
 
-            // Onay/Reddet butonlarını yalnızca 'Onay Bekliyor' ise göster
             boolean canDecide = "Onay Bekliyor".equalsIgnoreCase(h.status());
             approveBtn.setVisible(canDecide);  approveBtn.setManaged(canDecide);
             rejectBtn.setVisible(canDecide);   rejectBtn.setManaged(canDecide);
@@ -168,7 +163,7 @@ public class ViewRequestController {
             } catch (SQLException ex) { throw new RuntimeException(ex); }
         }, () -> {
             AppDialogs.info(approve ? "Talep onaylandı." : "Talep reddedildi.");
-            if (onChange != null) onChange.run(); // üst listeyi yenile
+            if (onChange != null) onChange.run();
             handleClose();
         }, ex -> {
             AppDialogs.dbError(approve ? "Talep onaylama" : "Talep reddetme", toSql(ex));
@@ -199,11 +194,9 @@ public class ViewRequestController {
             this.quantity.set(quantity);
             this.discountedPrice.set(discountedPrice == null ? BigDecimal.ZERO : discountedPrice);
         }
-
         public String getProductName() { return productName.get(); }
         public int getQuantity() { return quantity.get(); }
         public BigDecimal getDiscountedPrice() { return discountedPrice.get(); }
-
         public javafx.beans.property.StringProperty productNameProperty() { return productName; }
         public javafx.beans.property.IntegerProperty quantityProperty() { return quantity; }
         public javafx.beans.property.ObjectProperty<BigDecimal> discountedPriceProperty() { return discountedPrice; }

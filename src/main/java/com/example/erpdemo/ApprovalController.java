@@ -37,7 +37,6 @@ public class ApprovalController {
 
     @FXML
     public void initialize() {
-        // sütun–model bağları
         idColumn.setCellValueFactory(new PropertyValueFactory<>("id"));
         customerIdColumn.setCellValueFactory(new PropertyValueFactory<>("customerId"));
         customerNameColumn.setCellValueFactory(new PropertyValueFactory<>("customerName"));
@@ -48,22 +47,18 @@ public class ApprovalController {
         pendingRequestsTable.setItems(rows);
         pendingRequestsTable.setPlaceholder(new Label("Bekleyen talep yok"));
 
-        // Seçime bağlı butonlar
         var noSel = pendingRequestsTable.getSelectionModel().selectedItemProperty().isNull();
         viewBtn.disableProperty().bind(noSel);
         approveBtn.disableProperty().bind(noSel);
         rejectBtn.disableProperty().bind(noSel);
 
-        // TABLO İÇİNDE:
-        // - boş alana tıklanınca => seçimi/odakı temizle
-        // - çift tıklanınca      => görüntüle
         pendingRequestsTable.setRowFactory(tv -> {
             TableRow<RequestRow> row = new TableRow<>();
             row.setOnMouseClicked(e -> {
                 if (row.isEmpty()) {
                     pendingRequestsTable.getSelectionModel().clearSelection();
                     if (pendingRequestsTable.getParent() != null)
-                        pendingRequestsTable.getParent().requestFocus(); // mavi çerçeve gitsin
+                        pendingRequestsTable.getParent().requestFocus();
                 } else if (e.getClickCount() == 2) {
                     handleView();
                 }
@@ -71,9 +66,7 @@ public class ApprovalController {
             return row;
         });
 
-        // TABLO DIŞINA tıklanınca da seçimi/odağı temizle — AMA actionsBar'i hariç tut
         javafx.application.Platform.runLater(() -> {
-            // Açılışta mavi çerçeve görünmesin
             if (pendingRequestsTable.getParent() != null)
                 pendingRequestsTable.getParent().requestFocus();
 
@@ -114,8 +107,8 @@ public class ApprovalController {
             Parent view = fxml.load();
 
             ViewRequestController c = fxml.getController();
-            c.setOnChange(this::refresh);          // onay/red sonrası listeyi yenile
-            c.setRequestId(sel.getId());           // veriyi yükle
+            c.setOnChange(this::refresh);
+            c.setRequestId(sel.getId());
 
             Stage dlg = new Stage();
             dlg.setTitle("Talep Detayı – #" + sel.getId());
@@ -144,7 +137,7 @@ public class ApprovalController {
                     }
                 },
                 () -> {
-                    AppDialogs.info("Talep onaylandı. Stok ve müşteri bakiyesi güncellendi.");
+                    AppDialogs.info("Talep onaylandı.");
                     refresh();
                 },
                 ex -> AppDialogs.dbError("Talep onaylama", toSql(ex)),
@@ -172,7 +165,7 @@ public class ApprovalController {
                 () -> setBusy(false));
     }
 
-    /** Bekleyen talepleri yükle – müşteri adı zaten JOIN ile geliyor. */
+    /** Bekleyen talepleri yükle – müşteri adı JOIN ile geliyor. */
     private void refresh() {
         setBusy(true);
         Async.run(() -> {
@@ -198,9 +191,7 @@ public class ApprovalController {
                 () -> setBusy(false));
     }
 
-    private void setBusy(boolean busy) {
-        pendingRequestsTable.setDisable(busy);
-    }
+    private void setBusy(boolean busy) { pendingRequestsTable.setDisable(busy); }
 
     private static SQLException toSql(Throwable t) {
         if (t instanceof SQLException se) return se;
@@ -221,11 +212,8 @@ public class ApprovalController {
         private final String status;
 
         public RequestRow(int id, int customerId, String customerName, LocalDate requestDate, String status) {
-            this.id = id;
-            this.customerId = customerId;
-            this.customerName = customerName;
-            this.requestDate = requestDate;
-            this.status = status;
+            this.id = id; this.customerId = customerId; this.customerName = customerName;
+            this.requestDate = requestDate; this.status = status;
         }
         public int getId() { return id; }
         public int getCustomerId() { return customerId; }

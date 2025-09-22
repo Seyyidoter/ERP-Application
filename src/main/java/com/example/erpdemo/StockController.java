@@ -17,14 +17,13 @@ import java.sql.SQLException;
 import java.text.NumberFormat;
 import java.util.Locale;
 
-/** Ürün listesi + CRUD + Geçmiş + Filtreleme (ASYNC yükleme) */
+/** Ürün listesi + CRUD + Geçmiş + Filtreleme (ASYNC yükleme) — stok takipsiz */
 public class StockController {
 
     @FXML private TableView<Product> productTable;
     @FXML private TableColumn<Product, Integer>    idColumn;
     @FXML private TableColumn<Product, String>     nameColumn;
     @FXML private TableColumn<Product, BigDecimal> priceColumn;
-    @FXML private TableColumn<Product, Integer>    stockColumn;
     @FXML private TableColumn<Product, String>     unitColumn;
 
     @FXML private TextField searchField;
@@ -41,15 +40,13 @@ public class StockController {
 
     @FXML
     public void initialize() {
-        // 1) Sütun–model bağları
+        // 1) Sütun–model bağları (stok yok)
         idColumn.setCellValueFactory(new PropertyValueFactory<>("id"));
         nameColumn.setCellValueFactory(new PropertyValueFactory<>("urunAdi"));
         priceColumn.setCellValueFactory(new PropertyValueFactory<>("fiyat"));
-        stockColumn.setCellValueFactory(new PropertyValueFactory<>("stok"));
         unitColumn.setCellValueFactory(new PropertyValueFactory<>("birim"));
 
         // 2) Hücre hizalama/biçim
-        stockColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
         priceColumn.setCellFactory(col -> new TableCell<>() {
             final NumberFormat nf = NumberFormat.getNumberInstance(new Locale("tr", "TR"));
             { nf.setMinimumFractionDigits(2); nf.setMaximumFractionDigits(2); }
@@ -59,6 +56,9 @@ public class StockController {
                 else { setText(nf.format(v)); setStyle("-fx-alignment: CENTER-RIGHT;"); }
             }
         });
+
+        // Birim sütununu sağa hizala (istenen değişiklik)
+        unitColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
 
         productTable.setPlaceholder(new Label("Kayıtlı ürün yok"));
 
@@ -134,10 +134,7 @@ public class StockController {
             String f2 = String.format(Locale.ROOT, "%.2f", fiyat);
             if (f2.contains(q)) return true;
 
-            if (String.valueOf(p.getStok()).contains(q)) return true;
-            if (String.valueOf(p.getId()).contains(q)) return true;
-
-            return false;
+            return String.valueOf(p.getId()).contains(q);
         });
     }
 
