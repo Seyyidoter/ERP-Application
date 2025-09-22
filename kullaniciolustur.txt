@@ -1,0 +1,17 @@
+-- 1) Sunucu login'i
+CREATE LOGIN omnis WITH PASSWORD = 'StrongPass!23';
+
+-- 2) SirketDB içinde kullanıcı ve yetkiler
+USE SirketDB;
+CREATE USER omnis FOR LOGIN omnis;
+ALTER ROLE db_datareader ADD MEMBER omnis;
+ALTER ROLE db_datawriter ADD MEMBER omnis;
+
+
+
+
+
+
+db.url=jdbc:sqlserver://DESKTOP-U8H8OGU;databaseName=SirketDB;encrypt=true;trustServerCertificate=true;
+db.user=omnis
+db.password=StrongPass!23
