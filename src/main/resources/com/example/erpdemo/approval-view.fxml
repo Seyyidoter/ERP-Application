@@ -14,15 +14,14 @@
 
         <TableView fx:id="pendingRequestsTable" VBox.vgrow="ALWAYS">
             <columns>
-                <TableColumn fx:id="idColumn"            prefWidth="80.0"  text="Talep ID"/>
-                <TableColumn fx:id="customerIdColumn"    prefWidth="100.0" text="Müşteri ID"/>
-                <TableColumn fx:id="customerNameColumn"  prefWidth="220.0" text="Müşteri Adı"/>
-                <TableColumn fx:id="dateColumn"          prefWidth="150.0" text="Talep Tarihi"/>
-                <TableColumn fx:id="statusColumn"        prefWidth="200.0" text="Durum"/>
+                <TableColumn fx:id="idColumn"           text="Talep ID"      prefWidth="80.0"  />
+                <TableColumn fx:id="customerIdColumn"   text="Müşteri ID"    prefWidth="100.0" />
+                <TableColumn fx:id="customerNameColumn" text="Müşteri Adı"   prefWidth="220.0" />
+                <TableColumn fx:id="dateColumn"         text="Talep Tarihi"  prefWidth="150.0" />
+                <TableColumn fx:id="statusColumn"       text="Durum"         prefWidth="200.0" />
             </columns>
         </TableView>
 
-        <!-- BUTON BARI: tablo dışı tıklama filtresinde hariç tutulması için fx:id eklendi -->
         <HBox fx:id="actionsBar" spacing="10.0" alignment="CENTER_RIGHT">
             <children>
                 <Button fx:id="viewBtn"    text="Görüntüle" onAction="#handleView"/>

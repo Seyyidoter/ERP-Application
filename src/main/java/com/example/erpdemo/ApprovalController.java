@@ -37,7 +37,7 @@ public class ApprovalController {
 
     @FXML
     public void initialize() {
-        // sütun–model bağları
+        // --- Sütun–model bağları
         idColumn.setCellValueFactory(new PropertyValueFactory<>("id"));
         customerIdColumn.setCellValueFactory(new PropertyValueFactory<>("customerId"));
         customerNameColumn.setCellValueFactory(new PropertyValueFactory<>("customerName"));
@@ -48,22 +48,34 @@ public class ApprovalController {
         pendingRequestsTable.setItems(rows);
         pendingRequestsTable.setPlaceholder(new Label("Bekleyen talep yok"));
 
+        // --- GENİŞLİK KİLİTLEME / SÜTUN OYNATILMASIN (FXML’e koymuyoruz)
+        pendingRequestsTable.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
+        // pref genişliklerini sabitle (min=pref=max etkisi)
+        idColumn.setPrefWidth(80);          idColumn.setMinWidth(80);          idColumn.setMaxWidth(80);
+        customerIdColumn.setPrefWidth(100); customerIdColumn.setMinWidth(100); customerIdColumn.setMaxWidth(100);
+        customerNameColumn.setPrefWidth(220); customerNameColumn.setMinWidth(220); customerNameColumn.setMaxWidth(220);
+        dateColumn.setPrefWidth(150);       dateColumn.setMinWidth(150);       dateColumn.setMaxWidth(150);
+        statusColumn.setPrefWidth(200);     statusColumn.setMinWidth(200);     statusColumn.setMaxWidth(200);
+
+        pendingRequestsTable.getColumns().forEach(c -> {
+            c.setReorderable(false);
+            c.setResizable(false);
+        });
+
         // Seçime bağlı butonlar
         var noSel = pendingRequestsTable.getSelectionModel().selectedItemProperty().isNull();
         viewBtn.disableProperty().bind(noSel);
         approveBtn.disableProperty().bind(noSel);
         rejectBtn.disableProperty().bind(noSel);
 
-        // TABLO İÇİNDE:
-        // - boş alana tıklanınca => seçimi/odakı temizle
-        // - çift tıklanınca      => görüntüle
+        // Tablo içi davranışlar
         pendingRequestsTable.setRowFactory(tv -> {
             TableRow<RequestRow> row = new TableRow<>();
             row.setOnMouseClicked(e -> {
                 if (row.isEmpty()) {
                     pendingRequestsTable.getSelectionModel().clearSelection();
                     if (pendingRequestsTable.getParent() != null)
-                        pendingRequestsTable.getParent().requestFocus(); // mavi çerçeve gitsin
+                        pendingRequestsTable.getParent().requestFocus();
                 } else if (e.getClickCount() == 2) {
                     handleView();
                 }
@@ -71,9 +83,8 @@ public class ApprovalController {
             return row;
         });
 
-        // TABLO DIŞINA tıklanınca da seçimi/odağı temizle — AMA actionsBar'i hariç tut
+        // Tablo dışına tıklama
         javafx.application.Platform.runLater(() -> {
-            // Açılışta mavi çerçeve görünmesin
             if (pendingRequestsTable.getParent() != null)
                 pendingRequestsTable.getParent().requestFocus();
 
@@ -114,8 +125,8 @@ public class ApprovalController {
             Parent view = fxml.load();
 
             ViewRequestController c = fxml.getController();
-            c.setOnChange(this::refresh);          // onay/red sonrası listeyi yenile
-            c.setRequestId(sel.getId());           // veriyi yükle
+            c.setOnChange(this::refresh);
+            c.setRequestId(sel.getId());
 
             Stage dlg = new Stage();
             dlg.setTitle("Talep Detayı – #" + sel.getId());
