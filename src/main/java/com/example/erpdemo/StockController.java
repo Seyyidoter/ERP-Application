@@ -50,6 +50,7 @@ public class StockController {
 
         // 2) Hücre hizalama/biçim
         stockColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
+        unitColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
         priceColumn.setCellFactory(col -> new TableCell<>() {
             final NumberFormat nf = NumberFormat.getNumberInstance(new Locale("tr", "TR"));
             { nf.setMinimumFractionDigits(2); nf.setMaximumFractionDigits(2); }
