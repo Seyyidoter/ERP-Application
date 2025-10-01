@@ -13,6 +13,7 @@
     <maven.compiler.release>21</maven.compiler.release>
     <javafx.version>21</javafx.version>
     <pdfbox.version>3.0.2</pdfbox.version>
+    <poi.version>5.2.5</poi.version>
     <slf4j.version>2.0.9</slf4j.version>
   </properties>
 
@@ -43,7 +44,7 @@
       <classifier>win</classifier>
     </dependency>
 
-    <!-- SQL Server JDBC (Java 21 uyumlu sürüm) -->
+    <!-- SQL Server JDBC -->
     <dependency>
       <groupId>com.microsoft.sqlserver</groupId>
       <artifactId>mssql-jdbc</artifactId>
@@ -57,6 +58,13 @@
       <version>${pdfbox.version}</version>
     </dependency>
 
+    <!-- Apache POI (Excel XLSX) -->
+    <dependency>
+      <groupId>org.apache.poi</groupId>
+      <artifactId>poi-ooxml</artifactId>
+      <version>${poi.version}</version>
+    </dependency>
+
     <!-- HikariCP -->
     <dependency>
       <groupId>com.zaxxer</groupId>
@@ -64,7 +72,7 @@
       <version>5.1.0</version>
     </dependency>
 
-    <!-- SLF4J API + NOP (runtime’da logları susturur) -->
+    <!-- SLF4J API + NOP -->
     <dependency>
       <groupId>org.slf4j</groupId>
       <artifactId>slf4j-api</artifactId>

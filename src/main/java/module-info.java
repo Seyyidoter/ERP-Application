@@ -1,9 +1,10 @@
 module com.example.erpdemo {
     requires javafx.controls;
     requires javafx.fxml;
-    requires org.apache.pdfbox;
     requires com.zaxxer.hikari;
     requires java.sql;
+    requires org.apache.poi.ooxml;
+    requires org.apache.pdfbox;
     opens com.example.erpdemo to javafx.fxml;
     exports com.example.erpdemo;
 }

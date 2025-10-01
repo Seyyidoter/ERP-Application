@@ -8,7 +8,10 @@ import org.apache.pdfbox.pdmodel.font.PDFont;
 import org.apache.pdfbox.pdmodel.font.PDType0Font;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
@@ -23,29 +26,31 @@ import java.time.format.DateTimeFormatter;
 import java.time.temporal.TemporalAdjusters;
 import java.util.*;
 
-/** Onaylanmış talepleri PDF'e, sayfa taşırmadan çok sayfalı olarak yazar. */
+/** Onaylanmış talepleri PDF/Excel olarak üretir; dönem filtreleri desteklenir. */
 public class ReportsController {
 
     /* ========================== Dönem Mantığı ========================== */
 
     private enum Period { TODAY, THIS_WEEK, THIS_MONTH, ROLLING_MONTH, ALL_TIME }
 
-    /** UI: Bugün */
-    @FXML private void generateApprovedRequestsToday()        { generateForPeriod(Period.TODAY); }
-    /** UI: Bu Hafta (Pzt–Pzt) */
-    @FXML private void generateApprovedRequestsThisWeek()     { generateForPeriod(Period.THIS_WEEK); }
-    /** UI: Bu Ay (takvim ayı) */
-    @FXML private void generateApprovedRequestsThisMonth()    { generateForPeriod(Period.THIS_MONTH); }
-    /** UI: Son 1 Ay (kayan 1 ay) */
-    @FXML private void generateApprovedRequestsRollingMonth() { generateForPeriod(Period.ROLLING_MONTH); }
-    /** UI: Tüm Zamanlar (eski tek buton) */
-    @FXML private void generateApprovedRequestsAllTime()      { generateForPeriod(Period.ALL_TIME); }
+    /** UI – PDF */
+    @FXML private void generateApprovedRequestsToday()        { generatePdfForPeriod(Period.TODAY); }
+    @FXML private void generateApprovedRequestsThisWeek()     { generatePdfForPeriod(Period.THIS_WEEK); }
+    @FXML private void generateApprovedRequestsThisMonth()    { generatePdfForPeriod(Period.THIS_MONTH); } // takvim ayı
+    @FXML private void generateApprovedRequestsRollingMonth() { generatePdfForPeriod(Period.ROLLING_MONTH); } // son 1 ay
+    @FXML private void generateApprovedRequestsAllTime()      { generatePdfForPeriod(Period.ALL_TIME); }
+    @FXML private void generateApprovedRequestsReport()       { generatePdfForPeriod(Period.ALL_TIME); } // backward-compat
 
-    /** Geriye dönük uyumluluk (eski FXML’deki tek buton) */
-    @FXML
-    private void generateApprovedRequestsReport() { generateForPeriod(Period.ALL_TIME); }
+    /** UI – Excel */
+    @FXML private void exportApprovedRequestsTodayExcel()        { generateExcelForPeriod(Period.TODAY); }
+    @FXML private void exportApprovedRequestsThisWeekExcel()     { generateExcelForPeriod(Period.THIS_WEEK); }
+    @FXML private void exportApprovedRequestsThisMonthExcel()    { generateExcelForPeriod(Period.THIS_MONTH); }
+    @FXML private void exportApprovedRequestsRollingMonthExcel() { generateExcelForPeriod(Period.ROLLING_MONTH); }
+    @FXML private void exportApprovedRequestsAllTimeExcel()      { generateExcelForPeriod(Period.ALL_TIME); }
 
-    private void generateForPeriod(Period period) {
+    /* ========================== PDF ========================== */
+
+    private void generatePdfForPeriod(Period period) {
         final var range = resolveRange(period); // [from, to)
         final LocalDate from = range.from();
         final LocalDate to   = range.to();
@@ -53,14 +58,14 @@ public class ReportsController {
         Async.runVoid(() -> {
             try (PDDocument document = new PDDocument()) {
                 PDFont font = loadFont(document);
-
                 final String title = "Onaylanmış Talepler Raporu – " + periodTitle(period, from, to);
 
-                // Veriyi çek
-                final List<Request> approved =
-                        (period == Period.ALL_TIME)
-                                ? RequestDAO.getApprovedRequests()
-                                : RequestDAO.getApprovedRequestsBetween(from, to);
+                final List<Request> approved;
+                if (period == Period.ALL_TIME) {
+                    approved = RequestDAO.getApprovedRequests();
+                } else {
+                    approved = RequestDAO.getApprovedRequestsBetween(from, to);
+                }
 
                 try (PdfWriter w = new PdfWriter(document, font)) {
                     w.startPage();
@@ -69,14 +74,10 @@ public class ReportsController {
                     if (approved.isEmpty()) {
                         w.printlnWrapBlock(List.of("Seçilen dönem için onaylanmış talep bulunamadı.", ""));
                     } else {
-                        DateTimeFormatter dateFmt = DateTimeFormatter.ofPattern("dd.MM.yyyy", TR);
-
                         Set<Integer> customerIds = new LinkedHashSet<>();
                         Set<Integer> requestIds  = new LinkedHashSet<>();
-                        for (Request r : approved) {
-                            customerIds.add(r.getCustomerId());
-                            requestIds.add(r.getId());
-                        }
+                        for (Request r : approved) { customerIds.add(r.getCustomerId()); requestIds.add(r.getId()); }
+
                         Map<Integer, String> nameMap  = CustomerDAO.getCustomerNamesByIds(customerIds);
                         Map<Integer, List<ItemRow>> itemsMap = fetchItemsForRequests(requestIds);
 
@@ -86,7 +87,7 @@ public class ReportsController {
 
                         for (Request r : approved) {
                             String cname   = nameMap.getOrDefault(r.getCustomerId(), "Bilinmiyor");
-                            String dateStr = (r.getRequestDate() != null) ? r.getRequestDate().format(dateFmt) : "";
+                            String dateStr = (r.getRequestDate() != null) ? r.getRequestDate().format(DF_DATE) : "";
 
                             List<String> headerBlock = new ArrayList<>();
                             headerBlock.add(w.hrLine());
@@ -141,9 +142,9 @@ public class ReportsController {
                             periodTotalDisc = periodTotalDisc.add(reqTotalDisc);
 
                             w.println(w.hrLineAscii());
-                            w.println(String.format(TR, "Toplam Ürün Adedi   : %d", reqTotalQty));
-                            w.println(String.format(TR, "Toplam Liste Tutarı : %s TL", fmtMoney(reqTotalList)));
-                            w.println(String.format(TR, "Toplam İsk. Tutar   : %s TL", fmtMoney(reqTotalDisc)));
+                            w.println(String.format(LOCALE_TR, "Toplam Ürün Adedi   : %d", reqTotalQty));
+                            w.println(String.format(LOCALE_TR, "Toplam Liste Tutarı : %s TL", fmtMoney(reqTotalList)));
+                            w.println(String.format(LOCALE_TR, "Toplam İsk. Tutar   : %s TL", fmtMoney(reqTotalDisc)));
                             w.println("");
                             w.println("");
                         }
@@ -152,27 +153,26 @@ public class ReportsController {
                         w.println(w.hrLine());
                         w.println("Dönem Özeti");
                         w.println(w.hrLineAscii());
-                        w.println(String.format(TR, "Genel Ürün Adedi    : %d", periodTotalQty));
-                        w.println(String.format(TR, "Genel Liste Tutarı  : %s TL", fmtMoney(periodTotalList)));
-                        w.println(String.format(TR, "Genel İsk. Tutarı   : %s TL", fmtMoney(periodTotalDisc)));
+                        w.println(String.format(LOCALE_TR, "Genel Ürün Adedi    : %d", periodTotalQty));
+                        w.println(String.format(LOCALE_TR, "Genel Liste Tutarı  : %s TL", fmtMoney(periodTotalList)));
+                        w.println(String.format(LOCALE_TR, "Genel İsk. Tutarı   : %s TL", fmtMoney(periodTotalDisc)));
                     }
                 }
 
-                String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH.mm.ss", TR));
+                String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH.mm.ss", LOCALE_TR));
                 Path outDir = Paths.get("reports");
                 Files.createDirectories(outDir);
                 String suffix = switch (period) {
-                    case TODAY -> "TODAY";
-                    case THIS_WEEK -> "THIS_WEEK";
-                    case THIS_MONTH -> "THIS_MONTH";
-                    case ROLLING_MONTH -> "ROLLING_MONTH";
-                    case ALL_TIME -> "ALL_TIME";
+                    case TODAY -> "BUGUN";
+                    case THIS_WEEK -> "BU_HAFTA";
+                    case THIS_MONTH -> "BU_AY";
+                    case ROLLING_MONTH -> "SON_1_AY";
+                    case ALL_TIME -> "TUM_ZAMANLAR";
                 };
-                Path outPath = outDir.resolve("ApprovedRequestsReport_" + suffix + "_" + ts + ".pdf");
+                Path outPath = outDir.resolve("SatisRaporu_" + suffix + "_" + ts + ".pdf");
                 document.save(outPath.toFile());
 
-                Async.later(() -> AppDialogs.info("Rapor oluşturuldu: " + outPath.toAbsolutePath()));
-
+                Async.later(() -> AppDialogs.info("PDF oluşturuldu: " + outPath.toAbsolutePath()));
             } catch (SQLException e) {
                 Async.later(() -> AppDialogs.dbError("Rapor verilerini alma", e));
             } catch (IOException e) {
@@ -181,19 +181,151 @@ public class ReportsController {
         }, null, null, null);
     }
 
-    /** PDF üst başlığı için insan okunur dönem metni */
+    /* ========================== Excel ========================== */
+
+    private void generateExcelForPeriod(Period period) {
+        final var range = resolveRange(period);
+        final LocalDate from = range.from();
+        final LocalDate to   = range.to();
+
+        Async.runVoid(() -> {
+            try (Workbook wb = new XSSFWorkbook()) {
+                Sheet sh = wb.createSheet("Onaylanmış Talepler");
+
+                // stiller
+                CellStyle header = headerStyle(wb);
+                CellStyle money  = moneyStyle(wb);
+                CellStyle intCs  = integerStyle(wb);
+
+                // YENİ: Talep ID için ortalı stiller
+                CellStyle idStyle = wb.createCellStyle();
+                idStyle.setAlignment(HorizontalAlignment.CENTER);
+
+                CellStyle headerCenter = wb.createCellStyle();
+                headerCenter.cloneStyleFrom(header);
+                headerCenter.setAlignment(HorizontalAlignment.CENTER);
+
+                int r = 0;
+                Row titleRow = sh.createRow(r++);
+                titleRow.createCell(0).setCellValue("Onaylanmış Talepler – " + periodTitle(period, from, to));
+                r++;
+
+                Row h = sh.createRow(r++);
+                String[] cols = {
+                        "Talep ID","Müşteri","Talep Tarihi","Durum",
+                        "Ürün","Miktar","Liste Fiyatı","İskontolu Fiyat","Ara Toplam"
+                };
+                for (int i = 0; i < cols.length; i++) {
+                    Cell c = h.createCell(i);
+                    c.setCellValue(cols[i]);
+                    c.setCellStyle(i == 0 ? headerCenter : header); // Talep ID başlığı ortalı
+                }
+
+                final List<Request> approved =
+                        (period == Period.ALL_TIME)
+                                ? RequestDAO.getApprovedRequests()
+                                : RequestDAO.getApprovedRequestsBetween(from, to);
+
+                if (!approved.isEmpty()) {
+                    Set<Integer> customerIds = new LinkedHashSet<>();
+                    Set<Integer> requestIds  = new LinkedHashSet<>();
+                    for (Request rq : approved) { customerIds.add(rq.getCustomerId()); requestIds.add(rq.getId()); }
+                    Map<Integer, String> nameMap  = CustomerDAO.getCustomerNamesByIds(customerIds);
+                    Map<Integer, List<ItemRow>> itemsMap = fetchItemsForRequests(requestIds);
+
+                    for (Request rq : approved) {
+                        String cust = nameMap.getOrDefault(rq.getCustomerId(), "Bilinmiyor");
+                        String date = rq.getRequestDate() == null ? "" : rq.getRequestDate().format(DF_DATE);
+
+                        List<ItemRow> items = itemsMap.getOrDefault(rq.getId(), List.of());
+                        if (items.isEmpty()) {
+                            Row row = sh.createRow(r++);
+                            int c = 0;
+                            Cell id = row.createCell(c++); id.setCellValue(rq.getId()); id.setCellStyle(idStyle); // Talep ID ortalı
+                            row.createCell(c++).setCellValue(cust);
+                            row.createCell(c++).setCellValue(date);
+                            row.createCell(c++).setCellValue(rq.getStatus());
+                            row.createCell(c++).setCellValue("(kalem yok)");
+                        } else {
+                            for (ItemRow it : items) {
+                                Row row = sh.createRow(r++);
+                                int c = 0;
+                                Cell id = row.createCell(c++); id.setCellValue(rq.getId()); id.setCellStyle(idStyle); // Talep ID ortalı
+                                row.createCell(c++).setCellValue(cust);
+                                row.createCell(c++).setCellValue(date);
+                                row.createCell(c++).setCellValue(rq.getStatus());
+                                row.createCell(c++).setCellValue(it.productName);
+                                Cell qty = row.createCell(c++); qty.setCellValue(it.quantity); qty.setCellStyle(intCs);
+                                Cell lp  = row.createCell(c++); lp.setCellValue(it.listPrice.doubleValue()); lp.setCellStyle(money);
+                                Cell dp  = row.createCell(c++); dp.setCellValue(it.discountedPrice.doubleValue()); dp.setCellStyle(money);
+                                Cell sub = row.createCell(c++); sub.setCellValue(it.discountedPrice.multiply(BigDecimal.valueOf(it.quantity)).doubleValue()); sub.setCellStyle(money);
+                            }
+                        }
+                    }
+                }
+
+                for (int i = 0; i < 9; i++) {
+                    sh.autoSizeColumn(i);
+                    sh.setColumnWidth(i, Math.min(sh.getColumnWidth(i), 10000));
+                }
+
+                String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH.mm.ss", LOCALE_TR));
+                Path outDir = Paths.get("reports");
+                Files.createDirectories(outDir);
+                String suffix = switch (period) {
+                    case TODAY -> "BUGUN";
+                    case THIS_WEEK -> "BU_HAFTA";
+                    case THIS_MONTH -> "BU_AY";
+                    case ROLLING_MONTH -> "SON_1_AY";
+                    case ALL_TIME -> "TUM_ZAMANLAR";
+                };
+                Path outPath = outDir.resolve("SatisRaporu_" + suffix + "_" + ts + ".xlsx");
+                try (FileOutputStream fos = new FileOutputStream(outPath.toFile())) { wb.write(fos); }
+
+                Async.later(() -> AppDialogs.info("Excel oluşturuldu: " + outPath.toAbsolutePath()));
+            } catch (SQLException e) {
+                Async.later(() -> AppDialogs.dbError("Rapor verilerini alma", e));
+            } catch (IOException e) {
+                Async.later(() -> AppDialogs.unexpectedError("Excel oluşturma", e));
+            }
+        }, null, null, null);
+    }
+
+    private CellStyle headerStyle(Workbook wb) {
+        CellStyle cs = wb.createCellStyle();
+        Font f = wb.createFont(); f.setBold(true); cs.setFont(f);
+        cs.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+        cs.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        cs.setBorderBottom(BorderStyle.THIN);
+        cs.setBorderTop(BorderStyle.THIN);
+        cs.setBorderLeft(BorderStyle.THIN);
+        cs.setBorderRight(BorderStyle.THIN);
+        return cs;
+    }
+    private CellStyle moneyStyle(Workbook wb) {
+        CellStyle cs = wb.createCellStyle();
+        cs.setDataFormat(wb.createDataFormat().getFormat("#,##0.00"));
+        return cs;
+    }
+    private CellStyle integerStyle(Workbook wb) {
+        CellStyle cs = wb.createCellStyle();
+        cs.setDataFormat(wb.createDataFormat().getFormat("0"));
+        return cs;
+    }
+
+    /* ========================== Ortaklar ========================== */
+
     private String periodTitle(Period p, LocalDate from, LocalDate to) {
-        DateTimeFormatter f = DateTimeFormatter.ofPattern("dd.MM.yyyy", TR);
         return switch (p) {
-            case TODAY          -> "Bugün (" + LocalDate.now().format(f) + ")";
-            case THIS_WEEK      -> "Bu Hafta (" + from.format(f) + " – " + to.minusDays(1).format(f) + ")";
-            case THIS_MONTH     -> "Bu Ay (" + from.format(f) + " – " + to.minusDays(1).format(f) + ")";
-            case ROLLING_MONTH  -> "Son 1 Ay (" + from.format(f) + " – " + to.minusDays(1).format(f) + ")";
-            case ALL_TIME       -> "Tüm Zamanlar";
+            case TODAY         -> "Bugün (" + LocalDate.now().format(DF_DATE) + ")";
+            case THIS_WEEK     -> "Bu Hafta (" + from.format(DF_DATE) + " – " + to.minusDays(1).format(DF_DATE) + ")";
+            case THIS_MONTH    -> "Bu Ay (" + from.format(DF_DATE) + " – " + to.minusDays(1).format(DF_DATE) + ")";
+            case ROLLING_MONTH -> "Son 1 Ay (" + from.format(DF_DATE) + " – " + to.minusDays(1).format(DF_DATE) + ")";
+            case ALL_TIME      -> "Tüm Zamanlar";
         };
     }
 
-    /** [from, to) aralığını hesaplar. 'to' her zaman exclusive’tir. */
+    /** [from, to) – 'to' her zaman exclusive */
     private DateRange resolveRange(Period p) {
         LocalDate today = LocalDate.now();
         return switch (p) {
@@ -210,8 +342,8 @@ public class ReportsController {
                 yield new DateRange(from, to);
             }
             case ROLLING_MONTH -> {
-                LocalDate from = today.minusMonths(1);   // 1 ay geriden başla
-                LocalDate to   = today.plusDays(1);      // bugünü dahil et
+                LocalDate from = today.minusMonths(1);
+                LocalDate to   = today.plusDays(1);
                 yield new DateRange(from, to);
             }
             case ALL_TIME -> new DateRange(null, null);
@@ -226,9 +358,10 @@ public class ReportsController {
     private static final int COL_W_DISC     = 12;
     private static final int COL_W_SUBTOTAL = 12;
 
-    private static final Locale TR = Locale.forLanguageTag("tr-TR");
+    private static final Locale LOCALE_TR = Locale.forLanguageTag("tr-TR");
+    private static final DateTimeFormatter DF_DATE = DateTimeFormatter.ofPattern("dd.MM.yyyy", LOCALE_TR);
 
-    /** Tüm talep kalemlerini tek seferde çekip requestId'ye göre gruplar */
+    /** Talep kalemlerini tek seferde çekip requestId'ye göre gruplar */
     private Map<Integer, List<ItemRow>> fetchItemsForRequests(Collection<Integer> requestIds) throws SQLException {
         if (requestIds.isEmpty()) return Map.of();
         String placeholders = String.join(",", Collections.nCopies(requestIds.size(), "?"));
@@ -453,7 +586,7 @@ public class ReportsController {
     private static String fmtMoney(BigDecimal v) {
         if (v == null) v = BigDecimal.ZERO;
         v = v.setScale(2, RoundingMode.HALF_UP);
-        return String.format(TR, "%.2f", v);
+        return String.format(LOCALE_TR, "%.2f", v);
     }
 
     /* Küçük yardımcı tipi */
