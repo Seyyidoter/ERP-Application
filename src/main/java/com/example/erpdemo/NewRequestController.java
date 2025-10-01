@@ -9,7 +9,7 @@ import javafx.stage.Stage;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.sql.SQLException;
+import java.sql.*;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -95,7 +95,7 @@ public class NewRequestController {
             return;
         }
 
-        BigDecimal price = prd.getFiyat(); // BigDecimal
+        BigDecimal price = prd.getFiyat(); // BigDecimal (liste fiyat)
         BigDecimal discountPct = BigDecimal.valueOf(cus.getIskonto()); // % int
         BigDecimal discounted = price
                 .multiply(BigDecimal.ONE.subtract(discountPct.divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP)))
@@ -116,6 +116,7 @@ public class NewRequestController {
         }
 
         try {
+            // 1) Güncel stoklara göre toplamlara bak (yarışları azaltmak için son kontrol)
             Map<Integer, Integer> totals = collectQuantitiesByProduct();
 
             List<String> insuff = new ArrayList<>();
@@ -137,22 +138,57 @@ public class NewRequestController {
                 return;
             }
 
-            int requestId = RequestDAO.addRequest(cus.getId());
-            if (requestId != -1) {
-                for (RequestItem it : requestItems) {
-                    RequestDAO.addRequestItem(
-                            requestId,
-                            it.getProductId(),
-                            it.getQuantity(),
-                            it.getDiscountedPrice() // BigDecimal
-                    );
+            // 2) ATOMİK KAYIT: Başlık + Kalemler aynı transaction’da
+            final String insertHeaderSql = """
+                INSERT INTO dbo.Talepler (MusteriId, TalepTarihi, Durum)
+                VALUES (?, GETDATE(), N'Onay Bekliyor')
+                """;
+            final String insertItemSql = """
+                INSERT INTO dbo.TalepKalemleri (TalepId, UrunId, Miktar, TeklifFiyati)
+                VALUES (?, ?, ?, ?)
+                """;
+
+            try (Connection c = DatabaseManager.getConnection()) {
+                boolean oldAuto = c.getAutoCommit();
+                c.setAutoCommit(false);
+
+                int requestId = -1;
+                try (PreparedStatement psHdr = c.prepareStatement(insertHeaderSql, Statement.RETURN_GENERATED_KEYS)) {
+                    psHdr.setInt(1, cus.getId());
+                    psHdr.executeUpdate();
+                    try (ResultSet keys = psHdr.getGeneratedKeys()) {
+                        if (keys.next()) {
+                            requestId = ((Number) keys.getObject(1)).intValue();
+                        }
+                    }
                 }
+                if (requestId <= 0) {
+                    throw new SQLException("Yeni talep Id alınamadı (generated keys).");
+                }
+
+                try (PreparedStatement psItem = c.prepareStatement(insertItemSql)) {
+                    for (RequestItem it : requestItems) {
+                        psItem.setInt(1, requestId);
+                        psItem.setInt(2, it.getProductId());
+                        psItem.setInt(3, it.getQuantity());
+                        psItem.setBigDecimal(4, it.getDiscountedPrice().setScale(2, RoundingMode.HALF_UP));
+                        psItem.addBatch();
+                    }
+                    psItem.executeBatch();
+                }
+
+                c.commit();
+                try { c.setAutoCommit(oldAuto); } catch (SQLException ignore) {}
+
                 AppDialogs.info("Talep kaydedildi.");
                 if (dialogStage != null) dialogStage.close();
                 else closeWindowIfPossible();
-            } else {
-                AppDialogs.error("Talep kaydedilemedi.");
+
+            } catch (SQLException e) {
+                // Transaction esnasında hata: rollback
+                AppDialogs.dbError("Talep kaydı (transaction)", e);
             }
+
         } catch (SQLException e) {
             AppDialogs.dbError("Talep kaydı", e);
         }

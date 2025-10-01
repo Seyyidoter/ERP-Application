@@ -57,7 +57,6 @@ public class ViewRequestController {
 
         // Pencere açıldığında tablo fokus almasın, dış tıklamalarda seçimi temizle
         javafx.application.Platform.runLater(() -> {
-            // mavi çerçeve görünmesin
             if (requestItemsTable.getParent() != null) {
                 requestItemsTable.getParent().requestFocus();
             }
@@ -95,28 +94,38 @@ public class ViewRequestController {
     public void setOnChange(Runnable r) { this.onChange = r; }
 
     private void loadData() {
-        try {
-            Header h = fetchHeader(requestId);
-            List<ItemRow> items = fetchItems(requestId);
+        setBusy(true);
+        Async.run(() -> {
+                    try {
+                        Header h = fetchHeader(requestId);
+                        List<ItemRow> items = fetchItems(requestId);
+                        return new Object[]{h, items};
+                    } catch (SQLException e) {
+                        throw new RuntimeException(e);
+                    }
+                },
+                payload -> {
+                    Header h = (Header) payload[0];
+                    @SuppressWarnings("unchecked")
+                    List<ItemRow> items = (List<ItemRow>) payload[1];
 
-            requestIdLabel.setText(String.valueOf(requestId));
-            customerNameLabel.setText(h.customerName());
-            statusLabel.setText(h.status());
+                    requestIdLabel.setText(String.valueOf(requestId));
+                    customerNameLabel.setText(h.customerName());
+                    statusLabel.setText(h.status());
 
-            LocalDate d = h.requestDate();
-            dateLabel.setText(d == null ? "—" : DateUtil.fmt(d));
+                    LocalDate d = h.requestDate();
+                    dateLabel.setText(d == null ? "—" : DateUtil.fmt(d));
 
-            requestItemsTable.getItems().setAll(items);
+                    requestItemsTable.getItems().setAll(items);
 
-            // Onay/Reddet butonlarını yalnızca 'Onay Bekliyor' ise göster
-            boolean canDecide = "Onay Bekliyor".equalsIgnoreCase(h.status());
-            approveBtn.setVisible(canDecide);  approveBtn.setManaged(canDecide);
-            rejectBtn.setVisible(canDecide);   rejectBtn.setManaged(canDecide);
-
-        } catch (SQLException ex) {
-            showError("Hata", "Talep detayı yüklenemedi:\n" + ex.getMessage());
-            statusLabel.setText("Hata");
-        }
+                    updateActionButtons(h.status()); // yalnızca 'Onay Bekliyor' ise göster
+                },
+                ex -> {
+                    AppDialogs.dbError("Talep detayı yükleme", toSql(ex));
+                    statusLabel.setText("Hata");
+                    updateActionButtons("Hata");
+                },
+                () -> setBusy(false));
     }
 
     /** DAO’da hazır olmadığı için başlığı buradan çekiyoruz. */
@@ -155,26 +164,64 @@ public class ViewRequestController {
     @FXML private void handleReject()  { approveReject(false); }
 
     private void approveReject(boolean approve) {
-        approveBtn.setDisable(true);
-        rejectBtn.setDisable(true);
+        setBusy(true);
 
         Async.runVoid(() -> {
             try {
+                // --- 0) Son durumu tekrar kontrol et (yarışlara karşı) ---
+                Header h = fetchHeader(requestId);
+                if (!isPending(h.status())) {
+                    throw new IllegalStateException(
+                            "Talep artık '" + h.status() + "' durumunda. İşlem iptal edildi.");
+                }
+
+                // --- 1) İşlem ---
                 if (approve) {
                     RequestDAO.approveRequestTransactionally(requestId, HelloApplication.getLoggedInUserId());
                 } else {
                     RequestDAO.rejectRequest(requestId, HelloApplication.getLoggedInUserId());
                 }
-            } catch (SQLException ex) { throw new RuntimeException(ex); }
+            } catch (SQLException ex) {
+                throw new RuntimeException(ex);
+            }
         }, () -> {
             AppDialogs.info(approve ? "Talep onaylandı." : "Talep reddedildi.");
             if (onChange != null) onChange.run(); // üst listeyi yenile
             handleClose();
         }, ex -> {
-            AppDialogs.dbError(approve ? "Talep onaylama" : "Talep reddetme", toSql(ex));
-            approveBtn.setDisable(false);
-            rejectBtn.setDisable(false);
-        }, null);
+            // Yarış/Geçersiz durum uyarısını kibar göster
+            Throwable cause = ex.getCause();
+            if (cause instanceof IllegalStateException ise) {
+                AppDialogs.warn(ise.getMessage() + "\nEkran güncellenecek.");
+                loadData(); // status ve butonlar güncellensin
+            } else {
+                AppDialogs.dbError(approve ? "Talep onaylama" : "Talep reddetme", toSql(ex));
+            }
+        }, () -> setBusy(false));
+    }
+
+    private void updateActionButtons(String status) {
+        boolean canDecide = isPending(status); // SADECE 'Onay Bekliyor'
+        approveBtn.setVisible(canDecide);  approveBtn.setManaged(canDecide);
+        rejectBtn.setVisible(canDecide);   rejectBtn.setManaged(canDecide);
+
+        // Güvenlik için disable da et (ör. kısa bir anda görünürse)
+        approveBtn.setDisable(!canDecide);
+        rejectBtn.setDisable(!canDecide);
+    }
+
+    private static boolean isPending(String status) {
+        if (status == null) return false;
+        String s = status.trim().toLowerCase(java.util.Locale.ROOT);
+        return s.equals("onay bekliyor");
+    }
+
+    private void setBusy(boolean busy) {
+        if (requestItemsTable != null) requestItemsTable.setDisable(busy);
+        if (actionsBar != null)        actionsBar.setDisable(busy);
+        if (approveBtn != null)        approveBtn.setDisable(busy || approveBtn.isDisable());
+        if (rejectBtn != null)         rejectBtn.setDisable(busy || rejectBtn.isDisable());
+        if (closeBtn != null)          closeBtn.setDisable(busy);
     }
 
     @FXML
