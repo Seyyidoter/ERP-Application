@@ -117,6 +117,39 @@ public class RequestDAO {
         return list;
     }
 
+    /**
+     * ONAYLANMIŞ talepleri tarih aralığına göre döndürür.
+     * from = dahil (>= 00:00), to = hariç (< to 00:00). İndeks dostu karşılaştırmalar.
+     * Her iki parametre de null olabilir (null → sınırsız).
+     */
+    public static ObservableList<Request> getApprovedRequestsBetween(LocalDate from, LocalDate to) throws SQLException {
+        ObservableList<Request> list = FXCollections.observableArrayList();
+
+        StringBuilder sb = new StringBuilder("""
+        SELECT Id, MusteriId, TalepTarihi, Durum, OnaylayanKullaniciId, OnayTarihi
+          FROM dbo.Talepler
+         WHERE Durum = N'Onaylandı'
+    """);
+
+        // DÖNEM FİLTRESİ: ONAY TARIHI
+        if (from != null) sb.append(" AND OnayTarihi >= ? ");
+        if (to   != null) sb.append(" AND OnayTarihi <  ? ");
+        sb.append(" ORDER BY OnayTarihi DESC, Id DESC ");
+
+        try (Connection c = DatabaseManager.getConnection();
+             PreparedStatement ps = c.prepareStatement(sb.toString())) {
+
+            int i = 1;
+            if (from != null) ps.setTimestamp(i++, Timestamp.valueOf(from.atStartOfDay()));
+            if (to   != null) ps.setTimestamp(i++, Timestamp.valueOf(to.atStartOfDay()));
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) list.add(mapRowToRequest(rs));
+            }
+        }
+        return list;
+    }
+
     /** Talep kalemleri (liste ve iskontolu fiyat BigDecimal) */
     public static ObservableList<RequestItem> getRequestItemsByRequestId(int requestId) throws SQLException {
         ObservableList<RequestItem> items = FXCollections.observableArrayList();
@@ -220,7 +253,7 @@ public class RequestDAO {
                 c.setTransactionIsolation(Connection.TRANSACTION_READ_COMMITTED);
 
                 try (Statement st = c.createStatement()) {
-                    st.execute("SET XACT_ABORT ON; SET LOCK_TIMEOUT 5000"); // daha deterministik hata & 5 sn kilit bekleme
+                    st.execute("SET XACT_ABORT ON; SET LOCK_TIMEOUT 5000");
                 }
 
                 try {
@@ -246,7 +279,7 @@ public class RequestDAO {
                     }
                     if (customerId == null) throw new SQLException("Talep başlığı bulunamadı.");
 
-                    // 2) kalemler (UPDLOCK ile oku, ürün id’ye göre sırala)
+                    // 2) kalemler (UPDLOCK ile oku)
                     List<ItemLite> items = new ArrayList<>();
                     try (PreparedStatement ps = c.prepareStatement(
                             "SELECT UrunId, Miktar, TeklifFiyati " +
@@ -265,7 +298,7 @@ public class RequestDAO {
                     if (items.isEmpty()) throw new SQLException("Talebe ait kalem bulunamadı.");
                     items.sort(java.util.Comparator.comparingInt(ItemLite::productId));
 
-                    // 3) stok düş (UPDATE sırasında ROWLOCK ipucu)
+                    // 3) stok düş (ROWLOCK ipucu)
                     try (PreparedStatement up = c.prepareStatement(
                             "UPDATE s WITH (ROWLOCK) SET s.Stok = s.Stok - ? " +
                                     "FROM dbo.Stoklar s WHERE s.Id = ? AND s.Stok >= ?")) {

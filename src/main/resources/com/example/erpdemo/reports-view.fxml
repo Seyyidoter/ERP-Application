@@ -14,12 +14,15 @@
             </padding>
 
             <Label text="Raporlar" style="-fx-font-size: 28; -fx-font-weight: bold;"/>
-            <Label text="Oluşturulacak Raporlar" style="-fx-font-size: 16; -fx-opacity: 0.85;"/>
+            <Label text="Onaylanmış Talepler PDF" style="-fx-font-size: 16; -fx-opacity: 0.85;"/>
 
+            <!-- Dönem bazlı PDF üretim butonları -->
             <HBox spacing="12">
-                <!-- Sadece PDF oluşturma butonu kaldı -->
-                <Button text="Onaylanmış Talepler Raporu Oluştur"
-                        onAction="#generateApprovedRequestsReport"/>
+                <Button text="Bugün"        onAction="#generateApprovedRequestsToday"/>
+                <Button text="Bu Hafta"     onAction="#generateApprovedRequestsThisWeek"/>
+                <Button text="Bu Ay"        onAction="#generateApprovedRequestsThisMonth"/>
+                <Button text="Son 1 Ay"     onAction="#generateApprovedRequestsRollingMonth"/>
+                <Button text="Tüm Zamanlar" onAction="#generateApprovedRequestsAllTime"/>
             </HBox>
         </VBox>
     </center>
