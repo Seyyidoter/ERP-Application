@@ -8,7 +8,6 @@ import javafx.stage.Stage;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.Locale;
 import java.util.function.UnaryOperator;
 
 public class NewProductController {
@@ -26,8 +25,18 @@ public class NewProductController {
 
     @FXML
     public void initialize() {
+        // Sayısal alanlar için sınırlandırma
         priceField.setTextFormatter(new TextFormatter<>(numericDecimalFilter()));
         stockField.setTextFormatter(new TextFormatter<>(numericIntFilter()));
+
+        // BİRİM alanında SAYI YAZMAYI ENGELLE
+        unitField.setTextFormatter(new TextFormatter<>(change -> {
+            String t = change.getText();
+            // silme/taşıma işlemlerinde t genelde "" olur, engelleme
+            if (t == null || t.isEmpty()) return change;
+            // eklenen/paste edilen metinde herhangi bir rakam varsa engelle
+            return t.matches(".*\\d.*") ? null : change;
+        }));
     }
 
     public void setProduct(Product product) {
@@ -37,7 +46,7 @@ public class NewProductController {
         if (product != null) {
             nameField.setText(product.getUrunAdi());
 
-            // BUG DÜZELTİLDİ: BigDecimal'ı %.2f ile formatlamak hata veriyordu
+            // BigDecimal güvenli format
             BigDecimal f = product.getFiyat() == null
                     ? BigDecimal.ZERO
                     : product.getFiyat().setScale(2, RoundingMode.HALF_UP);
@@ -79,7 +88,6 @@ public class NewProductController {
             closeWindowIfPossible();
 
         } catch (Exception e) {
-            // SQLException dahil AppDialogs.* zaten dekorasyonlu
             if (e instanceof java.sql.SQLException se) {
                 AppDialogs.dbError("Ürün kaydetme", se);
             } else {

@@ -47,6 +47,9 @@ public class NewRequestController {
         priceColumn.setCellValueFactory(new PropertyValueFactory<>("listPrice"));
         discountedPriceColumn.setCellValueFactory(new PropertyValueFactory<>("discountedPrice"));
 
+        priceColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
+        discountedPriceColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
+
         productTable.setItems(requestItems);
 
         priceColumn.setCellFactory(col -> new TableCell<>() {

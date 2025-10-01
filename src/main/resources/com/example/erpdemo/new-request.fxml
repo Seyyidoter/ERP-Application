@@ -45,6 +45,9 @@
 
     <center>
         <TableView fx:id="productTable">
+            <placeholder>
+                <Label text="Eklenmiş ürün yok."/>
+            </placeholder>
             <columns>
                 <TableColumn fx:id="productNameColumn" text="Ürün" prefWidth="240"/>
                 <TableColumn fx:id="quantityColumn" text="Miktar" prefWidth="100"/>
