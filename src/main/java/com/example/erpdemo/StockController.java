@@ -14,10 +14,9 @@ import javafx.scene.layout.HBox;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.sql.SQLException;
-import java.text.NumberFormat;
 import java.util.Locale;
 
-/** Ürün listesi + CRUD + Geçmiş + Filtreleme (ASYNC yükleme) */
+/** Ürün listesi + CRUD + Filtreleme (ASYNC yükleme) */
 public class StockController {
 
     @FXML private TableView<Product> productTable;
@@ -51,15 +50,7 @@ public class StockController {
         // 2) Hücre hizalama/biçim
         stockColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
         unitColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
-        priceColumn.setCellFactory(col -> new TableCell<>() {
-            final NumberFormat nf = NumberFormat.getNumberInstance(new Locale("tr", "TR"));
-            { nf.setMinimumFractionDigits(2); nf.setMaximumFractionDigits(2); }
-            @Override protected void updateItem(BigDecimal v, boolean empty) {
-                super.updateItem(v, empty);
-                if (empty || v == null) { setText(null); setStyle(""); }
-                else { setText(nf.format(v)); setStyle("-fx-alignment: CENTER-RIGHT;"); }
-            }
-        });
+        priceColumn.setCellFactory(MoneyCells.twoDecimalsTR());
 
         productTable.setPlaceholder(new Label("Kayıtlı ürün yok"));
 

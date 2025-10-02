@@ -1,0 +1,856 @@
+﻿//// ===== BEGIN: C:\Users\seyyid\IdeaProjects\ERPdemo\src\main\resources\com\example\erpdemo\approval-view.fxml =====
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.text.Font?>
+
+<VBox xmlns="http://javafx.com/javafx/21"
+      xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="com.example.erpdemo.ApprovalController"
+      spacing="10.0" style="-fx-padding: 20;">
+    <children>
+        <Label text="Onay İşlemleri">
+            <font><Font name="System Bold" size="24.0"/></font>
+        </Label>
+
+        <TableView fx:id="pendingRequestsTable" VBox.vgrow="ALWAYS">
+            <columns>
+                <TableColumn fx:id="idColumn"           text="Talep ID"      prefWidth="80.0"  />
+                <TableColumn fx:id="customerIdColumn"   text="Müşteri ID"    prefWidth="100.0" />
+                <TableColumn fx:id="customerNameColumn" text="Müşteri Adı"   prefWidth="220.0" />
+                <TableColumn fx:id="dateColumn"         text="Talep Tarihi"  prefWidth="150.0" />
+                <TableColumn fx:id="statusColumn"       text="Durum"         prefWidth="200.0" />
+            </columns>
+        </TableView>
+
+        <HBox fx:id="actionsBar" spacing="10.0" alignment="CENTER_RIGHT">
+            <children>
+                <Button fx:id="viewBtn"    text="Görüntüle" onAction="#handleView"/>
+                <Button fx:id="approveBtn" text="Onayla"    onAction="#handleApprove"/>
+                <Button fx:id="rejectBtn"  text="Reddet"    onAction="#handleReject"/>
+            </children>
+        </HBox>
+    </children>
+</VBox>
+
+//// ===== END =====
+
+//// ===== BEGIN: C:\Users\seyyid\IdeaProjects\ERPdemo\src\main\resources\com\example\erpdemo\customer-history-view.fxml =====
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns="http://javafx.com/javafx/21"
+            xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="com.example.erpdemo.CustomerHistoryController">
+
+    <padding>
+        <Insets topRightBottomLeft="12"/>
+    </padding>
+
+    <top>
+        <VBox spacing="8">
+            <children>
+                <Label text="Müşteri Sipariş Geçmişi" style="-fx-font-size: 18; -fx-font-weight: bold;"/>
+
+                <HBox spacing="10" alignment="CENTER_LEFT">
+                    <children>
+                        <Label text="Müşteri:"/>
+                        <Label fx:id="lblCustomer" style="-fx-font-weight: 700;"/>
+
+                        <Region HBox.hgrow="ALWAYS"/>
+
+                        <Label text="Başlangıç:"/>
+                        <DatePicker fx:id="dpFrom"/>
+
+                        <Label text="Bitiş:"/>
+                        <DatePicker fx:id="dpTo"/>
+
+                        <Label text="Durum:"/>
+                        <ComboBox fx:id="cbStatus" prefWidth="140"/>
+
+                        <Label text="Ürün:"/>
+                        <TextField fx:id="txtProduct" promptText="Ürün ara" prefWidth="160"/>
+
+                        <Button text="Uygula" onAction="#handleApplyFilters"/>
+                        <Button text="Temizle" onAction="#handleClearFilters"/>
+                    </children>
+                </HBox>
+            </children>
+        </VBox>
+    </top>
+
+    <center>
+        <TableView fx:id="tblHistory">
+            <columns>
+                <TableColumn fx:id="colReqId"    text="Talep ID"       prefWidth="90"/>
+                <TableColumn fx:id="colDate"     text="Tarih"          prefWidth="130"/>
+                <TableColumn fx:id="colStatus"   text="Durum"          prefWidth="130"/>
+                <TableColumn fx:id="colProduct"  text="Ürün"           prefWidth="280"/>
+                <TableColumn fx:id="colQty"      text="Miktar"         prefWidth="110"/>
+                <!-- değişen başlık: -->
+                <TableColumn fx:id="colUnit"     text="İskontolu Fiyat" prefWidth="130"/>
+                <TableColumn fx:id="colSubtotal" text="Ara Toplam"     prefWidth="140"/>
+            </columns>
+        </TableView>
+    </center>
+
+    <bottom>
+        <VBox spacing="8">
+            <children>
+                <HBox alignment="CENTER_RIGHT" spacing="18">
+                    <children>
+                        <Label text="Toplam Miktar (Onaylanan):"/>
+                        <Label fx:id="lblTotalQty" style="-fx-font-weight: 700;"/>
+                        <Label text="Toplam Tutar (Onaylanan):" style="-fx-padding:0 0 0 16;"/>
+                        <Label fx:id="lblTotalAmount" style="-fx-font-weight: 700;"/>
+                    </children>
+                </HBox>
+                <HBox alignment="CENTER_RIGHT">
+                    <Button text="Kapat" onAction="#handleClose"/>
+                </HBox>
+            </children>
+        </VBox>
+    </bottom>
+</BorderPane>
+
+//// ===== END =====
+
+//// ===== BEGIN: C:\Users\seyyid\IdeaProjects\ERPdemo\src\main\resources\com\example\erpdemo\customer-view.fxml =====
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.text.Font?>
+
+<VBox xmlns="http://javafx.com/javafx/21"
+      xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="com.example.erpdemo.CustomerController"
+      spacing="10.0" style="-fx-padding: 20;">
+
+    <!-- Başlık -->
+    <Label text="Müşteri İşlemleri">
+        <font>
+            <Font name="System Bold" size="24.0" />
+        </font>
+    </Label>
+
+    <!-- Filtre satırı -->
+    <HBox spacing="8">
+        <children>
+            <TextField fx:id="searchField"
+                       promptText="Ara (firma, kişi, telefon, e-posta, iskonto, bakiye)"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <Button text="Temizle" onAction="#handleClearSearch"/>
+        </children>
+    </HBox>
+
+    <!-- Tablo -->
+    <TableView fx:id="customerTable" VBox.vgrow="ALWAYS">
+        <columns>
+            <TableColumn fx:id="idColumn"       prefWidth="60.0"  text="ID" />
+            <TableColumn fx:id="nameColumn"     prefWidth="220.0" text="Firma Adı" />
+            <TableColumn fx:id="contactColumn"  prefWidth="160.0" text="İletişim Kişisi" />
+            <TableColumn fx:id="phoneColumn"    prefWidth="140.0" text="Telefon" />
+            <TableColumn fx:id="emailColumn"    prefWidth="220.0" text="E-Posta" />
+            <TableColumn fx:id="iskontoColumn"  prefWidth="110.0" text="İskonto (%)" />
+            <TableColumn fx:id="balanceColumn"  prefWidth="120.0" text="Bakiye" />
+        </columns>
+    </TableView>
+
+    <!-- Aksiyon butonları -->
+    <!-- ⚠️ fx:id eklendi: actionsBar -->
+    <HBox fx:id="actionsBar" spacing="10.0" alignment="CENTER_RIGHT">
+        <children>
+            <Button fx:id="addButton"    text="Yeni Müşteri Ekle" onAction="#handleAddButton" />
+            <Button fx:id="editButton"   text="Müşteri Düzenle"   onAction="#handleEditButton"/>
+            <Button fx:id="deleteButton" text="Müşteri Sil"       onAction="#handleDeleteButton"/>
+            <Separator orientation="VERTICAL"/>
+            <Button fx:id="takePaymentButton" text="Ödeme Al" onAction="#handleTakePayment"/>
+            <Button fx:id="historyButton"     text="Geçmiş"   onAction="#handleCustomerHistory"/>
+        </children>
+    </HBox>
+</VBox>
+
+//// ===== END =====
+
+//// ===== BEGIN: C:\Users\seyyid\IdeaProjects\ERPdemo\src\main\resources\com\example\erpdemo\edit-customer.fxml =====
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.GridPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.text.Font?>
+
+<VBox xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.example.erpdemo.EditCustomerController" spacing="15.0" style="-fx-padding: 20;">
+    <Label text="Müşteri Düzenle">
+        <font>
+            <Font name="System Bold" size="20.0" />
+        </font>
+    </Label>
+
+    <GridPane hgap="10.0" vgap="10.0">
+        <Label text="ID:" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
+        <TextField fx:id="idField" GridPane.rowIndex="0" GridPane.columnIndex="1" editable="false"/>
+
+        <Label text="Firma Adı:" GridPane.rowIndex="1" GridPane.columnIndex="0"/>
+        <TextField fx:id="companyNameField" GridPane.rowIndex="1" GridPane.columnIndex="1"/>
+
+        <Label text="İletişim Kişisi:" GridPane.rowIndex="2" GridPane.columnIndex="0"/>
+        <TextField fx:id="contactPersonField" GridPane.rowIndex="2" GridPane.columnIndex="1"/>
+
+        <Label text="Telefon:" GridPane.rowIndex="3" GridPane.columnIndex="0"/>
+        <TextField fx:id="phoneField" GridPane.rowIndex="3" GridPane.columnIndex="1"/>
+
+        <Label text="E-Posta:" GridPane.rowIndex="4" GridPane.columnIndex="0"/>
+        <TextField fx:id="emailField" GridPane.rowIndex="4" GridPane.columnIndex="1"/>
+
+        <Label text="İskonto:" GridPane.rowIndex="5" GridPane.columnIndex="0"/>
+        <TextField fx:id="discountField" GridPane.rowIndex="5" GridPane.columnIndex="1"/>
+    </GridPane>
+
+    <HBox spacing="10.0" alignment="CENTER_RIGHT">
+        <Button text="Kaydet" onAction="#handleSave"/>
+        <Button text="İptal" onAction="#handleCancel"/>
+    </HBox>
+</VBox>
+//// ===== END =====
+
+//// ===== BEGIN: C:\Users\seyyid\IdeaProjects\ERPdemo\src\main\resources\com\example\erpdemo\hello-view.fxml =====
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.image.Image?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.*?>
+
+<StackPane xmlns="http://javafx.com/javafx/21"
+           xmlns:fx="http://javafx.com/fxml/1"
+           fx:controller="com.example.erpdemo.HelloController"
+           stylesheets="@hello.css"
+           style="-fx-background-color: linear-gradient(to right,#0b3156,#143f66);">
+
+  <padding>
+    <Insets top="36" right="36" bottom="36" left="36"/>
+  </padding>
+
+  <VBox alignment="CENTER" spacing="18">
+
+    <!-- Logo + Başlık -->
+    <HBox alignment="CENTER" spacing="10">
+      <ImageView fitHeight="34" fitWidth="34" preserveRatio="true">
+        <image>
+          <Image url="@assets/logo-32.png"/>
+        </image>
+      </ImageView>
+      <Label text="Omnis" styleClass="title"/>
+    </HBox>
+
+    <!-- Kart -->
+    <VBox spacing="16"
+          prefWidth="460" maxWidth="460" minWidth="460"
+          prefHeight="250" maxHeight="250" minHeight="250"
+          styleClass="card">
+
+      <padding>
+        <Insets top="20" right="20" bottom="20" left="20"/>
+      </padding>
+
+      <!-- Etiket üstte, alan altta -->
+      <VBox spacing="8">
+        <Label text="Kullanıcı Adı" styleClass="field-label"/>
+        <TextField fx:id="txtUser" promptText="kullanıcı" onAction="#handleLogin"/>
+
+        <Label text="Şifre" style="-fx-padding: 12 0 0 0;" styleClass="field-label"/>
+        <PasswordField fx:id="txtPass" promptText="••••" onAction="#handleLogin"/>
+
+        <HBox alignment="CENTER_LEFT" spacing="8" style="-fx-padding: 14 0 0 0;">
+          <Button fx:id="btnLogin"
+                  text="Giriş Yap"
+                  onAction="#handleLogin"
+                  defaultButton="true"
+                  styleClass="primary-btn"
+                  focusTraversable="false"/>
+        </HBox>
+      </VBox>
+    </VBox>
+  </VBox>
+</StackPane>
+
+//// ===== END =====
+
+//// ===== BEGIN: C:\Users\seyyid\IdeaProjects\ERPdemo\src\main\resources\com\example\erpdemo\main-view.fxml =====
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns="http://javafx.com/javafx/21"
+            xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="com.example.erpdemo.MainController"
+            stylesheets="@main-view.css">
+
+    <!-- ÜST: App Bar -->
+    <top>
+        <HBox styleClass="appbar" alignment="CENTER_LEFT" spacing="14">
+            <Label fx:id="pageTitle" text="Gösterge Paneli" styleClass="appbar-title"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <MenuButton fx:id="userMenu" text="Kullanıcı" styleClass="user-menu" focusTraversable="false">
+                <items>
+                    <MenuItem text="Şifre Değiştir" onAction="#changePassword"/>
+                    <MenuItem text="Çıkış" onAction="#logout"/>
+                </items>
+            </MenuButton>
+        </HBox>
+    </top>
+
+    <!-- SOL: Sidebar -->
+    <left>
+        <VBox styleClass="sidebar" spacing="8">
+            <Separator/>
+            <Button text="Gösterge Paneli"  onAction="#goDashboard" styleClass="nav-btn" focusTraversable="false"/>
+            <Button text="Müşteri İşlemleri" onAction="#goCustomers" styleClass="nav-btn" focusTraversable="false"/>
+            <Button text="Talep/Teklif"      onAction="#goRequests"  styleClass="nav-btn" focusTraversable="false"/>
+            <Button text="Ürün İşlemleri"    onAction="#goProducts"  styleClass="nav-btn" focusTraversable="false"/>
+            <Button text="Onay İşlemleri"    onAction="#goApprovals" styleClass="nav-btn" focusTraversable="false"/>
+            <Button text="Raporlar"          onAction="#goReports"   styleClass="nav-btn" focusTraversable="false"/>
+            <Region VBox.vgrow="ALWAYS"/>
+            <Label text="v1.0.0" styleClass="sidebar-foot"/>
+        </VBox>
+    </left>
+
+    <!-- ORTA: İçerik kökü (Dashboard ile başlar) -->
+    <center>
+        <StackPane fx:id="contentRoot" styleClass="content-root">
+            <VBox fx:id="dashboardRoot" alignment="TOP_CENTER" spacing="18">
+                <Label text="Gösterge Paneli" styleClass="hero-title"/>
+
+                <!-- Kartlar -->
+                <HBox spacing="14" alignment="CENTER">
+                    <VBox styleClass="card">
+                        <Label text="Bugünkü Talep" styleClass="card-title"/>
+                        <Label fx:id="lblTodayRequests" text="0" styleClass="card-metric"/>
+                    </VBox>
+                    <VBox styleClass="card">
+                        <Label text="Toplam Ürün Adedi" styleClass="card-title"/>
+                        <Label fx:id="lblTodayProducts" text="0" styleClass="card-metric"/>
+                    </VBox>
+                    <VBox styleClass="card">
+                        <Label text="Toplam Gelir" styleClass="card-title"/>
+                        <Label fx:id="lblTodayRevenue" text="0.00 TL" styleClass="card-metric"/>
+                    </VBox>
+                </HBox>
+
+                <!-- Ürün bazında bugünkü talep tablosu -->
+                <VBox spacing="8" style="-fx-padding: 6 0 0 0;">
+                    <Label text="Bugün Ürün Bazında Talep" style="-fx-font-weight:700; -fx-text-fill:#38536d;"/>
+                    <!-- Mavi seçim için ekstra sınıf YOK -->
+                    <TableView fx:id="tblTodayProductDemand"
+                               VBox.vgrow="ALWAYS"
+                               prefHeight="260"
+                               focusTraversable="false">
+                        <columns>
+                            <TableColumn fx:id="colDemandProduct" text="Ürün" prefWidth="320"/>
+                            <TableColumn fx:id="colDemandQty"     text="Toplam Miktar" prefWidth="160"/>
+                        </columns>
+                    </TableView>
+                </VBox>
+            </VBox>
+        </StackPane>
+    </center>
+</BorderPane>
+
+//// ===== END =====
+
+//// ===== BEGIN: C:\Users\seyyid\IdeaProjects\ERPdemo\src\main\resources\com\example\erpdemo\new-customer.fxml =====
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.GridPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.text.Font?>
+
+<VBox xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.example.erpdemo.NewCustomerController" spacing="15.0" style="-fx-padding: 20;">
+    <Label text="Yeni Müşteri Ekle">
+        <font>
+            <Font name="System Bold" size="20.0" />
+        </font>
+    </Label>
+
+    <GridPane hgap="10.0" vgap="10.0">
+        <Label text="Firma Adı:" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
+        <TextField fx:id="companyNameField" GridPane.rowIndex="0" GridPane.columnIndex="1"/>
+
+        <Label text="İletişim Kişisi:" GridPane.rowIndex="1" GridPane.columnIndex="0"/>
+        <TextField fx:id="contactPersonField" GridPane.rowIndex="1" GridPane.columnIndex="1"/>
+
+        <Label text="Telefon:" GridPane.rowIndex="2" GridPane.columnIndex="0"/>
+        <TextField fx:id="phoneField" GridPane.rowIndex="2" GridPane.columnIndex="1"/>
+
+        <Label text="E-Posta:" GridPane.rowIndex="3" GridPane.columnIndex="0"/>
+        <TextField fx:id="emailField" GridPane.rowIndex="3" GridPane.columnIndex="1"/>
+
+        <Label text="İskonto:" GridPane.rowIndex="4" GridPane.columnIndex="0"/>
+        <TextField fx:id="discountField" GridPane.rowIndex="4" GridPane.columnIndex="1"/>
+    </GridPane>
+
+    <HBox spacing="10.0" alignment="CENTER_RIGHT">
+        <Button text="Kaydet" onAction="#handleSave"/>
+        <Button text="İptal" onAction="#handleCancel"/>
+    </HBox>
+</VBox>
+//// ===== END =====
+
+//// ===== BEGIN: C:\Users\seyyid\IdeaProjects\ERPdemo\src\main\resources\com\example\erpdemo\new-product.fxml =====
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.GridPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.text.Font?>
+
+<VBox xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="com.example.erpdemo.NewProductController" spacing="15.0" style="-fx-padding: 20;">
+    <Label fx:id="titleLabel" text="Yeni Ürün Ekle">
+        <font>
+            <Font name="System Bold" size="20.0" />
+        </font>
+    </Label>
+
+    <GridPane hgap="10.0" vgap="10.0">
+        <Label text="Ürün Adı:" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
+        <TextField fx:id="nameField" GridPane.rowIndex="0" GridPane.columnIndex="1" promptText="Örn: Vida"/>
+
+        <Label text="Fiyat:" GridPane.rowIndex="1" GridPane.columnIndex="0"/>
+        <TextField fx:id="priceField" GridPane.rowIndex="1" GridPane.columnIndex="1" promptText="Örn: 12,50"/>
+
+        <Label text="Stok:" GridPane.rowIndex="2" GridPane.columnIndex="0"/>
+        <TextField fx:id="stockField" GridPane.rowIndex="2" GridPane.columnIndex="1" promptText="Örn: 100"/>
+
+        <Label text="Birim:" GridPane.rowIndex="3" GridPane.columnIndex="0"/>
+        <TextField fx:id="unitField" GridPane.rowIndex="3" GridPane.columnIndex="1" promptText="Örn: adet, kg, kutu"/>
+    </GridPane>
+
+    <HBox spacing="10.0" alignment="CENTER_RIGHT">
+        <Button text="Kaydet" onAction="#handleSave"/>
+        <Button text="İptal" onAction="#handleCancel"/>
+    </HBox>
+</VBox>
+
+//// ===== END =====
+
+//// ===== BEGIN: C:\Users\seyyid\IdeaProjects\ERPdemo\src\main\resources\com\example\erpdemo\new-request.fxml =====
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns="http://javafx.com/javafx/21"
+            xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="com.example.erpdemo.NewRequestController">
+
+    <!-- Kenar boşlukları DOĞRU kullanım -->
+    <padding>
+        <Insets topRightBottomLeft="12"/>
+    </padding>
+
+    <top>
+        <VBox spacing="10">
+            <children>
+                <GridPane hgap="10" vgap="10">
+                    <columnConstraints>
+                        <ColumnConstraints percentWidth="30"/>
+                        <ColumnConstraints percentWidth="70"/>
+                    </columnConstraints>
+
+                    <children>
+                        <Label text="Müşteri" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
+                        <ComboBox fx:id="customerComboBox" promptText="Müşteri seçin"
+                                  GridPane.rowIndex="0" GridPane.columnIndex="1"/>
+
+                        <Label text="Ürün" GridPane.rowIndex="1" GridPane.columnIndex="0"/>
+                        <ComboBox fx:id="productComboBox" promptText="Ürün seçin"
+                                  GridPane.rowIndex="1" GridPane.columnIndex="1"/>
+
+                        <Label text="Miktar" GridPane.rowIndex="2" GridPane.columnIndex="0"/>
+                        <TextField fx:id="quantityField" promptText="Adet"
+                                   GridPane.rowIndex="2" GridPane.columnIndex="1"/>
+                    </children>
+                </GridPane>
+
+                <HBox spacing="8" alignment="CENTER_RIGHT">
+                    <Button text="Ürün Ekle" onAction="#handleAddProduct"/>
+                </HBox>
+            </children>
+        </VBox>
+    </top>
+
+    <center>
+        <TableView fx:id="productTable">
+            <placeholder>
+                <Label text="Eklenmiş ürün yok."/>
+            </placeholder>
+            <columns>
+                <TableColumn fx:id="productNameColumn" text="Ürün" prefWidth="240"/>
+                <TableColumn fx:id="quantityColumn" text="Miktar" prefWidth="100"/>
+                <TableColumn fx:id="priceColumn" text="Liste Fiyatı" prefWidth="120"/>
+                <TableColumn fx:id="discountedPriceColumn" text="İskontolu Fiyat" prefWidth="140"/>
+            </columns>
+        </TableView>
+    </center>
+
+    <bottom>
+        <VBox spacing="10">
+            <children>
+                <HBox alignment="CENTER_RIGHT" spacing="10">
+                    <Label text="Toplam:"/>
+                    <Label fx:id="totalAmountLabel" text="0.00 TL"/>
+                </HBox>
+
+                <HBox alignment="CENTER_RIGHT" spacing="8">
+                    <Button text="Kaydet" onAction="#handleSaveRequest"/>
+                    <Button text="İptal"  onAction="#handleCancel"/>
+                </HBox>
+            </children>
+        </VBox>
+    </bottom>
+</BorderPane>
+
+//// ===== END =====
+
+//// ===== BEGIN: C:\Users\seyyid\IdeaProjects\ERPdemo\src\main\resources\com\example\erpdemo\product-history-view.fxml =====
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns="http://javafx.com/javafx/21"
+            xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="com.example.erpdemo.ProductHistoryController">
+
+    <padding>
+        <Insets topRightBottomLeft="12"/>
+    </padding>
+
+    <top>
+        <VBox spacing="8">
+            <children>
+                <Label text="Ürün Sipariş Geçmişi" style="-fx-font-size: 18; -fx-font-weight: bold;"/>
+
+                <HBox spacing="10" alignment="CENTER_LEFT">
+                    <children>
+                        <Label text="Ürün:"/>
+                        <Label fx:id="lblProduct" style="-fx-font-weight: 700;"/>
+
+                        <Region HBox.hgrow="ALWAYS"/>
+
+                        <Label text="Başlangıç:"/>
+                        <DatePicker fx:id="dpFrom"/>
+
+                        <Label text="Bitiş:"/>
+                        <DatePicker fx:id="dpTo"/>
+
+                        <Label text="Durum:"/>
+                        <ComboBox fx:id="cbStatus" prefWidth="140"/>
+
+                        <Label text="Müşteri:"/>
+                        <TextField fx:id="txtCustomer" promptText="İsim ara" prefWidth="160"/>
+
+                        <Button text="Uygula" onAction="#handleApplyFilters"/>
+                        <Button text="Temizle" onAction="#handleClearFilters"/>
+                    </children>
+                </HBox>
+            </children>
+        </VBox>
+    </top>
+
+    <center>
+        <TableView fx:id="tblHistory">
+            <columns>
+                <TableColumn fx:id="colReqId"     text="Talep ID"      prefWidth="90"/>
+                <TableColumn fx:id="colDate"      text="Tarih"         prefWidth="130"/>
+                <TableColumn fx:id="colStatus"    text="Durum"         prefWidth="130"/>
+                <TableColumn fx:id="colCustomer"  text="Müşteri"       prefWidth="280"/>
+                <TableColumn fx:id="colQty"       text="Miktar"        prefWidth="110"/>
+                <!-- değişen başlık: -->
+                <TableColumn fx:id="colUnit"      text="İskontolu Fiyat" prefWidth="130"/>
+                <TableColumn fx:id="colSubtotal"  text="Ara Toplam"    prefWidth="140"/>
+            </columns>
+        </TableView>
+    </center>
+
+    <bottom>
+        <VBox spacing="8">
+            <children>
+                <HBox alignment="CENTER_RIGHT" spacing="18">
+                    <children>
+                        <Label text="Toplam Miktar (Onaylanan):"/>
+                        <Label fx:id="lblTotalQty" style="-fx-font-weight: 700;"/>
+                        <Label text="Toplam Tutar (Onaylanan):" style="-fx-padding:0 0 0 16;"/>
+                        <Label fx:id="lblTotalAmount" style="-fx-font-weight: 700;"/>
+                    </children>
+                </HBox>
+                <HBox alignment="CENTER_RIGHT">
+                    <Button text="Kapat" onAction="#handleClose"/>
+                </HBox>
+            </children>
+        </VBox>
+    </bottom>
+</BorderPane>
+
+//// ===== END =====
+
+//// ===== BEGIN: C:\Users\seyyid\IdeaProjects\ERPdemo\src\main\resources\com\example\erpdemo\reports-view.fxml =====
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns="http://javafx.com/javafx/21"
+            xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="com.example.erpdemo.ReportsController"
+            stylesheets="@reports.css">
+
+    <center>
+        <VBox spacing="18" alignment="TOP_LEFT" BorderPane.alignment="CENTER">
+            <padding>
+                <Insets top="24" right="24" bottom="24" left="24"/>
+            </padding>
+
+            <!-- Başlıklar -->
+            <VBox spacing="6">
+                <Label text="Raporlar" styleClass="page-title"/>
+                <Label text="Onaylanmış Talepler — PDF / Excel" styleClass="page-subtitle"/>
+            </VBox>
+
+            <Separator/>
+
+            <!-- İçerik kartları: PDF | Excel -->
+            <GridPane hgap="18" vgap="18">
+                <columnConstraints>
+                    <ColumnConstraints hgrow="ALWAYS" percentWidth="50"/>
+                    <ColumnConstraints hgrow="ALWAYS" percentWidth="50"/>
+                </columnConstraints>
+
+                <!-- PDF Kartı -->
+                <VBox GridPane.columnIndex="0" spacing="12" styleClass="card">
+                    <Label text="Satışlar PDF" styleClass="card-title"/>
+                    <Label text="Seçili dönem için PDF raporu oluşturur." styleClass="muted"/>
+                    <TilePane hgap="10" vgap="10" prefColumns="3">
+                        <Button text="Bugün"        onAction="#generateApprovedRequestsToday"        maxWidth="1.7976931348623157E308" styleClass="pill"/>
+                        <Button text="Bu Hafta"     onAction="#generateApprovedRequestsThisWeek"     maxWidth="1.7976931348623157E308" styleClass="pill"/>
+                        <Button text="Bu Ay"        onAction="#generateApprovedRequestsThisMonth"    maxWidth="1.7976931348623157E308" styleClass="pill"/>
+                        <Button text="Son 1 Ay"     onAction="#generateApprovedRequestsRollingMonth" maxWidth="1.7976931348623157E308" styleClass="pill"/>
+                        <Button text="Tüm Zamanlar" onAction="#generateApprovedRequestsAllTime"      maxWidth="1.7976931348623157E308" styleClass="pill"/>
+                    </TilePane>
+                </VBox>
+
+                <!-- Excel Kartı -->
+                <VBox GridPane.columnIndex="1" spacing="12" styleClass="card">
+                    <Label text="Satışlar Excel" styleClass="card-title"/>
+                    <Label text="Seçili dönem için XLSX dosyası oluşturur." styleClass="muted"/>
+                    <TilePane hgap="10" vgap="10" prefColumns="3">
+                        <Button text="Bugün"        onAction="#exportApprovedRequestsTodayExcel"        maxWidth="1.7976931348623157E308" styleClass="pill"/>
+                        <Button text="Bu Hafta"     onAction="#exportApprovedRequestsThisWeekExcel"     maxWidth="1.7976931348623157E308" styleClass="pill"/>
+                        <Button text="Bu Ay"        onAction="#exportApprovedRequestsThisMonthExcel"    maxWidth="1.7976931348623157E308" styleClass="pill"/>
+                        <Button text="Son 1 Ay"     onAction="#exportApprovedRequestsRollingMonthExcel" maxWidth="1.7976931348623157E308" styleClass="pill"/>
+                        <Button text="Tüm Zamanlar" onAction="#exportApprovedRequestsAllTimeExcel"      maxWidth="1.7976931348623157E308" styleClass="pill"/>
+                    </TilePane>
+                </VBox>
+            </GridPane>
+        </VBox>
+    </center>
+
+</BorderPane>
+
+//// ===== END =====
+
+//// ===== BEGIN: C:\Users\seyyid\IdeaProjects\ERPdemo\src\main\resources\com\example\erpdemo\request-view.fxml =====
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.text.Font?>
+
+<BorderPane xmlns="http://javafx.com/javafx/21"
+            xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="com.example.erpdemo.RequestController">
+
+    <!-- Kenar boşlukları: customer-view ile uyumlu -->
+    <padding>
+        <Insets topRightBottomLeft="20"/>
+    </padding>
+
+    <!-- Üst: Başlık -->
+    <top>
+        <VBox spacing="8" BorderPane.alignment="CENTER_LEFT">
+            <!-- Başlığın altına margin: tabloyla araya boşluk bırakır -->
+            <BorderPane.margin>
+                <Insets bottom="10"/>
+            </BorderPane.margin>
+            <children>
+                <Label text="Talep / Teklif">
+                    <font>
+                        <Font name="System Bold" size="24.0"/>
+                    </font>
+                </Label>
+            </children>
+        </VBox>
+    </top>
+
+    <!-- Orta: Tablo -->
+    <center>
+        <TableView fx:id="tblRequests" BorderPane.alignment="CENTER">
+            <columns>
+                <TableColumn fx:id="colId"             text="ID"           prefWidth="90.0"/>
+                <TableColumn fx:id="colCustomer"       text="Müşteri ID"   prefWidth="110.0"/>
+                <TableColumn fx:id="colCustomerName"   text="Müşteri Adı"  prefWidth="240.0"/>
+                <TableColumn fx:id="colDate"           text="Talep Tarihi" prefWidth="160.0"/>
+                <TableColumn fx:id="colStatus"         text="Durum"        prefWidth="180.0"/>
+            </columns>
+        </TableView>
+    </center>
+
+    <!-- Alt: Buton çubuğu -->
+    <bottom>
+        <HBox fx:id="actionsBar" alignment="CENTER_RIGHT" spacing="8">
+            <padding><Insets topRightBottomLeft="8"/></padding>
+            <Button text="Yeni Talep Oluştur" onAction="#createRequest"/>
+            <Button fx:id="viewBtn"   text="Talebi Görüntüle" onAction="#viewRequest"/>
+            <Button fx:id="deleteBtn" text="Talebi Sil"       onAction="#deleteSingleRequest"/>
+        </HBox>
+    </bottom>
+</BorderPane>
+
+//// ===== END =====
+
+//// ===== BEGIN: C:\Users\seyyid\IdeaProjects\ERPdemo\src\main\resources\com\example\erpdemo\stock-view.fxml =====
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.text.Font?>
+
+<VBox xmlns="http://javafx.com/javafx/21"
+      xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="com.example.erpdemo.StockController"
+      spacing="10.0" style="-fx-padding: 20;">
+
+    <!-- Başlık -->
+    <Label text="Ürün İşlemleri">
+        <font>
+            <Font name="System Bold" size="24.0"/>
+        </font>
+    </Label>
+
+    <!-- Filtre satırı -->
+    <HBox spacing="8">
+        <children>
+            <TextField fx:id="searchField"
+                       promptText="Ara (ürün adı, fiyat, stok, birim)"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <Button text="Temizle" onAction="#handleClearSearch"/>
+        </children>
+    </HBox>
+
+    <!-- Tablo: ilk açılışta fokus almasın -->
+    <TableView fx:id="productTable" VBox.vgrow="ALWAYS" focusTraversable="false">
+        <columns>
+            <TableColumn fx:id="idColumn"    prefWidth="60.0"  text="ID"/>
+            <TableColumn fx:id="nameColumn"  prefWidth="260.0" text="Ürün Adı"/>
+            <TableColumn fx:id="priceColumn" prefWidth="140.0" text="Fiyat"/>
+            <TableColumn fx:id="stockColumn" prefWidth="120.0" text="Stok"/>
+            <TableColumn fx:id="unitColumn"  prefWidth="140.0" text="Birim"/>
+        </columns>
+    </TableView>
+
+    <!-- Aksiyonlar: HARİÇ tutulması için fx:id eklendi -->
+    <HBox fx:id="actionsBar" spacing="10.0" alignment="CENTER_RIGHT">
+        <children>
+            <Button fx:id="addButton"            text="Yeni Ürün Ekle" onAction="#handleAddButton"/>
+            <Button fx:id="editButton"           text="Ürün Düzenle"  onAction="#handleEditButton"/>
+            <Button fx:id="deleteButton"         text="Ürün Sil"      onAction="#handleDeleteButton"/>
+            <Button fx:id="productHistoryButton" text="Geçmiş"        onAction="#handleProductHistory"/>
+        </children>
+    </HBox>
+</VBox>
+
+//// ===== END =====
+
+//// ===== BEGIN: C:\Users\seyyid\IdeaProjects\ERPdemo\src\main\resources\com\example\erpdemo\view-request.fxml =====
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns="http://javafx.com/javafx/21"
+            xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="com.example.erpdemo.ViewRequestController">
+
+    <!-- Kenarlardan genel boşluk -->
+    <padding>
+        <Insets topRightBottomLeft="12"/>
+    </padding>
+
+    <top>
+        <VBox spacing="8">
+            <children>
+                <Label text="Talep Detayı" style="-fx-font-size: 18; -fx-font-weight: bold;"/>
+                <GridPane hgap="12" vgap="8">
+                    <columnConstraints>
+                        <ColumnConstraints percentWidth="20"/>
+                        <ColumnConstraints percentWidth="80"/>
+                    </columnConstraints>
+                    <children>
+                        <Label text="Talep ID:" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
+                        <Label fx:id="requestIdLabel" GridPane.rowIndex="0" GridPane.columnIndex="1"/>
+
+                        <Label text="Müşteri:" GridPane.rowIndex="1" GridPane.columnIndex="0"/>
+                        <Label fx:id="customerNameLabel" GridPane.rowIndex="1" GridPane.columnIndex="1"/>
+
+                        <Label text="Durum:" GridPane.rowIndex="2" GridPane.columnIndex="0"/>
+                        <Label fx:id="statusLabel" GridPane.rowIndex="2" GridPane.columnIndex="1"/>
+
+                        <Label text="Tarih:" GridPane.rowIndex="3" GridPane.columnIndex="0"/>
+                        <Label fx:id="dateLabel" GridPane.rowIndex="3" GridPane.columnIndex="1"/>
+                    </children>
+                </GridPane>
+            </children>
+        </VBox>
+    </top>
+
+    <!-- Tablo + alttan boşluk -->
+    <center>
+        <VBox spacing="8">
+            <padding>
+                <Insets top="0" right="0" bottom="8" left="0"/>
+            </padding>
+            <!-- İlk açılışta fokus almasın (mavi çerçeve görünmesin) -->
+            <TableView fx:id="requestItemsTable" VBox.vgrow="ALWAYS" focusTraversable="false">
+                <columns>
+                    <TableColumn fx:id="productNameColumn"       text="Ürün"            prefWidth="280"/>
+                    <TableColumn fx:id="quantityColumn"          text="Miktar"          prefWidth="120"/>
+                    <TableColumn fx:id="discountedPriceColumn"   text="İskontolu Fiyat" prefWidth="160"/>
+                </columns>
+            </TableView>
+        </VBox>
+    </center>
+
+    <!-- Aksiyon butonları -->
+    <bottom>
+        <!-- actionsBar: dış tıklama filtresinde tablo dışı olarak sayılacak -->
+        <HBox fx:id="actionsBar" alignment="CENTER_RIGHT" spacing="8">
+            <padding>
+                <Insets topRightBottomLeft="8"/>
+            </padding>
+            <Button fx:id="approveBtn" text="Onayla" onAction="#handleApprove"/>
+            <Button fx:id="rejectBtn"  text="Reddet" onAction="#handleReject"/>
+            <Button fx:id="closeBtn"   text="Kapat"  onAction="#handleClose"/>
+        </HBox>
+    </bottom>
+</BorderPane>
+
+//// ===== END =====
+

@@ -1,5 +1,6 @@
 package com.example.erpdemo;
 
+import java.math.BigDecimal;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -12,7 +13,6 @@ public class DashboardDAO {
 
     /** Bugün oluşturulan talep sayısı */
     public static int getTodayRequestCount() throws SQLException {
-        // Kolona CAST yok: SARGable aralık filtresi
         String sql = """
             SELECT COUNT(*)
             FROM dbo.Talepler
@@ -42,10 +42,10 @@ public class DashboardDAO {
         }
     }
 
-    /** Bugünkü taleplerin toplam geliri (Miktar * TeklifFiyati) */
-    public static double getTodayRevenue() throws SQLException {
+    /** Güvenli: Bugünkü toplam gelir (BigDecimal, 2 ondalık). */
+    public static BigDecimal getTodayRevenueBD() throws SQLException {
         String sql = """
-            SELECT COALESCE(SUM(tk.Miktar * tk.TeklifFiyati), 0)
+            SELECT COALESCE(SUM(CAST(tk.Miktar AS decimal(18,2)) * tk.TeklifFiyati), 0)
             FROM dbo.TalepKalemleri tk
             JOIN dbo.Talepler t ON t.Id = tk.TalepId
             WHERE t.TalepTarihi >= CAST(GETDATE() AS date)
@@ -54,8 +54,16 @@ public class DashboardDAO {
         try (Connection c = DatabaseManager.getConnection();
              PreparedStatement ps = c.prepareStatement(sql);
              ResultSet rs = ps.executeQuery()) {
-            return rs.next() ? rs.getDouble(1) : 0.0;
+            if (rs.next()) {
+                return Money.scale2(rs.getBigDecimal(1));
+            }
         }
+        return BigDecimal.ZERO;
+    }
+
+    /** Eski arayüzü bozmamak için: double dönen sürüm (BigDecimal üstünden). */
+    public static double getTodayRevenue() throws SQLException {
+        return getTodayRevenueBD().doubleValue();
     }
 
     /** Bugün, ürün bazında toplam talep miktarı listesi */

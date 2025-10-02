@@ -46,11 +46,8 @@ public class NewProductController {
         if (product != null) {
             nameField.setText(product.getUrunAdi());
 
-            // BigDecimal güvenli format
-            BigDecimal f = product.getFiyat() == null
-                    ? BigDecimal.ZERO
-                    : product.getFiyat().setScale(2, RoundingMode.HALF_UP);
-            priceField.setText(f.toPlainString());
+            BigDecimal f = Money.scale2(product.getFiyat());
+            priceField.setText(Money.fmtTR(f));   // ör: 1.234,56
 
             stockField.setText(String.valueOf(product.getStok()));
             unitField.setText(product.getBirim());
@@ -113,10 +110,9 @@ public class NewProductController {
         if (raw == null) return null;
         String txt = raw.trim();
         if (txt.isEmpty()) return null;
-        txt = txt.replace(',', '.');
         try {
-            return new BigDecimal(txt).setScale(2, RoundingMode.HALF_UP);
-        } catch (NumberFormatException ex) {
+            return Money.scale2(Money.parseTR(txt));
+        } catch (java.text.ParseException ex) {
             return null;
         }
     }

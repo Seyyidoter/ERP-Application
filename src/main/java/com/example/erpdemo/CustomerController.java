@@ -1,5 +1,6 @@
 package com.example.erpdemo;
 
+import com.example.erpdemo.Money;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
@@ -18,7 +19,6 @@ import javafx.stage.Stage;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.sql.SQLException;
-import java.text.NumberFormat;
 import java.util.Locale;
 
 /** Müşteri listesi + CRUD + Ödeme alma + Geçmiş + Filtreleme (ASYNC yükleme) */
@@ -60,15 +60,7 @@ public class CustomerController {
 
         // hizalama ve para biçimlendirme
         iskontoColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
-        balanceColumn.setCellFactory(col -> new TableCell<>() {
-            final NumberFormat nf = NumberFormat.getNumberInstance(new Locale("tr","TR"));
-            { nf.setMinimumFractionDigits(2); nf.setMaximumFractionDigits(2); }
-            @Override protected void updateItem(BigDecimal v, boolean empty) {
-                super.updateItem(v, empty);
-                if (empty || v == null) { setText(null); setStyle(""); }
-                else { setText(nf.format(v)); setStyle("-fx-alignment: CENTER-RIGHT;"); }
-            }
-        });
+        balanceColumn.setCellFactory(MoneyCells.twoDecimalsTR());
 
         // boş tablo mesajı
         customerTable.setPlaceholder(new Label("Kayıtlı müşteri yok"));
@@ -263,11 +255,10 @@ public class CustomerController {
 
         BigDecimal amountBD;
         try {
-            String txt = res.get().replace(",", ".").trim();
-            amountBD = new BigDecimal(txt);
-            if (amountBD.signum() <= 0) throw new NumberFormatException();
-        } catch (NumberFormatException ex) {
-            AppDialogs.warn("Geçerli bir tutar girin (0'dan büyük).");
+            amountBD = com.example.erpdemo.Money.parseTR(res.get().trim());
+            if (amountBD.signum() <= 0) throw new IllegalArgumentException();
+        } catch (Exception ex) {
+            AppDialogs.warn("Geçerli bir tutar girin (0'dan büyük, örn: 1.234,56).");
             return;
         }
 

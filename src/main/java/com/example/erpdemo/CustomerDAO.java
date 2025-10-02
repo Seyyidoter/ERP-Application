@@ -4,7 +4,6 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.sql.*;
 import java.util.*;
 
@@ -12,14 +11,13 @@ public class CustomerDAO {
 
     public static ObservableList<Customer> getAllCustomers() throws SQLException {
         ObservableList<Customer> customerList = FXCollections.observableArrayList();
-        // YALNIZ GEREKLİ KOLONLAR
         String sql = "SELECT Id, FirmaAdi, IletisimKisi, Telefon, Eposta, Iskonto, Bakiye FROM Musteriler";
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql);
              ResultSet rs = stmt.executeQuery()) {
 
             while (rs.next()) {
-                BigDecimal bal = rs.getBigDecimal("Bakiye");
+                BigDecimal bal = Money.scale2(rs.getBigDecimal("Bakiye"));
                 Customer customer = new Customer(
                         rs.getInt("Id"),
                         rs.getString("FirmaAdi"),
@@ -27,7 +25,7 @@ public class CustomerDAO {
                         rs.getString("Telefon"),
                         rs.getString("Eposta"),
                         rs.getInt("Iskonto"),
-                        bal == null ? BigDecimal.ZERO : bal
+                        bal
                 );
                 customerList.add(customer);
             }
@@ -36,14 +34,13 @@ public class CustomerDAO {
     }
 
     public static Customer getCustomerById(int customerId) throws SQLException {
-        // YALNIZ GEREKLİ KOLONLAR
         String sql = "SELECT Id, FirmaAdi, IletisimKisi, Telefon, Eposta, Iskonto, Bakiye FROM Musteriler WHERE Id = ?";
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, customerId);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    BigDecimal bal = rs.getBigDecimal("Bakiye");
+                    BigDecimal bal = Money.scale2(rs.getBigDecimal("Bakiye"));
                     return new Customer(
                             rs.getInt("Id"),
                             rs.getString("FirmaAdi"),
@@ -51,7 +48,7 @@ public class CustomerDAO {
                             rs.getString("Telefon"),
                             rs.getString("Eposta"),
                             rs.getInt("Iskonto"),
-                            bal == null ? BigDecimal.ZERO : bal
+                            bal
                     );
                 }
             }
@@ -95,10 +92,10 @@ public class CustomerDAO {
         }
     }
 
-    /** Bakiye ayarla (BigDecimal, 2 ondalık). */
+    /** Bakiye ayarla (BigDecimal, 2 ondalık – tek noktadan ölçekleme). */
     public static void adjustBalance(int customerId, BigDecimal delta) throws SQLException {
         if (delta == null) throw new IllegalArgumentException("delta null olamaz");
-        delta = delta.setScale(2, RoundingMode.HALF_UP);
+        delta = Money.scale2(delta);
 
         String sql = "UPDATE Musteriler SET Bakiye = Bakiye + ? WHERE Id = ?";
         try (Connection conn = DatabaseManager.getConnection();
@@ -115,7 +112,7 @@ public class CustomerDAO {
         adjustBalance(customerId, BigDecimal.valueOf(delta));
     }
 
-    // ============ YENİ: toplu müşteri adı =============
+    /** Toplu müşteri adı getirir. */
     public static Map<Integer, String> getCustomerNamesByIds(Set<Integer> ids) throws SQLException {
         Map<Integer, String> map = new HashMap<>();
         if (ids == null || ids.isEmpty()) return map;

@@ -10,6 +10,8 @@ import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.time.LocalDate;
 
+import com.example.erpdemo.Money;
+
 public class ProductHistoryController {
 
     @FXML private Label lblProduct;
@@ -106,7 +108,7 @@ public class ProductHistoryController {
                             .reduce(BigDecimal.ZERO, BigDecimal::add);
 
                     lblTotalQty.setText(String.valueOf(totalQty));
-                    lblTotalAmount.setText(MoneyCells.fmtTL(totalAmount));
+                    lblTotalAmount.setText(Money.fmtTRWithSymbol(totalAmount));
                 },
                 ex -> AppDialogs.dbError("Ürün geçmişi yükleme", toSql(ex)),
                 () -> setBusy(false));

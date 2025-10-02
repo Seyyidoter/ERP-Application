@@ -1,5 +1,6 @@
 package com.example.erpdemo;
 
+import com.example.erpdemo.Money;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
@@ -230,7 +231,7 @@ public class MainController {
             double rev = DashboardDAO.getTodayRevenue();
             lblTodayRequests.setText(String.valueOf(req));
             lblTodayProducts.setText(String.valueOf(qty));
-            lblTodayRevenue.setText(String.format("%.2f TL", rev));
+            lblTodayRevenue.setText(Money.fmtTRWithSymbol(java.math.BigDecimal.valueOf(rev)));
         } catch (SQLException e) {
             lblTodayRequests.setText("-");
             lblTodayProducts.setText("-");

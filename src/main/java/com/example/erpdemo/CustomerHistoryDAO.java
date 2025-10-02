@@ -78,11 +78,12 @@ public class CustomerHistoryDAO {
                     String status = rs.getString("Durum");
                     String product = rs.getString("Urun");
                     int qty = rs.getInt("Miktar");
-                    BigDecimal unit = rs.getBigDecimal("TeklifFiyati");
-                    BigDecimal subtotal = (unit == null ? BigDecimal.ZERO : unit.multiply(BigDecimal.valueOf(qty)));
 
-                    rows.add(new CustomerHistoryRow(reqId, date, status, product, qty,
-                            unit == null ? BigDecimal.ZERO : unit, subtotal));
+                    BigDecimal unitRaw = rs.getBigDecimal("TeklifFiyati");
+                    BigDecimal unit = Money.scale2(unitRaw);
+                    BigDecimal subtotal = Money.scale2(unit.multiply(BigDecimal.valueOf(qty)));
+
+                    rows.add(new CustomerHistoryRow(reqId, date, status, product, qty, unit, subtotal));
                 }
             }
         }

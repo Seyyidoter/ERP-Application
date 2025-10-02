@@ -265,12 +265,4 @@ public class ViewRequestController {
         }
         return new SQLException(t.getMessage(), t);
     }
-
-    private void showError(String title, String msg) {
-        Alert a = new Alert(Alert.AlertType.ERROR, msg, ButtonType.OK);
-        a.setTitle(title);
-        a.setHeaderText(null);
-        IconUtil.decorateAlert(a);
-        a.showAndWait();
-    }
 }

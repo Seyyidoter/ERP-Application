@@ -1,7 +1,6 @@
 package com.example.erpdemo;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.sql.*;
 
 /**
@@ -24,8 +23,8 @@ public class PaymentDAO {
             throw new IllegalArgumentException("Ödeme tutarı 0'dan büyük olmalı.");
         }
 
-        // Java 9+ : RoundingMode kullan (deprecated integer sabitler yerine)
-        amount = amount.setScale(2, RoundingMode.HALF_UP);
+        // Tek noktadan yuvarlama/ölçekleme
+        amount = Money.scale2(amount);
 
         final String insertSql =
                 "INSERT INTO dbo.Odemeler (MusteriId, Tutar, Aciklama) VALUES (?, ?, ?)";

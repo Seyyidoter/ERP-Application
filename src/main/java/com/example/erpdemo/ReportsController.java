@@ -15,7 +15,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -256,9 +255,13 @@ public class ReportsController {
                                 row.createCell(c++).setCellValue(rq.getStatus());
                                 row.createCell(c++).setCellValue(it.productName);
                                 Cell qty = row.createCell(c++); qty.setCellValue(it.quantity); qty.setCellStyle(intCs);
-                                Cell lp  = row.createCell(c++); lp.setCellValue(it.listPrice.doubleValue()); lp.setCellStyle(money);
-                                Cell dp  = row.createCell(c++); dp.setCellValue(it.discountedPrice.doubleValue()); dp.setCellStyle(money);
-                                Cell sub = row.createCell(c++); sub.setCellValue(it.discountedPrice.multiply(BigDecimal.valueOf(it.quantity)).doubleValue()); sub.setCellStyle(money);
+
+                                // Tek noktadan ölçekleme sonra doubleValue
+                                Cell lp  = row.createCell(c++); lp.setCellValue(Money.scale2(it.listPrice).doubleValue());       lp.setCellStyle(money);
+                                Cell dp  = row.createCell(c++); dp.setCellValue(Money.scale2(it.discountedPrice).doubleValue());  dp.setCellStyle(money);
+                                Cell sub = row.createCell(c++); sub.setCellValue(
+                                        Money.scale2(it.discountedPrice.multiply(BigDecimal.valueOf(it.quantity))).doubleValue()
+                                ); sub.setCellStyle(money);
                             }
                         }
                     }
@@ -583,10 +586,10 @@ public class ReportsController {
     private static String trim(String s, int max) { if (s == null) return ""; return s.length() <= max ? s : s.substring(0, max - 1) + "…"; }
     private static String padRight(String s, int width) { if (s == null) s = ""; return s.length() >= width ? s : s + " ".repeat(width - s.length()); }
     private static String padLeft(String s, int width) { if (s == null) s = ""; return s.length() >= width ? s : " ".repeat(width - s.length()) + s; }
+
+    /** Tek yerden yuvarlama + TR format (sembolsüz). */
     private static String fmtMoney(BigDecimal v) {
-        if (v == null) v = BigDecimal.ZERO;
-        v = v.setScale(2, RoundingMode.HALF_UP);
-        return String.format(LOCALE_TR, "%.2f", v);
+        return Money.fmtTR(Money.scale2(v));
     }
 
     /* Küçük yardımcı tipi */

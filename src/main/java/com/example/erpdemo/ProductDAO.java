@@ -4,7 +4,6 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.sql.*;
 
 public class ProductDAO {
@@ -51,8 +50,8 @@ public class ProductDAO {
     }
 
     public static void addProduct(String urunAdi, BigDecimal fiyat, int stok, String birim) throws SQLException {
-        if (fiyat == null) fiyat = BigDecimal.ZERO;
-        fiyat = fiyat.setScale(2, RoundingMode.HALF_UP);
+        // Tek noktadan ölçekleme
+        fiyat = Money.scale2(fiyat);
         String sql = "INSERT INTO Stoklar (UrunAdi, Fiyat, Stok, Birim) VALUES (?, ?, ?, ?)";
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -65,10 +64,8 @@ public class ProductDAO {
     }
 
     public static void updateProduct(Product product) throws SQLException {
-        // getFiyat() null gelebilir; her durumda 2 ondalığa sabitle
-        BigDecimal fiyat = (product.getFiyat() == null)
-                ? BigDecimal.ZERO
-                : product.getFiyat().setScale(2, RoundingMode.HALF_UP);
+        // getFiyat() null gelebilir; her durumda tek noktadan ölçekle
+        BigDecimal fiyat = Money.scale2(product.getFiyat());
 
         String sql = "UPDATE Stoklar SET UrunAdi=?, Fiyat=?, Stok=?, Birim=? WHERE Id=?";
         try (Connection conn = DatabaseManager.getConnection();

@@ -65,7 +65,7 @@ public class CustomerHistoryController {
 
     public void setCustomer(Customer c) {
         this.customer = c;
-        lblCustomer.setText(c != null ? c.getCompanyName() : "—"); // changed
+        lblCustomer.setText(c != null ? c.getCompanyName() : "—");
         loadData();
     }
 
@@ -113,7 +113,7 @@ public class CustomerHistoryController {
         // SADECE BigDecimal ile çalış: double YOK
         int totalQty = list.stream()
                 .filter(r -> "Onaylandı".equalsIgnoreCase(r.getStatus()))
-                .mapToInt(CustomerHistoryRow::getQuantity) // changed
+                .mapToInt(CustomerHistoryRow::getQuantity)
                 .sum();
 
         BigDecimal totalAmount = list.stream()

@@ -9,7 +9,7 @@ import javafx.stage.Stage;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.sql.*;
+import java.sql.SQLException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -47,25 +47,16 @@ public class NewRequestController {
         priceColumn.setCellValueFactory(new PropertyValueFactory<>("listPrice"));
         discountedPriceColumn.setCellValueFactory(new PropertyValueFactory<>("discountedPrice"));
 
-        priceColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
-        discountedPriceColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
+        // hizalama + hücre formatları
+        quantityColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
+        priceColumn.setCellFactory(MoneyCells.twoDecimalsTR());
+        discountedPriceColumn.setCellFactory(MoneyCells.twoDecimalsTR());
 
         productTable.setItems(requestItems);
+        productTable.setPlaceholder(new Label("Listeye henüz ürün eklenmedi."));
 
-        priceColumn.setCellFactory(col -> new TableCell<>() {
-            @Override protected void updateItem(BigDecimal v, boolean empty) {
-                super.updateItem(v, empty);
-                setText(empty || v == null ? null : String.format(java.util.Locale.forLanguageTag("tr-TR"), "%.2f", v));
-            }
-        });
-        discountedPriceColumn.setCellFactory(col -> new TableCell<>() {
-            @Override protected void updateItem(BigDecimal v, boolean empty) {
-                super.updateItem(v, empty);
-                setText(empty || v == null ? null : String.format(java.util.Locale.forLanguageTag("tr-TR"), "%.2f", v));
-            }
-        });
-
-        quantityColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
+        // toplamı, liste değiştikçe de güncelle (ekleme/çıkarma olursa)
+        requestItems.addListener((javafx.collections.ListChangeListener<RequestItem>) c -> updateTotalAmount());
     }
 
     private Map<Integer, Integer> collectQuantitiesByProduct() {
@@ -81,7 +72,7 @@ public class NewRequestController {
         Customer cus = customerComboBox.getSelectionModel().getSelectedItem();
         Product  prd = productComboBox.getSelectionModel().getSelectedItem();
 
-        if (cus == null || prd == null || quantityField.getText().isBlank()) {
+        if (cus == null || prd == null || quantityField.getText() == null || quantityField.getText().trim().isBlank()) {
             AppDialogs.warn("Lütfen müşteri, ürün ve miktar girin.");
             return;
         }
@@ -98,11 +89,12 @@ public class NewRequestController {
             return;
         }
 
-        BigDecimal price = prd.getFiyat(); // BigDecimal (liste fiyat)
-        BigDecimal discountPct = BigDecimal.valueOf(cus.getIskonto()); // % int
+        BigDecimal price = prd.getFiyat() != null ? prd.getFiyat() : BigDecimal.ZERO; // liste fiyat
+        BigDecimal discountPct = BigDecimal.valueOf(cus.getIskonto());                 // % int
+
         BigDecimal discounted = price
-                .multiply(BigDecimal.ONE.subtract(discountPct.divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP)))
-                .setScale(2, RoundingMode.HALF_UP);
+                .multiply(BigDecimal.ONE.subtract(discountPct.divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP)));
+        discounted = Money.scale2(discounted); // 🔸 Tek noktadan 2 ondalık
 
         requestItems.add(new RequestItem(0, 0, prd.getId(), prd.getUrunAdi(), qty, price, discounted));
 
@@ -141,56 +133,12 @@ public class NewRequestController {
                 return;
             }
 
-            // 2) ATOMİK KAYIT: Başlık + Kalemler aynı transaction’da
-            final String insertHeaderSql = """
-                INSERT INTO dbo.Talepler (MusteriId, TalepTarihi, Durum)
-                VALUES (?, GETDATE(), N'Onay Bekliyor')
-                """;
-            final String insertItemSql = """
-                INSERT INTO dbo.TalepKalemleri (TalepId, UrunId, Miktar, TeklifFiyati)
-                VALUES (?, ?, ?, ?)
-                """;
+            // 2) Kayıt: Controller değil DAO yapsın (tek noktadan)
+            int requestId = RequestDAO.addRequestWithItems(cus.getId(), new ArrayList<>(requestItems));
 
-            try (Connection c = DatabaseManager.getConnection()) {
-                boolean oldAuto = c.getAutoCommit();
-                c.setAutoCommit(false);
-
-                int requestId = -1;
-                try (PreparedStatement psHdr = c.prepareStatement(insertHeaderSql, Statement.RETURN_GENERATED_KEYS)) {
-                    psHdr.setInt(1, cus.getId());
-                    psHdr.executeUpdate();
-                    try (ResultSet keys = psHdr.getGeneratedKeys()) {
-                        if (keys.next()) {
-                            requestId = ((Number) keys.getObject(1)).intValue();
-                        }
-                    }
-                }
-                if (requestId <= 0) {
-                    throw new SQLException("Yeni talep Id alınamadı (generated keys).");
-                }
-
-                try (PreparedStatement psItem = c.prepareStatement(insertItemSql)) {
-                    for (RequestItem it : requestItems) {
-                        psItem.setInt(1, requestId);
-                        psItem.setInt(2, it.getProductId());
-                        psItem.setInt(3, it.getQuantity());
-                        psItem.setBigDecimal(4, it.getDiscountedPrice().setScale(2, RoundingMode.HALF_UP));
-                        psItem.addBatch();
-                    }
-                    psItem.executeBatch();
-                }
-
-                c.commit();
-                try { c.setAutoCommit(oldAuto); } catch (SQLException ignore) {}
-
-                AppDialogs.info("Talep kaydedildi.");
-                if (dialogStage != null) dialogStage.close();
-                else closeWindowIfPossible();
-
-            } catch (SQLException e) {
-                // Transaction esnasında hata: rollback
-                AppDialogs.dbError("Talep kaydı (transaction)", e);
-            }
+            AppDialogs.info("Talep kaydedildi. (#" + requestId + ")");
+            if (dialogStage != null) dialogStage.close();
+            else closeWindowIfPossible();
 
         } catch (SQLException e) {
             AppDialogs.dbError("Talep kaydı", e);
@@ -215,6 +163,6 @@ public class NewRequestController {
         BigDecimal total = requestItems.stream()
                 .map(RequestItem::getSubtotal)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        totalAmountLabel.setText(String.format(java.util.Locale.forLanguageTag("tr-TR"), "%.2f TL", total));
+        totalAmountLabel.setText(Money.fmtTRWithSymbol(Money.scale2(total))); // ör: "₺1.234,56"
     }
 }
