@@ -1,6 +1,5 @@
 package com.example.erpdemo;
 
-import com.example.erpdemo.Money;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
@@ -218,14 +217,18 @@ public class CustomerController {
         Customer selectedCustomer = customerTable.getSelectionModel().getSelectedItem();
         if (selectedCustomer == null) return; // buton zaten disabled
 
-        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
-                "Müşteriyi silmek istediğinizden emin misiniz?", ButtonType.YES, ButtonType.NO);
+        // TR butonlu onay
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
         confirm.setHeaderText(null);
         confirm.setTitle("Onay");
+        confirm.setContentText("Müşteriyi silmek istediğinizden emin misiniz?");
+        ButtonType evet = new ButtonType("Evet", ButtonBar.ButtonData.YES);
+        ButtonType hayir = new ButtonType("Hayır", ButtonBar.ButtonData.NO);
+        confirm.getButtonTypes().setAll(evet, hayir);
         IconUtil.decorateAlert(confirm);
         confirm.showAndWait();
 
-        if (confirm.getResult() == ButtonType.YES) {
+        if (confirm.getResult() == evet) {
             setBusy(true);
             Async.runVoid(
                     () -> {
@@ -245,27 +248,36 @@ public class CustomerController {
         Customer sel = customerTable.getSelectionModel().getSelectedItem();
         if (sel == null) return; // buton zaten disabled
 
+        // Tutar girişi – TR butonlar
         TextInputDialog td = new TextInputDialog();
         td.setTitle("Ödeme Al – " + sel.getCompanyName());
         td.setHeaderText(null);
         td.setContentText("Tutar (TL):");
+        ButtonType tamam = new ButtonType("Tamam", ButtonBar.ButtonData.OK_DONE);
+        ButtonType iptal = new ButtonType("İptal",  ButtonBar.ButtonData.CANCEL_CLOSE);
+        td.getDialogPane().getButtonTypes().setAll(tamam, iptal);
         IconUtil.decorateDialog(td);
         var res = td.showAndWait();
         if (res.isEmpty()) return;
 
         BigDecimal amountBD;
         try {
-            amountBD = com.example.erpdemo.Money.parseTR(res.get().trim());
+            amountBD = Money.parseTR(res.get().trim());
             if (amountBD.signum() <= 0) throw new IllegalArgumentException();
         } catch (Exception ex) {
             AppDialogs.warn("Geçerli bir tutar girin (0'dan büyük, örn: 1.234,56).");
             return;
         }
 
+        // Açıklama – TR butonlar
         TextInputDialog note = new TextInputDialog();
         note.setTitle("Ödeme Açıklaması");
         note.setHeaderText(null);
         note.setContentText("Açıklama (opsiyonel):");
+        note.getDialogPane().getButtonTypes().setAll(
+                new ButtonType("Tamam", ButtonBar.ButtonData.OK_DONE),
+                new ButtonType("İptal",  ButtonBar.ButtonData.CANCEL_CLOSE)
+        );
         IconUtil.decorateDialog(note);
         String desc = note.showAndWait().orElse("");
 

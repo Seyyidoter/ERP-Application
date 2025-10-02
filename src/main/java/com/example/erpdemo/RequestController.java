@@ -17,7 +17,7 @@ import java.io.IOException;
 import java.sql.SQLException;
 import java.time.LocalDate;
 
-/** Talep listesi ekranı (Görüntüle/Sil butonları, seçim koruma ve asenkron yükleme) */
+/** Talep listesi ekranı (Görüntüle/Sil + Tarih filtresi + asenkron yükleme) */
 public class RequestController {
 
     @FXML private TableView<Row> tblRequests;
@@ -26,6 +26,10 @@ public class RequestController {
     @FXML private TableColumn<Row, String>    colCustomerName;
     @FXML private TableColumn<Row, LocalDate> colDate;
     @FXML private TableColumn<Row, String>    colStatus;
+
+    // 🔸 Tarih filtreleri
+    @FXML private DatePicker dpFrom;
+    @FXML private DatePicker dpTo;
 
     // Seçime bağlı butonlar
     @FXML private Button viewBtn;
@@ -55,7 +59,7 @@ public class RequestController {
         viewBtn.disableProperty().bind(noSel);
         deleteBtn.disableProperty().bind(noSel);
 
-        // 4) Tablo içinde boş alana tıklayınca seçimi/odağı temizle, çift tık → görüntüle
+        // 4) Tabloda boş alana tıklayınca seçimi/odağı temizle, çift tık → görüntüle
         tblRequests.setRowFactory(tv -> {
             TableRow<Row> row = new TableRow<>();
             row.setOnMouseClicked(e -> {
@@ -70,7 +74,7 @@ public class RequestController {
             return row;
         });
 
-        // 5) SAHNE GENELİ: Tablonun DA, actionsBar'ın DA dışında tıklanırsa seçimi temizle
+        // 5) SAHNE GENELİ: tablo ve actionsBar dışına tıklanırsa seçimi temizle
         javafx.application.Platform.runLater(() -> {
             Scene scene = tblRequests.getScene();
             if (scene == null) return;
@@ -99,23 +103,58 @@ public class RequestController {
         return false;
     }
 
+    // 🔸 Filtre butonları
+    @FXML private void handleApplyFilters() { refresh(); }
+    @FXML private void handleClearFilters() {
+        if (dpFrom != null) dpFrom.setValue(null);
+        if (dpTo   != null) dpTo.setValue(null);
+        refresh();
+    }
+
     @FXML
     private void createRequest() {
         try {
             FXMLLoader fxml = new FXMLLoader(getClass().getResource("new-request.fxml"));
             Parent view = fxml.load();
 
+            // Controller’ı al – sadece “Kaydet” olunca listeyi yenile
+            NewRequestController c = fxml.getController();
+            c.setOnSaved(this::refresh);
+
+            Stage owner = (Stage) tblRequests.getScene().getWindow();
+
             Stage dlg = new Stage();
             dlg.setTitle("Yeni Talep");
             dlg.initModality(Modality.WINDOW_MODAL);
-            dlg.initOwner(tblRequests.getScene().getWindow());
+            dlg.initOwner(owner);
             dlg.setScene(new Scene(view));
             IconUtil.setAppIcon(dlg);
+
+            // Kapanışta odağı ve etkileşimi garanti altına al
+            dlg.setOnHidden(e -> {
+                try {
+                    tblRequests.setDisable(false);
+                    tblRequests.setMouseTransparent(false);
+                    tblRequests.requestFocus();
+                    owner.requestFocus();
+                } catch (Throwable ignore) {}
+            });
+
             dlg.showAndWait();
 
-            refresh();
+            // showAndWait dönüşünde de güvence
+            tblRequests.setDisable(false);
+            tblRequests.setMouseTransparent(false);
+            tblRequests.requestFocus();
+
         } catch (IOException ex) {
             AppDialogs.unexpectedError("Talep oluşturma penceresi açma", ex);
+            try {
+                tblRequests.setDisable(false);
+                tblRequests.setMouseTransparent(false);
+                ((Stage) tblRequests.getScene().getWindow()).requestFocus();
+                tblRequests.requestFocus();
+            } catch (Throwable ignore) {}
         }
     }
 
@@ -129,7 +168,6 @@ public class RequestController {
 
             ViewRequestController c = fxml.getController();
             c.setRequestId(sel.getId());
-            // --- DÜZELTME: Detayda onay/reddet sonrası listeyi yenile ---
             c.setOnChange(this::refresh);
 
             Stage dlg = new Stage();
@@ -147,7 +185,7 @@ public class RequestController {
     @FXML
     private void deleteSingleRequest() {
         Row sel = tblRequests.getSelectionModel().getSelectedItem();
-        if (sel == null) return; // buton zaten disabled
+        if (sel == null) return;
 
         Alert q = new Alert(Alert.AlertType.CONFIRMATION,
                 "Talep #" + sel.getId() + " silinsin mi?", ButtonType.YES, ButtonType.NO);
@@ -167,13 +205,19 @@ public class RequestController {
                 () -> setControlsDisabled(false));
     }
 
-    /** JOIN’li özet sorgu kullanılıyor; arka planda yükle. */
+    /** JOIN’li özetleri tarih filtresiyle yükler; arka planda. */
     private void refresh() {
+        final LocalDate from = (dpFrom == null) ? null : dpFrom.getValue();
+        final LocalDate to   = (dpTo   == null) ? null : dpTo.getValue();
+
         setControlsDisabled(true);
         Async.run(() -> {
                     try {
-                        var list = RequestDAO.findAllSummaries();
-                        ObservableList<Row> tmp = FXCollections.observableArrayList();
+                        var list = (from == null && to == null)
+                                ? RequestDAO.findAllSummaries()
+                                : RequestDAO.findSummariesBetween(from, to);
+
+                        var tmp = FXCollections.<Row>observableArrayList();
                         for (RequestSummary s : list) {
                             tmp.add(new Row(s.getId(), s.getCustomerId(), s.getCustomerName(),
                                     s.getRequestDate(), s.getStatus()));
@@ -189,8 +233,13 @@ public class RequestController {
     }
 
     private void setControlsDisabled(boolean disabled) {
-        if (tblRequests != null) tblRequests.setDisable(disabled);
+        if (tblRequests != null) {
+            tblRequests.setDisable(disabled);
+            tblRequests.setMouseTransparent(disabled); // bazı temalarda gerekli
+        }
         if (actionsBar != null)  actionsBar.setDisable(disabled);
+        if (viewBtn != null && viewBtn.isDisable() != disabled) viewBtn.setDisable(disabled);
+        if (deleteBtn != null && deleteBtn.isDisable() != disabled) deleteBtn.setDisable(disabled);
     }
 
     /** Liste satırı modeli. */

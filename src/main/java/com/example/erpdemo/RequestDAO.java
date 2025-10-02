@@ -4,7 +4,6 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.sql.*;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -37,6 +36,50 @@ public class RequestDAO {
                 String status = rs.getString("Durum");
                 String customerName = rs.getString("CustomerName");
                 list.add(new RequestSummary(id, customerId, customerName, date, status));
+            }
+        }
+        return list;
+    }
+
+    /** 🔸 Tarih aralığına göre özet döndürür. (from/to boş olabilir) */
+    public static List<RequestSummary> findSummariesBetween(LocalDate from, LocalDate to) throws SQLException {
+        List<RequestSummary> list = new ArrayList<>();
+
+        StringBuilder sb = new StringBuilder("""
+            SELECT t.Id,
+                   t.MusteriId,
+                   m.FirmaAdi                  AS CustomerName,
+                   CAST(t.TalepTarihi AS date) AS TalepTarihi,
+                   t.Durum
+            FROM dbo.Talepler t
+            LEFT JOIN dbo.Musteriler m ON m.Id = t.MusteriId
+            WHERE 1=1
+        """);
+
+        if (from != null) sb.append(" AND t.TalepTarihi >= ? ");
+        if (to   != null) sb.append(" AND t.TalepTarihi <  ? ");
+        sb.append(" ORDER BY t.Id DESC ");
+
+        try (Connection c = DatabaseManager.getConnection();
+             PreparedStatement ps = c.prepareStatement(sb.toString())) {
+
+            int i = 1;
+            if (from != null) ps.setTimestamp(i++, Timestamp.valueOf(from.atStartOfDay()));
+            if (to   != null) {
+                // to'yu dahil yapmak için ertesi gün 00:00'a kadar alıyoruz
+                ps.setTimestamp(i++, Timestamp.valueOf(to.plusDays(1).atStartOfDay()));
+            }
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    int id = rs.getInt("Id");
+                    int customerId = rs.getInt("MusteriId");
+                    Date d = rs.getDate("TalepTarihi");
+                    LocalDate date = (d != null ? d.toLocalDate() : null);
+                    String status = rs.getString("Durum");
+                    String customerName = rs.getString("CustomerName");
+                    list.add(new RequestSummary(id, customerId, customerName, date, status));
+                }
             }
         }
         return list;
@@ -75,7 +118,7 @@ public class RequestDAO {
 
             try (PreparedStatement psItem = c.prepareStatement(insertItemSql)) {
                 for (RequestItem it : items) {
-                    BigDecimal discounted = Money.scale2(it.getDiscountedPrice()); // 🔸
+                    BigDecimal discounted = Money.scale2(it.getDiscountedPrice());
                     psItem.setInt(1, requestId);
                     psItem.setInt(2, it.getProductId());
                     psItem.setInt(3, it.getQuantity());
@@ -119,7 +162,7 @@ public class RequestDAO {
             ps.setInt(1, requestId);
             ps.setInt(2, productId);
             ps.setInt(3, qty);
-            ps.setBigDecimal(4, Money.scale2(fiyat)); // 🔸
+            ps.setBigDecimal(4, Money.scale2(fiyat));
             ps.executeUpdate();
         }
     }
@@ -163,9 +206,9 @@ public class RequestDAO {
         ObservableList<Request> list = FXCollections.observableArrayList();
 
         StringBuilder sb = new StringBuilder("""
-        SELECT Id, MusteriId, TalepTarihi, Durum, OnaylayanKullaniciId, OnayTarihi
-          FROM dbo.Talepler
-         WHERE Durum = N'Onaylandı'
+            SELECT Id, MusteriId, TalepTarihi, Durum, OnaylayanKullaniciId, OnayTarihi
+              FROM dbo.Talepler
+             WHERE Durum = N'Onaylandı'
         """);
 
         if (from != null) sb.append(" AND OnayTarihi >= ? ");
@@ -257,7 +300,7 @@ public class RequestDAO {
             ps.setInt(1, requestId);
             try (ResultSet rs = ps.executeQuery()) {
                 BigDecimal v = rs.next() ? rs.getBigDecimal(1) : BigDecimal.ZERO;
-                return Money.scale2(v); // 🔸
+                return Money.scale2(v);
             }
         }
     }
@@ -422,7 +465,7 @@ public class RequestDAO {
             ps.setInt(1, requestId);
             try (ResultSet rs = ps.executeQuery()) {
                 BigDecimal v = rs.next() ? rs.getBigDecimal(1) : BigDecimal.ZERO;
-                return Money.scale2(v); // 🔸
+                return Money.scale2(v);
             }
         }
     }

@@ -13,10 +13,9 @@
         <Insets topRightBottomLeft="20"/>
     </padding>
 
-    <!-- Üst: Başlık -->
+    <!-- Üst: Başlık + Tarih filtresi -->
     <top>
         <VBox spacing="8" BorderPane.alignment="CENTER_LEFT">
-            <!-- Başlığın altına margin: tabloyla araya boşluk bırakır -->
             <BorderPane.margin>
                 <Insets bottom="10"/>
             </BorderPane.margin>
@@ -26,6 +25,21 @@
                         <Font name="System Bold" size="24.0"/>
                     </font>
                 </Label>
+
+                <!-- 🔸 Tarih filtre satırı -->
+                <HBox spacing="10" alignment="CENTER_LEFT">
+                    <children>
+                        <Label text="Başlangıç:"/>
+                        <DatePicker fx:id="dpFrom"/>
+
+                        <Label text="Bitiş:"/>
+                        <DatePicker fx:id="dpTo"/>
+
+                        <Button text="Uygula" onAction="#handleApplyFilters"/>
+                        <Button text="Temizle" onAction="#handleClearFilters"/>
+                        <Region HBox.hgrow="ALWAYS"/>
+                    </children>
+                </HBox>
             </children>
         </VBox>
     </top>

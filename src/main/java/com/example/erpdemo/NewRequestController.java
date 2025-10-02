@@ -6,30 +6,37 @@ import javafx.fxml.FXML;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.stage.Stage;
+import javafx.util.StringConverter;
+import javafx.scene.control.ListCell;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.sql.SQLException;
 import java.util.*;
-import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
 public class NewRequestController {
 
     @FXML private ComboBox<Customer> customerComboBox;
     @FXML private ComboBox<Product>  productComboBox;
-    @FXML private TextField quantityField;
+    @FXML private TextField          quantityField;
 
-    @FXML private TableView<RequestItem> productTable;
+    @FXML private TableView<RequestItem>               productTable;
     @FXML private TableColumn<RequestItem, String>     productNameColumn;
     @FXML private TableColumn<RequestItem, Integer>    quantityColumn;
-    @FXML private TableColumn<RequestItem, BigDecimal> priceColumn;           // BigDecimal
-    @FXML private TableColumn<RequestItem, BigDecimal> discountedPriceColumn; // BigDecimal
+    @FXML private TableColumn<RequestItem, BigDecimal> priceColumn;
+    @FXML private TableColumn<RequestItem, BigDecimal> discountedPriceColumn;
 
     @FXML private Label totalAmountLabel;
 
     private final ObservableList<RequestItem> requestItems = FXCollections.observableArrayList();
     private Stage dialogStage;
+
+    /** "Kaydet" başarılı olunca dışarıya haber vermek için. */
+    private Runnable onSaved;
+
+    /** Müşteri seçiminde geri alma yaparken uyarının tekrar açılmasını engellemek için. */
+    private boolean suppressCustomerChange = false;
 
     @FXML
     public void initialize() {
@@ -43,13 +50,19 @@ public class NewRequestController {
             AppDialogs.dbError("Müşteri/ürün verileri yükleme", e);
         }
 
-        // Sütun–model bağları
+        // Boşken promptText görünsün
+        installPromptOnEmpty(customerComboBox);
+        installPromptOnEmpty(productComboBox);
+
+        // Müşteri değişimi → doğrulama / sıfırlama
+        customerComboBox.valueProperty().addListener((obs, oldCus, newCus) -> onCustomerChanged(oldCus, newCus));
+
+        // Tablo sütunları
         productNameColumn.setCellValueFactory(new PropertyValueFactory<>("productName"));
         quantityColumn.setCellValueFactory(new PropertyValueFactory<>("quantity"));
         priceColumn.setCellValueFactory(new PropertyValueFactory<>("listPrice"));
         discountedPriceColumn.setCellValueFactory(new PropertyValueFactory<>("discountedPrice"));
 
-        // Hücre stil/biçimleri
         quantityColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
         priceColumn.setCellFactory(MoneyCells.twoDecimalsTR());
         discountedPriceColumn.setCellFactory(MoneyCells.twoDecimalsTR());
@@ -57,17 +70,73 @@ public class NewRequestController {
         productTable.setItems(requestItems);
         productTable.setPlaceholder(new Label("Listeye henüz ürün eklenmedi."));
 
-        // Toplam, liste değiştiğinde güncellensin
+        // Liste değiştikçe toplamı güncelle
         requestItems.addListener((javafx.collections.ListChangeListener<RequestItem>) c -> updateTotalAmount());
+    }
 
-        // 🔹 MİKTAR alanı: yalnızca rakam (boş da serbest – kullanıcı yazarken)
-        quantityField.setTextFormatter(new TextFormatter<>(numericIntFilter()));
+    /** Dışarıdan: Kaydet başarılı olursa çağrılacak aksiyonu ver. */
+    public void setOnSaved(Runnable r) { this.onSaved = r; }
 
-        // 🔹 Enter ile ekleme
-        quantityField.setOnAction(e -> handleAddProduct());
+    /** Müşteri değiştirildiğinde liste/alanları kontrol ederek sıfırlar. */
+    private void onCustomerChanged(Customer oldCus, Customer newCus) {
+        // Geri alma sırasında tetiklenen değişikliği yok say
+        if (suppressCustomerChange) {
+            suppressCustomerChange = false;
+            return;
+        }
+        if (Objects.equals(oldCus, newCus)) return;
 
-        // Açılışta toplam etiketi güvenli biçimde güncelle
-        updateTotalAmount();
+        // Ürün listesi boşsa sessizce alanları sıfırla
+        if (requestItems.isEmpty()) {
+            clearProductInputs();
+            return;
+        }
+
+        // Aksi halde onay iste
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+        confirm.setHeaderText(null);
+        confirm.setTitle("Müşteri Değiştir");
+        confirm.setContentText("Müşteri değiştirildiğinde mevcut ürün listesi temizlenecek.\nDevam edilsin mi?");
+
+        // Türkçe butonlar
+        ButtonType evetBtn = new ButtonType("Evet", ButtonBar.ButtonData.YES);
+        ButtonType hayirBtn = new ButtonType("Hayır", ButtonBar.ButtonData.NO);
+        confirm.getButtonTypes().setAll(evetBtn, hayirBtn);
+
+        IconUtil.decorateAlert(confirm);
+        confirm.showAndWait();
+
+        if (confirm.getResult() == evetBtn) {
+            requestItems.clear();
+            clearProductInputs();
+        } else {
+            // Eski müşteriye geri dön → bu değişiklikte listener çalışmasın
+            suppressCustomerChange = true;
+            customerComboBox.getSelectionModel().select(oldCus);
+        }
+    }
+
+    /** Ürün/miktar alanlarını sıfırlar ve prompt’ı geri getirir. */
+    private void clearProductInputs() {
+        productComboBox.getSelectionModel().clearSelection();
+        productComboBox.setValue(null); // buttonCell prompt’ı gösterecek
+        quantityField.clear();
+        productComboBox.requestFocus();
+    }
+
+    /** ComboBox boşken (value=null) butonda promptText’i gösterir. */
+    private static <T> void installPromptOnEmpty(ComboBox<T> combo) {
+        combo.setButtonCell(new ListCell<>() {
+            @Override protected void updateItem(T item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(combo.getPromptText());
+                } else {
+                    StringConverter<T> conv = combo.getConverter();
+                    setText(conv != null ? conv.toString(item) : String.valueOf(item));
+                }
+            }
+        });
     }
 
     private Map<Integer, Integer> collectQuantitiesByProduct() {
@@ -103,21 +172,14 @@ public class NewRequestController {
         BigDecimal price = prd.getFiyat() != null ? prd.getFiyat() : BigDecimal.ZERO; // liste fiyat
         BigDecimal discountPct = BigDecimal.valueOf(cus.getIskonto());                 // % int
 
-        BigDecimal discounted = price
-                .multiply(BigDecimal.ONE.subtract(discountPct.divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP)));
-        discounted = Money.scale2(discounted); // 🔸 Tek noktadan 2 ondalık
+        BigDecimal discounted = price.multiply(
+                BigDecimal.ONE.subtract(discountPct.divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP))
+        );
+        discounted = Money.scale2(discounted);
 
         requestItems.add(new RequestItem(0, 0, prd.getId(), prd.getUrunAdi(), qty, price, discounted));
 
-        // İlk kalem eklendiyse müşteri değişmesin (iskonto tutarlılığı)
-        if (!requestItems.isEmpty()) {
-            customerComboBox.setDisable(true);
-        }
-
-        // UX temizlikleri
-        quantityField.clear();
-        productComboBox.getSelectionModel().clearSelection();
-        updateTotalAmount();
+        clearProductInputs();
     }
 
     @FXML
@@ -129,7 +191,7 @@ public class NewRequestController {
         }
 
         try {
-            // 1) Güncel stoklara göre toplamlara bak (yarışları azaltmak için son kontrol)
+            // Güncel stoklara göre toplamlara bak (son kontrol)
             Map<Integer, Integer> totals = collectQuantitiesByProduct();
 
             List<String> insuff = new ArrayList<>();
@@ -151,10 +213,12 @@ public class NewRequestController {
                 return;
             }
 
-            // 2) Kayıt: Controller değil DAO yapsın (tek noktadan)
             int requestId = RequestDAO.addRequestWithItems(cus.getId(), new ArrayList<>(requestItems));
 
             AppDialogs.info("Talep kaydedildi. (#" + requestId + ")");
+            if (onSaved != null) {
+                try { onSaved.run(); } catch (Throwable ignore) {}
+            }
             if (dialogStage != null) dialogStage.close();
             else closeWindowIfPossible();
 
@@ -175,20 +239,23 @@ public class NewRequestController {
         }
     }
 
-    public void setDialogStage(Stage s) { this.dialogStage = s; }
+    public void setDialogStage(Stage s) {
+        this.dialogStage = s;
+        if (s != null) {
+            // Dialog kapanırken ana pencereyi etkinleştir + odak ver (garanti)
+            s.setOnHidden(e -> {
+                try {
+                    var owner = s.getOwner();
+                    if (owner != null) owner.requestFocus();
+                } catch (Throwable ignore) {}
+            });
+        }
+    }
 
     private void updateTotalAmount() {
         BigDecimal total = requestItems.stream()
                 .map(RequestItem::getSubtotal)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        totalAmountLabel.setText(Money.fmtTRWithSymbol(Money.scale2(total))); // ör: "₺1.234,56"
-    }
-
-    /** Yalnızca 0-9 (boş’a izin ver, silerken engel olmasın). */
-    private static UnaryOperator<TextFormatter.Change> numericIntFilter() {
-        return change -> {
-            String newText = change.getControlNewText();
-            return newText.matches("\\d*") ? change : null;
-        };
+        totalAmountLabel.setText(Money.fmtTRWithSymbol(Money.scale2(total)));
     }
 }
