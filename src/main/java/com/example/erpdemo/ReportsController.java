@@ -366,33 +366,58 @@ public class ReportsController {
 
     /** Talep kalemlerini tek seferde çekip requestId'ye göre gruplar */
     private Map<Integer, List<ItemRow>> fetchItemsForRequests(Collection<Integer> requestIds) throws SQLException {
-        if (requestIds.isEmpty()) return Map.of();
-        String placeholders = String.join(",", Collections.nCopies(requestIds.size(), "?"));
-        String sql = """
-            SELECT tk.TalepId, s.UrunAdi, tk.Miktar, s.Fiyat AS ListeFiyati, tk.TeklifFiyati AS IskontoluFiyat
-            FROM dbo.TalepKalemleri tk
-            JOIN dbo.Stoklar s ON s.Id = tk.UrunId
-            WHERE tk.TalepId IN (""" + placeholders + ") ORDER BY tk.TalepId, tk.Id";
+        if (requestIds == null || requestIds.isEmpty()) return Map.of();
 
+        // 2100 limitine güvenli mesafe: 1000'lik dilimler
+        final int CHUNK = 1000;
+
+        // Çağıran taraftaki talep sırasını korumak için LinkedHashMap
         Map<Integer, List<ItemRow>> map = new LinkedHashMap<>();
-        try (Connection c = DatabaseManager.getConnection();
-             PreparedStatement ps = c.prepareStatement(sql)) {
-            int i = 1;
-            for (Integer id : requestIds) ps.setInt(i++, id);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    int rid = rs.getInt("TalepId");
-                    map.computeIfAbsent(rid, k -> new ArrayList<>()).add(
-                            new ItemRow(
-                                    rs.getString("UrunAdi"),
-                                    rs.getInt("Miktar"),
-                                    rs.getBigDecimal("ListeFiyati"),
-                                    rs.getBigDecimal("IskontoluFiyat")
-                            )
-                    );
+
+        // Kolay dilimleme için listeye al
+        java.util.List<Integer> ids = new java.util.ArrayList<>(requestIds);
+
+        // Tek bağlantı — her dilimde aynı connection'ı kullan
+        try (Connection c = DatabaseManager.getConnection()) {
+
+            for (int start = 0; start < ids.size(); start += CHUNK) {
+                java.util.List<Integer> chunk = ids.subList(start, Math.min(start + CHUNK, ids.size()));
+
+                // (?, ?, ?, ...) placeholder üret
+                String placeholders = String.join(",", java.util.Collections.nCopies(chunk.size(), "?"));
+
+                String sql = """
+                SELECT tk.TalepId,
+                       s.UrunAdi,
+                       tk.Miktar,
+                       s.Fiyat           AS ListeFiyati,
+                       tk.TeklifFiyati   AS IskontoluFiyat
+                  FROM dbo.TalepKalemleri tk
+                  JOIN dbo.Stoklar s ON s.Id = tk.UrunId
+                 WHERE tk.TalepId IN (""" + placeholders + ") " +
+                        "ORDER BY tk.TalepId, tk.Id";
+
+                try (PreparedStatement ps = c.prepareStatement(sql)) {
+                    int i = 1;
+                    for (Integer id : chunk) ps.setInt(i++, id);
+
+                    try (ResultSet rs = ps.executeQuery()) {
+                        while (rs.next()) {
+                            int rid = rs.getInt("TalepId");
+                            map.computeIfAbsent(rid, k -> new java.util.ArrayList<>()).add(
+                                    new ItemRow(
+                                            rs.getString("UrunAdi"),
+                                            rs.getInt("Miktar"),
+                                            rs.getBigDecimal("ListeFiyati"),
+                                            rs.getBigDecimal("IskontoluFiyat")
+                                    )
+                            );
+                        }
+                    }
                 }
             }
         }
+
         return map;
     }
 

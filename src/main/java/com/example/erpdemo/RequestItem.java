@@ -3,7 +3,10 @@ package com.example.erpdemo;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 
-/** Talep kalemi: miktar, liste fiyatı, iskontolu fiyat ve ara toplam. */
+/**
+ * Talep kalemi: miktar, liste fiyatı, iskontolu fiyat ve ara toplam.
+ * Immutable tasarım: tüm alanlar final, BigDecimal değerleri 2 ondalık (HALF_UP) ölçeklenir.
+ */
 public class RequestItem {
     private final int id;
     private final int requestId;
@@ -17,7 +20,7 @@ public class RequestItem {
     /** İskontolu birim fiyat (2 ondalık) */
     private final BigDecimal discountedPrice;
 
-    // BigDecimal temelli ana kurucu
+    // BigDecimal tabanlı ana kurucu
     public RequestItem(int id,
                        int requestId,
                        int productId,
@@ -28,7 +31,7 @@ public class RequestItem {
         this.id = id;
         this.requestId = requestId;
         this.productId = productId;
-        this.productName = productName;
+        this.productName = norm(productName);
         this.quantity = quantity;
         // null güvenliği + tutarlı ölçek
         this.listPrice = scale2(listPrice);
@@ -66,5 +69,11 @@ public class RequestItem {
     private static BigDecimal scale2(BigDecimal v) {
         if (v == null) v = BigDecimal.ZERO;
         return v.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /** null → "", trim + iç boşluk sadeleştirme */
+    private static String norm(String s) {
+        if (s == null) return "";
+        return s.trim().replaceAll("\\s+", " ");
     }
 }

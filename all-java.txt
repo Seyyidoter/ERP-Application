@@ -454,6 +454,7 @@ public class Customer {
 //// ===== BEGIN: C:\Users\seyyid\IdeaProjects\ERPdemo\src\main\java\com\example\erpdemo\CustomerController.java =====
 package com.example.erpdemo;
 
+import com.example.erpdemo.Money;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
@@ -472,7 +473,6 @@ import javafx.stage.Stage;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.sql.SQLException;
-import java.text.NumberFormat;
 import java.util.Locale;
 
 /** Müşteri listesi + CRUD + Ödeme alma + Geçmiş + Filtreleme (ASYNC yükleme) */
@@ -514,15 +514,7 @@ public class CustomerController {
 
         // hizalama ve para biçimlendirme
         iskontoColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
-        balanceColumn.setCellFactory(col -> new TableCell<>() {
-            final NumberFormat nf = NumberFormat.getNumberInstance(new Locale("tr","TR"));
-            { nf.setMinimumFractionDigits(2); nf.setMaximumFractionDigits(2); }
-            @Override protected void updateItem(BigDecimal v, boolean empty) {
-                super.updateItem(v, empty);
-                if (empty || v == null) { setText(null); setStyle(""); }
-                else { setText(nf.format(v)); setStyle("-fx-alignment: CENTER-RIGHT;"); }
-            }
-        });
+        balanceColumn.setCellFactory(MoneyCells.twoDecimalsTR());
 
         // boş tablo mesajı
         customerTable.setPlaceholder(new Label("Kayıtlı müşteri yok"));
@@ -717,11 +709,10 @@ public class CustomerController {
 
         BigDecimal amountBD;
         try {
-            String txt = res.get().replace(",", ".").trim();
-            amountBD = new BigDecimal(txt);
-            if (amountBD.signum() <= 0) throw new NumberFormatException();
-        } catch (NumberFormatException ex) {
-            AppDialogs.warn("Geçerli bir tutar girin (0'dan büyük).");
+            amountBD = com.example.erpdemo.Money.parseTR(res.get().trim());
+            if (amountBD.signum() <= 0) throw new IllegalArgumentException();
+        } catch (Exception ex) {
+            AppDialogs.warn("Geçerli bir tutar girin (0'dan büyük, örn: 1.234,56).");
             return;
         }
 
@@ -792,7 +783,6 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.sql.*;
 import java.util.*;
 
@@ -800,14 +790,13 @@ public class CustomerDAO {
 
     public static ObservableList<Customer> getAllCustomers() throws SQLException {
         ObservableList<Customer> customerList = FXCollections.observableArrayList();
-        // YALNIZ GEREKLİ KOLONLAR
         String sql = "SELECT Id, FirmaAdi, IletisimKisi, Telefon, Eposta, Iskonto, Bakiye FROM Musteriler";
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql);
              ResultSet rs = stmt.executeQuery()) {
 
             while (rs.next()) {
-                BigDecimal bal = rs.getBigDecimal("Bakiye");
+                BigDecimal bal = Money.scale2(rs.getBigDecimal("Bakiye"));
                 Customer customer = new Customer(
                         rs.getInt("Id"),
                         rs.getString("FirmaAdi"),
@@ -815,7 +804,7 @@ public class CustomerDAO {
                         rs.getString("Telefon"),
                         rs.getString("Eposta"),
                         rs.getInt("Iskonto"),
-                        bal == null ? BigDecimal.ZERO : bal
+                        bal
                 );
                 customerList.add(customer);
             }
@@ -824,14 +813,13 @@ public class CustomerDAO {
     }
 
     public static Customer getCustomerById(int customerId) throws SQLException {
-        // YALNIZ GEREKLİ KOLONLAR
         String sql = "SELECT Id, FirmaAdi, IletisimKisi, Telefon, Eposta, Iskonto, Bakiye FROM Musteriler WHERE Id = ?";
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, customerId);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    BigDecimal bal = rs.getBigDecimal("Bakiye");
+                    BigDecimal bal = Money.scale2(rs.getBigDecimal("Bakiye"));
                     return new Customer(
                             rs.getInt("Id"),
                             rs.getString("FirmaAdi"),
@@ -839,7 +827,7 @@ public class CustomerDAO {
                             rs.getString("Telefon"),
                             rs.getString("Eposta"),
                             rs.getInt("Iskonto"),
-                            bal == null ? BigDecimal.ZERO : bal
+                            bal
                     );
                 }
             }
@@ -883,10 +871,10 @@ public class CustomerDAO {
         }
     }
 
-    /** Bakiye ayarla (BigDecimal, 2 ondalık). */
+    /** Bakiye ayarla (BigDecimal, 2 ondalık – tek noktadan ölçekleme). */
     public static void adjustBalance(int customerId, BigDecimal delta) throws SQLException {
         if (delta == null) throw new IllegalArgumentException("delta null olamaz");
-        delta = delta.setScale(2, RoundingMode.HALF_UP);
+        delta = Money.scale2(delta);
 
         String sql = "UPDATE Musteriler SET Bakiye = Bakiye + ? WHERE Id = ?";
         try (Connection conn = DatabaseManager.getConnection();
@@ -903,7 +891,7 @@ public class CustomerDAO {
         adjustBalance(customerId, BigDecimal.valueOf(delta));
     }
 
-    // ============ YENİ: toplu müşteri adı =============
+    /** Toplu müşteri adı getirir. */
     public static Map<Integer, String> getCustomerNamesByIds(Set<Integer> ids) throws SQLException {
         Map<Integer, String> map = new HashMap<>();
         if (ids == null || ids.isEmpty()) return map;
@@ -996,7 +984,7 @@ public class CustomerHistoryController {
 
     public void setCustomer(Customer c) {
         this.customer = c;
-        lblCustomer.setText(c != null ? c.getCompanyName() : "—"); // changed
+        lblCustomer.setText(c != null ? c.getCompanyName() : "—");
         loadData();
     }
 
@@ -1044,7 +1032,7 @@ public class CustomerHistoryController {
         // SADECE BigDecimal ile çalış: double YOK
         int totalQty = list.stream()
                 .filter(r -> "Onaylandı".equalsIgnoreCase(r.getStatus()))
-                .mapToInt(CustomerHistoryRow::getQuantity) // changed
+                .mapToInt(CustomerHistoryRow::getQuantity)
                 .sum();
 
         BigDecimal totalAmount = list.stream()
@@ -1164,11 +1152,12 @@ public class CustomerHistoryDAO {
                     String status = rs.getString("Durum");
                     String product = rs.getString("Urun");
                     int qty = rs.getInt("Miktar");
-                    BigDecimal unit = rs.getBigDecimal("TeklifFiyati");
-                    BigDecimal subtotal = (unit == null ? BigDecimal.ZERO : unit.multiply(BigDecimal.valueOf(qty)));
 
-                    rows.add(new CustomerHistoryRow(reqId, date, status, product, qty,
-                            unit == null ? BigDecimal.ZERO : unit, subtotal));
+                    BigDecimal unitRaw = rs.getBigDecimal("TeklifFiyati");
+                    BigDecimal unit = Money.scale2(unitRaw);
+                    BigDecimal subtotal = Money.scale2(unit.multiply(BigDecimal.valueOf(qty)));
+
+                    rows.add(new CustomerHistoryRow(reqId, date, status, product, qty, unit, subtotal));
                 }
             }
         }
@@ -1236,6 +1225,7 @@ public class CustomerStringConverter extends StringConverter<Customer> {
 //// ===== BEGIN: C:\Users\seyyid\IdeaProjects\ERPdemo\src\main\java\com\example\erpdemo\DashboardDAO.java =====
 package com.example.erpdemo;
 
+import java.math.BigDecimal;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -1248,7 +1238,6 @@ public class DashboardDAO {
 
     /** Bugün oluşturulan talep sayısı */
     public static int getTodayRequestCount() throws SQLException {
-        // Kolona CAST yok: SARGable aralık filtresi
         String sql = """
             SELECT COUNT(*)
             FROM dbo.Talepler
@@ -1278,10 +1267,10 @@ public class DashboardDAO {
         }
     }
 
-    /** Bugünkü taleplerin toplam geliri (Miktar * TeklifFiyati) */
-    public static double getTodayRevenue() throws SQLException {
+    /** Güvenli: Bugünkü toplam gelir (BigDecimal, 2 ondalık). */
+    public static BigDecimal getTodayRevenueBD() throws SQLException {
         String sql = """
-            SELECT COALESCE(SUM(tk.Miktar * tk.TeklifFiyati), 0)
+            SELECT COALESCE(SUM(CAST(tk.Miktar AS decimal(18,2)) * tk.TeklifFiyati), 0)
             FROM dbo.TalepKalemleri tk
             JOIN dbo.Talepler t ON t.Id = tk.TalepId
             WHERE t.TalepTarihi >= CAST(GETDATE() AS date)
@@ -1290,8 +1279,16 @@ public class DashboardDAO {
         try (Connection c = DatabaseManager.getConnection();
              PreparedStatement ps = c.prepareStatement(sql);
              ResultSet rs = ps.executeQuery()) {
-            return rs.next() ? rs.getDouble(1) : 0.0;
+            if (rs.next()) {
+                return Money.scale2(rs.getBigDecimal(1));
+            }
         }
+        return BigDecimal.ZERO;
+    }
+
+    /** Eski arayüzü bozmamak için: double dönen sürüm (BigDecimal üstünden). */
+    public static double getTodayRevenue() throws SQLException {
+        return getTodayRevenueBD().doubleValue();
     }
 
     /** Bugün, ürün bazında toplam talep miktarı listesi */
@@ -1876,6 +1873,7 @@ public final class LogoutUtil {
 //// ===== BEGIN: C:\Users\seyyid\IdeaProjects\ERPdemo\src\main\java\com\example\erpdemo\MainController.java =====
 package com.example.erpdemo;
 
+import com.example.erpdemo.Money;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
@@ -2106,7 +2104,7 @@ public class MainController {
             double rev = DashboardDAO.getTodayRevenue();
             lblTodayRequests.setText(String.valueOf(req));
             lblTodayProducts.setText(String.valueOf(qty));
-            lblTodayRevenue.setText(String.format("%.2f TL", rev));
+            lblTodayRevenue.setText(Money.fmtTRWithSymbol(java.math.BigDecimal.valueOf(rev)));
         } catch (SQLException e) {
             lblTodayRequests.setText("-");
             lblTodayProducts.setText("-");
@@ -2193,6 +2191,53 @@ public class MainController {
 
 //// ===== END =====
 
+//// ===== BEGIN: C:\Users\seyyid\IdeaProjects\ERPdemo\src\main\java\com\example\erpdemo\Money.java =====
+package com.example.erpdemo;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.text.NumberFormat;
+import java.text.ParseException;
+import java.util.Locale;
+
+/** TL için tek noktadan format/parsing + yuvarlama yardımcıları. */
+public final class Money {
+    private static final Locale TR = new Locale("tr", "TR");
+
+    private Money() {}
+
+    /** 2 ondalık HALF_UP ölçekleme. null -> 0.00 */
+    public static BigDecimal scale2(BigDecimal value) {
+        if (value == null) return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        return value.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /** 2 ondalık, 1.234,56 biçiminde (para sembolsüz). null -> "0,00" */
+    public static String fmtTR(BigDecimal value) {
+        NumberFormat nf = NumberFormat.getNumberInstance(TR);
+        nf.setMinimumFractionDigits(2);
+        nf.setMaximumFractionDigits(2);
+        return nf.format(value == null ? BigDecimal.ZERO : value);
+    }
+
+    /** 2 ondalık, TL sembollü (“₺1.234,56” ya da yerelle eşdeğer). */
+    public static String fmtTRWithSymbol(BigDecimal value) {
+        NumberFormat cf = NumberFormat.getCurrencyInstance(TR);
+        return cf.format(value == null ? BigDecimal.ZERO : value);
+    }
+
+    /** Kullanıcı girişini (1.234,56 / 1234.56 vb.) BigDecimal’a parse eder. */
+    public static BigDecimal parseTR(String text) throws ParseException {
+        if (text == null || text.trim().isEmpty()) return BigDecimal.ZERO;
+        NumberFormat nf = NumberFormat.getNumberInstance(TR);
+        nf.setParseIntegerOnly(false);
+        Number n = nf.parse(text.trim());
+        return new BigDecimal(n.toString());
+    }
+}
+
+//// ===== END =====
+
 //// ===== BEGIN: C:\Users\seyyid\IdeaProjects\ERPdemo\src\main\java\com\example\erpdemo\MoneyCells.java =====
 package com.example.erpdemo;
 
@@ -2223,7 +2268,7 @@ public final class MoneyCells {
         return nf;
     }
 
-    /** "123,45 TL" gibi metin döndürür (2 ondalık, binlik ayırıcılı). */
+    /** "1.234,56 TL" gibi metin döndürür (2 ondalık, binlik ayırıcılı). */
     public static String fmtTL(BigDecimal v) {
         if (v == null) v = BigDecimal.ZERO;
         return number2TR().format(v) + " TL";
@@ -2370,11 +2415,8 @@ public class NewProductController {
         if (product != null) {
             nameField.setText(product.getUrunAdi());
 
-            // BigDecimal güvenli format
-            BigDecimal f = product.getFiyat() == null
-                    ? BigDecimal.ZERO
-                    : product.getFiyat().setScale(2, RoundingMode.HALF_UP);
-            priceField.setText(f.toPlainString());
+            BigDecimal f = Money.scale2(product.getFiyat());
+            priceField.setText(Money.fmtTR(f));   // ör: 1.234,56
 
             stockField.setText(String.valueOf(product.getStok()));
             unitField.setText(product.getBirim());
@@ -2437,10 +2479,9 @@ public class NewProductController {
         if (raw == null) return null;
         String txt = raw.trim();
         if (txt.isEmpty()) return null;
-        txt = txt.replace(',', '.');
         try {
-            return new BigDecimal(txt).setScale(2, RoundingMode.HALF_UP);
-        } catch (NumberFormatException ex) {
+            return Money.scale2(Money.parseTR(txt));
+        } catch (java.text.ParseException ex) {
             return null;
         }
     }
@@ -2481,7 +2522,7 @@ import javafx.stage.Stage;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.sql.*;
+import java.sql.SQLException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -2519,25 +2560,16 @@ public class NewRequestController {
         priceColumn.setCellValueFactory(new PropertyValueFactory<>("listPrice"));
         discountedPriceColumn.setCellValueFactory(new PropertyValueFactory<>("discountedPrice"));
 
-        priceColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
-        discountedPriceColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
+        // hizalama + hücre formatları
+        quantityColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
+        priceColumn.setCellFactory(MoneyCells.twoDecimalsTR());
+        discountedPriceColumn.setCellFactory(MoneyCells.twoDecimalsTR());
 
         productTable.setItems(requestItems);
+        productTable.setPlaceholder(new Label("Listeye henüz ürün eklenmedi."));
 
-        priceColumn.setCellFactory(col -> new TableCell<>() {
-            @Override protected void updateItem(BigDecimal v, boolean empty) {
-                super.updateItem(v, empty);
-                setText(empty || v == null ? null : String.format(java.util.Locale.forLanguageTag("tr-TR"), "%.2f", v));
-            }
-        });
-        discountedPriceColumn.setCellFactory(col -> new TableCell<>() {
-            @Override protected void updateItem(BigDecimal v, boolean empty) {
-                super.updateItem(v, empty);
-                setText(empty || v == null ? null : String.format(java.util.Locale.forLanguageTag("tr-TR"), "%.2f", v));
-            }
-        });
-
-        quantityColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
+        // toplamı, liste değiştikçe de güncelle (ekleme/çıkarma olursa)
+        requestItems.addListener((javafx.collections.ListChangeListener<RequestItem>) c -> updateTotalAmount());
     }
 
     private Map<Integer, Integer> collectQuantitiesByProduct() {
@@ -2553,7 +2585,7 @@ public class NewRequestController {
         Customer cus = customerComboBox.getSelectionModel().getSelectedItem();
         Product  prd = productComboBox.getSelectionModel().getSelectedItem();
 
-        if (cus == null || prd == null || quantityField.getText().isBlank()) {
+        if (cus == null || prd == null || quantityField.getText() == null || quantityField.getText().trim().isBlank()) {
             AppDialogs.warn("Lütfen müşteri, ürün ve miktar girin.");
             return;
         }
@@ -2570,11 +2602,12 @@ public class NewRequestController {
             return;
         }
 
-        BigDecimal price = prd.getFiyat(); // BigDecimal (liste fiyat)
-        BigDecimal discountPct = BigDecimal.valueOf(cus.getIskonto()); // % int
+        BigDecimal price = prd.getFiyat() != null ? prd.getFiyat() : BigDecimal.ZERO; // liste fiyat
+        BigDecimal discountPct = BigDecimal.valueOf(cus.getIskonto());                 // % int
+
         BigDecimal discounted = price
-                .multiply(BigDecimal.ONE.subtract(discountPct.divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP)))
-                .setScale(2, RoundingMode.HALF_UP);
+                .multiply(BigDecimal.ONE.subtract(discountPct.divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP)));
+        discounted = Money.scale2(discounted); // 🔸 Tek noktadan 2 ondalık
 
         requestItems.add(new RequestItem(0, 0, prd.getId(), prd.getUrunAdi(), qty, price, discounted));
 
@@ -2613,56 +2646,12 @@ public class NewRequestController {
                 return;
             }
 
-            // 2) ATOMİK KAYIT: Başlık + Kalemler aynı transaction’da
-            final String insertHeaderSql = """
-                INSERT INTO dbo.Talepler (MusteriId, TalepTarihi, Durum)
-                VALUES (?, GETDATE(), N'Onay Bekliyor')
-                """;
-            final String insertItemSql = """
-                INSERT INTO dbo.TalepKalemleri (TalepId, UrunId, Miktar, TeklifFiyati)
-                VALUES (?, ?, ?, ?)
-                """;
+            // 2) Kayıt: Controller değil DAO yapsın (tek noktadan)
+            int requestId = RequestDAO.addRequestWithItems(cus.getId(), new ArrayList<>(requestItems));
 
-            try (Connection c = DatabaseManager.getConnection()) {
-                boolean oldAuto = c.getAutoCommit();
-                c.setAutoCommit(false);
-
-                int requestId = -1;
-                try (PreparedStatement psHdr = c.prepareStatement(insertHeaderSql, Statement.RETURN_GENERATED_KEYS)) {
-                    psHdr.setInt(1, cus.getId());
-                    psHdr.executeUpdate();
-                    try (ResultSet keys = psHdr.getGeneratedKeys()) {
-                        if (keys.next()) {
-                            requestId = ((Number) keys.getObject(1)).intValue();
-                        }
-                    }
-                }
-                if (requestId <= 0) {
-                    throw new SQLException("Yeni talep Id alınamadı (generated keys).");
-                }
-
-                try (PreparedStatement psItem = c.prepareStatement(insertItemSql)) {
-                    for (RequestItem it : requestItems) {
-                        psItem.setInt(1, requestId);
-                        psItem.setInt(2, it.getProductId());
-                        psItem.setInt(3, it.getQuantity());
-                        psItem.setBigDecimal(4, it.getDiscountedPrice().setScale(2, RoundingMode.HALF_UP));
-                        psItem.addBatch();
-                    }
-                    psItem.executeBatch();
-                }
-
-                c.commit();
-                try { c.setAutoCommit(oldAuto); } catch (SQLException ignore) {}
-
-                AppDialogs.info("Talep kaydedildi.");
-                if (dialogStage != null) dialogStage.close();
-                else closeWindowIfPossible();
-
-            } catch (SQLException e) {
-                // Transaction esnasında hata: rollback
-                AppDialogs.dbError("Talep kaydı (transaction)", e);
-            }
+            AppDialogs.info("Talep kaydedildi. (#" + requestId + ")");
+            if (dialogStage != null) dialogStage.close();
+            else closeWindowIfPossible();
 
         } catch (SQLException e) {
             AppDialogs.dbError("Talep kaydı", e);
@@ -2687,7 +2676,7 @@ public class NewRequestController {
         BigDecimal total = requestItems.stream()
                 .map(RequestItem::getSubtotal)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        totalAmountLabel.setText(String.format(java.util.Locale.forLanguageTag("tr-TR"), "%.2f TL", total));
+        totalAmountLabel.setText(Money.fmtTRWithSymbol(Money.scale2(total))); // ör: "₺1.234,56"
     }
 }
 
@@ -2697,7 +2686,6 @@ public class NewRequestController {
 package com.example.erpdemo;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.sql.*;
 
 /**
@@ -2720,8 +2708,8 @@ public class PaymentDAO {
             throw new IllegalArgumentException("Ödeme tutarı 0'dan büyük olmalı.");
         }
 
-        // Java 9+ : RoundingMode kullan (deprecated integer sabitler yerine)
-        amount = amount.setScale(2, RoundingMode.HALF_UP);
+        // Tek noktadan yuvarlama/ölçekleme
+        amount = Money.scale2(amount);
 
         final String insertSql =
                 "INSERT INTO dbo.Odemeler (MusteriId, Tutar, Aciklama) VALUES (?, ?, ?)";
@@ -2847,7 +2835,6 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.sql.*;
 
 public class ProductDAO {
@@ -2894,8 +2881,8 @@ public class ProductDAO {
     }
 
     public static void addProduct(String urunAdi, BigDecimal fiyat, int stok, String birim) throws SQLException {
-        if (fiyat == null) fiyat = BigDecimal.ZERO;
-        fiyat = fiyat.setScale(2, RoundingMode.HALF_UP);
+        // Tek noktadan ölçekleme
+        fiyat = Money.scale2(fiyat);
         String sql = "INSERT INTO Stoklar (UrunAdi, Fiyat, Stok, Birim) VALUES (?, ?, ?, ?)";
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -2908,10 +2895,8 @@ public class ProductDAO {
     }
 
     public static void updateProduct(Product product) throws SQLException {
-        // getFiyat() null gelebilir; her durumda 2 ondalığa sabitle
-        BigDecimal fiyat = (product.getFiyat() == null)
-                ? BigDecimal.ZERO
-                : product.getFiyat().setScale(2, RoundingMode.HALF_UP);
+        // getFiyat() null gelebilir; her durumda tek noktadan ölçekle
+        BigDecimal fiyat = Money.scale2(product.getFiyat());
 
         String sql = "UPDATE Stoklar SET UrunAdi=?, Fiyat=?, Stok=?, Birim=? WHERE Id=?";
         try (Connection conn = DatabaseManager.getConnection();
@@ -3045,6 +3030,8 @@ import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.time.LocalDate;
 
+import com.example.erpdemo.Money;
+
 public class ProductHistoryController {
 
     @FXML private Label lblProduct;
@@ -3141,7 +3128,7 @@ public class ProductHistoryController {
                             .reduce(BigDecimal.ZERO, BigDecimal::add);
 
                     lblTotalQty.setText(String.valueOf(totalQty));
-                    lblTotalAmount.setText(MoneyCells.fmtTL(totalAmount));
+                    lblTotalAmount.setText(Money.fmtTRWithSymbol(totalAmount));
                 },
                 ex -> AppDialogs.dbError("Ürün geçmişi yükleme", toSql(ex)),
                 () -> setBusy(false));
@@ -3340,7 +3327,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -3581,9 +3567,13 @@ public class ReportsController {
                                 row.createCell(c++).setCellValue(rq.getStatus());
                                 row.createCell(c++).setCellValue(it.productName);
                                 Cell qty = row.createCell(c++); qty.setCellValue(it.quantity); qty.setCellStyle(intCs);
-                                Cell lp  = row.createCell(c++); lp.setCellValue(it.listPrice.doubleValue()); lp.setCellStyle(money);
-                                Cell dp  = row.createCell(c++); dp.setCellValue(it.discountedPrice.doubleValue()); dp.setCellStyle(money);
-                                Cell sub = row.createCell(c++); sub.setCellValue(it.discountedPrice.multiply(BigDecimal.valueOf(it.quantity)).doubleValue()); sub.setCellStyle(money);
+
+                                // Tek noktadan ölçekleme sonra doubleValue
+                                Cell lp  = row.createCell(c++); lp.setCellValue(Money.scale2(it.listPrice).doubleValue());       lp.setCellStyle(money);
+                                Cell dp  = row.createCell(c++); dp.setCellValue(Money.scale2(it.discountedPrice).doubleValue());  dp.setCellStyle(money);
+                                Cell sub = row.createCell(c++); sub.setCellValue(
+                                        Money.scale2(it.discountedPrice.multiply(BigDecimal.valueOf(it.quantity))).doubleValue()
+                                ); sub.setCellStyle(money);
                             }
                         }
                     }
@@ -3908,10 +3898,10 @@ public class ReportsController {
     private static String trim(String s, int max) { if (s == null) return ""; return s.length() <= max ? s : s.substring(0, max - 1) + "…"; }
     private static String padRight(String s, int width) { if (s == null) s = ""; return s.length() >= width ? s : s + " ".repeat(width - s.length()); }
     private static String padLeft(String s, int width) { if (s == null) s = ""; return s.length() >= width ? s : " ".repeat(width - s.length()) + s; }
+
+    /** Tek yerden yuvarlama + TR format (sembolsüz). */
     private static String fmtMoney(BigDecimal v) {
-        if (v == null) v = BigDecimal.ZERO;
-        v = v.setScale(2, RoundingMode.HALF_UP);
-        return String.format(LOCALE_TR, "%.2f", v);
+        return Money.fmtTR(Money.scale2(v));
     }
 
     /* Küçük yardımcı tipi */
@@ -4242,9 +4232,55 @@ public class RequestDAO {
     }
 
     /**
-     * Yeni talep başlığı ekler ve kimliğini döndürür.
-     * SCOPE_IDENTITY yerine JDBC RETURN_GENERATED_KEYS kullanılır.
+     * Controller’dan SQL’i kaldırmak için: Başlık + Kalemleri tek transaction’da ekler.
+     * @return oluşturulan talep Id
      */
+    public static int addRequestWithItems(int customerId, List<RequestItem> items) throws SQLException {
+        if (items == null || items.isEmpty())
+            throw new SQLException("Talep için en az bir kalem gereklidir.");
+
+        final String insertHeaderSql = """
+            INSERT INTO dbo.Talepler (MusteriId, TalepTarihi, Durum)
+            VALUES (?, GETDATE(), N'Onay Bekliyor')
+        """;
+        final String insertItemSql = """
+            INSERT INTO dbo.TalepKalemleri (TalepId, UrunId, Miktar, TeklifFiyati)
+            VALUES (?, ?, ?, ?)
+        """;
+
+        try (Connection c = DatabaseManager.getConnection()) {
+            boolean oldAuto = c.getAutoCommit();
+            c.setAutoCommit(false);
+            int requestId = -1;
+
+            try (PreparedStatement psHdr = c.prepareStatement(insertHeaderSql, Statement.RETURN_GENERATED_KEYS)) {
+                psHdr.setInt(1, customerId);
+                psHdr.executeUpdate();
+                try (ResultSet keys = psHdr.getGeneratedKeys()) {
+                    if (keys.next()) requestId = ((Number) keys.getObject(1)).intValue();
+                }
+            }
+            if (requestId <= 0) throw new SQLException("Yeni talep Id alınamadı (generated keys).");
+
+            try (PreparedStatement psItem = c.prepareStatement(insertItemSql)) {
+                for (RequestItem it : items) {
+                    BigDecimal discounted = Money.scale2(it.getDiscountedPrice()); // 🔸
+                    psItem.setInt(1, requestId);
+                    psItem.setInt(2, it.getProductId());
+                    psItem.setInt(3, it.getQuantity());
+                    psItem.setBigDecimal(4, discounted);
+                    psItem.addBatch();
+                }
+                psItem.executeBatch();
+            }
+
+            c.commit();
+            try { c.setAutoCommit(oldAuto); } catch (SQLException ignore) {}
+            return requestId;
+        }
+    }
+
+    /** Var olan iki basit metod (geriye dönük kullanım için bırakıldı) */
     public static int addRequest(int customerId) throws SQLException {
         String sql = """
             INSERT INTO dbo.Talepler (MusteriId, TalepTarihi, Durum)
@@ -4255,19 +4291,14 @@ public class RequestDAO {
             ps.setInt(1, customerId);
             ps.executeUpdate();
             try (ResultSet keys = ps.getGeneratedKeys()) {
-                if (keys.next()) {
-                    // SQL Server sürümüne göre 1. kolon BigDecimal/Long/Integer gelebilir
-                    return ((Number) keys.getObject(1)).intValue();
-                }
+                if (keys.next()) return ((Number) keys.getObject(1)).intValue();
             }
         }
         throw new SQLException("Yeni talep Id alınamadı (generated keys boş).");
     }
 
-    /** Talep kalemi ekler (fiyat = iskontolu, BigDecimal). */
+    /** Talep kalemi ekler (fiyat = iskontolu). */
     public static void addRequestItem(int requestId, int productId, int qty, BigDecimal fiyat) throws SQLException {
-        if (fiyat == null) fiyat = BigDecimal.ZERO;
-        fiyat = fiyat.setScale(2, RoundingMode.HALF_UP);
         String sql = """
             INSERT INTO dbo.TalepKalemleri (TalepId, UrunId, Miktar, TeklifFiyati)
             VALUES (?, ?, ?, ?)
@@ -4277,7 +4308,7 @@ public class RequestDAO {
             ps.setInt(1, requestId);
             ps.setInt(2, productId);
             ps.setInt(3, qty);
-            ps.setBigDecimal(4, fiyat);
+            ps.setBigDecimal(4, Money.scale2(fiyat)); // 🔸
             ps.executeUpdate();
         }
     }
@@ -4316,11 +4347,7 @@ public class RequestDAO {
         return list;
     }
 
-    /**
-     * ONAYLANMIŞ talepleri tarih aralığına göre döndürür.
-     * from = dahil (>= 00:00), to = hariç (< to 00:00). İndeks dostu karşılaştırmalar.
-     * Her iki parametre de null olabilir (null → sınırsız).
-     */
+    /** ONAYLANMIŞ talepleri tarih aralığına göre döndürür. */
     public static ObservableList<Request> getApprovedRequestsBetween(LocalDate from, LocalDate to) throws SQLException {
         ObservableList<Request> list = FXCollections.observableArrayList();
 
@@ -4328,20 +4355,17 @@ public class RequestDAO {
         SELECT Id, MusteriId, TalepTarihi, Durum, OnaylayanKullaniciId, OnayTarihi
           FROM dbo.Talepler
          WHERE Durum = N'Onaylandı'
-    """);
+        """);
 
-        // DÖNEM FİLTRESİ: ONAY TARIHI
         if (from != null) sb.append(" AND OnayTarihi >= ? ");
         if (to   != null) sb.append(" AND OnayTarihi <  ? ");
         sb.append(" ORDER BY OnayTarihi DESC, Id DESC ");
 
         try (Connection c = DatabaseManager.getConnection();
              PreparedStatement ps = c.prepareStatement(sb.toString())) {
-
             int i = 1;
             if (from != null) ps.setTimestamp(i++, Timestamp.valueOf(from.atStartOfDay()));
             if (to   != null) ps.setTimestamp(i++, Timestamp.valueOf(to.atStartOfDay()));
-
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) list.add(mapRowToRequest(rs));
             }
@@ -4422,12 +4446,11 @@ public class RequestDAO {
             ps.setInt(1, requestId);
             try (ResultSet rs = ps.executeQuery()) {
                 BigDecimal v = rs.next() ? rs.getBigDecimal(1) : BigDecimal.ZERO;
-                return (v == null ? BigDecimal.ZERO : v).setScale(2, RoundingMode.HALF_UP);
+                return Money.scale2(v); // 🔸
             }
         }
     }
 
-    /** Eski çağrılar için kolaylık. Yeni kodlarda BigDecimal kullanalım. */
     @Deprecated
     public static double getRequestTotalAsDouble(int requestId) throws SQLException {
         return getRequestTotal(requestId).doubleValue();
@@ -4435,10 +4458,6 @@ public class RequestDAO {
 
     /**
      * Onay işlemi: stok düş, bakiyeyi düş, talebi onayla (tek transaction).
-     * Kilit ipuçları: SQL Server'da satır düzeyinde yarışları azaltmak için
-     *  - okumalarda WITH (UPDLOCK, ROWLOCK)
-     *  - güncellemelerde UPDATE ... WITH (ROWLOCK)
-     * kullanıldı.
      */
     public static void approveRequestTransactionally(int requestId, int approverId) throws SQLException {
         final int maxRetries = 3;
@@ -4456,18 +4475,14 @@ public class RequestDAO {
                 }
 
                 try {
-                    // 0) tek işlemci içeri girsin
                     int touched;
                     try (PreparedStatement ps = c.prepareStatement(
                             "UPDATE dbo.Talepler SET Durum=N'Onaylanıyor' WHERE Id=? AND Durum=N'Onay Bekliyor'")) {
                         ps.setInt(1, requestId);
                         touched = ps.executeUpdate();
                     }
-                    if (touched != 1) {
-                        throw new SQLException("Talep beklemede değil veya başka bir işlem tarafından alındı.");
-                    }
+                    if (touched != 1) throw new SQLException("Talep beklemede değil veya başka bir işlem tarafından alındı.");
 
-                    // 1) müşteri id (başlığı UPDLOCK ile oku)
                     Integer customerId = null;
                     try (PreparedStatement ps = c.prepareStatement(
                             "SELECT MusteriId FROM dbo.Talepler WITH (UPDLOCK, ROWLOCK) WHERE Id=?")) {
@@ -4478,29 +4493,22 @@ public class RequestDAO {
                     }
                     if (customerId == null) throw new SQLException("Talep başlığı bulunamadı.");
 
-                    // 2) kalemler (UPDLOCK ile oku)
                     List<ItemLite> items = new ArrayList<>();
                     try (PreparedStatement ps = c.prepareStatement(
-                            "SELECT UrunId, Miktar, TeklifFiyati " +
-                                    "FROM dbo.TalepKalemleri WITH (UPDLOCK, ROWLOCK) " +
-                                    "WHERE TalepId=?")) {
+                            "SELECT UrunId, Miktar, TeklifFiyati FROM dbo.TalepKalemleri WITH (UPDLOCK, ROWLOCK) WHERE TalepId=?")) {
                         ps.setInt(1, requestId);
                         try (ResultSet rs = ps.executeQuery()) {
-                            while (rs.next()) {
-                                items.add(new ItemLite(
-                                        rs.getInt("UrunId"),
-                                        rs.getInt("Miktar"),
-                                        rs.getBigDecimal("TeklifFiyati")));
-                            }
+                            while (rs.next()) items.add(new ItemLite(
+                                    rs.getInt("UrunId"),
+                                    rs.getInt("Miktar"),
+                                    rs.getBigDecimal("TeklifFiyati")));
                         }
                     }
                     if (items.isEmpty()) throw new SQLException("Talebe ait kalem bulunamadı.");
                     items.sort(java.util.Comparator.comparingInt(ItemLite::productId));
 
-                    // 3) stok düş (ROWLOCK ipucu)
                     try (PreparedStatement up = c.prepareStatement(
-                            "UPDATE s WITH (ROWLOCK) SET s.Stok = s.Stok - ? " +
-                                    "FROM dbo.Stoklar s WHERE s.Id = ? AND s.Stok >= ?")) {
+                            "UPDATE s WITH (ROWLOCK) SET s.Stok = s.Stok - ? FROM dbo.Stoklar s WHERE s.Id = ? AND s.Stok >= ?")) {
                         for (ItemLite it : items) {
                             up.setInt(1, it.qty());
                             up.setInt(2, it.productId());
@@ -4510,10 +4518,8 @@ public class RequestDAO {
                         }
                     }
 
-                    // 4) toplamı aynı tx içinde al
                     BigDecimal total = getRequestTotalInTx(c, requestId);
 
-                    // 5) bakiye düş (müşteri satırına satır kilidi)
                     try (PreparedStatement bal = c.prepareStatement(
                             "UPDATE m WITH (ROWLOCK) SET m.Bakiye = m.Bakiye - ? FROM dbo.Musteriler m WHERE m.Id = ?")) {
                         bal.setBigDecimal(1, total);
@@ -4521,11 +4527,8 @@ public class RequestDAO {
                         bal.executeUpdate();
                     }
 
-                    // 6) onayla
                     try (PreparedStatement ps = c.prepareStatement(
-                            "UPDATE dbo.Talepler " +
-                                    "SET Durum=N'Onaylandı', OnaylayanKullaniciId=?, OnayTarihi=GETDATE() " +
-                                    "WHERE Id=? AND Durum=N'Onaylanıyor'")) {
+                            "UPDATE dbo.Talepler SET Durum=N'Onaylandı', OnaylayanKullaniciId=?, OnayTarihi=GETDATE() WHERE Id=? AND Durum=N'Onaylanıyor'")) {
                         ps.setInt(1, approverId);
                         ps.setInt(2, requestId);
                         int ok = ps.executeUpdate();
@@ -4536,7 +4539,7 @@ public class RequestDAO {
                     return;
 
                 } catch (SQLException ex) {
-                    try { c.rollback(); } catch (SQLException ignore) { }
+                    try { c.rollback(); } catch (SQLException ignore) {}
                     if (isDeadlockOrTimeout(ex) && attempt < maxRetries) {
                         try { Thread.sleep(backoff[attempt - 1]); } catch (InterruptedException ie) {
                             Thread.currentThread().interrupt();
@@ -4545,15 +4548,15 @@ public class RequestDAO {
                     }
                     throw ex;
                 } finally {
-                    try { c.setTransactionIsolation(oldIso); } catch (SQLException ignore) { }
-                    try { c.setAutoCommit(oldAuto); } catch (SQLException ignore) { }
+                    try { c.setTransactionIsolation(oldIso); } catch (SQLException ignore) {}
+                    try { c.setAutoCommit(oldAuto); } catch (SQLException ignore) {}
                 }
             }
         }
         throw new SQLException("Onay işlemi tekrar denemelerine rağmen tamamlanamadı.");
     }
 
-    /** Reddetme işlemi */
+    /** 🔸 Reddetme metodu — Controllers bunu çağırıyor. */
     public static void rejectRequest(int requestId, int approverId) throws SQLException {
         String sql = """
             UPDATE dbo.Talepler
@@ -4571,7 +4574,7 @@ public class RequestDAO {
         }
     }
 
-    /* ---------------------- Yardımcılar ---------------------- */
+    // ---------- Yardımcılar ----------
 
     private static Request mapRowToRequest(ResultSet rs) throws SQLException {
         int id = rs.getInt("Id");
@@ -4608,7 +4611,7 @@ public class RequestDAO {
             ps.setInt(1, requestId);
             try (ResultSet rs = ps.executeQuery()) {
                 BigDecimal v = rs.next() ? rs.getBigDecimal(1) : BigDecimal.ZERO;
-                return (v == null ? BigDecimal.ZERO : v).setScale(2, RoundingMode.HALF_UP);
+                return Money.scale2(v); // 🔸
             }
         }
     }
@@ -4768,10 +4771,9 @@ import javafx.scene.layout.HBox;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.sql.SQLException;
-import java.text.NumberFormat;
 import java.util.Locale;
 
-/** Ürün listesi + CRUD + Geçmiş + Filtreleme (ASYNC yükleme) */
+/** Ürün listesi + CRUD + Filtreleme (ASYNC yükleme) */
 public class StockController {
 
     @FXML private TableView<Product> productTable;
@@ -4805,15 +4807,7 @@ public class StockController {
         // 2) Hücre hizalama/biçim
         stockColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
         unitColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
-        priceColumn.setCellFactory(col -> new TableCell<>() {
-            final NumberFormat nf = NumberFormat.getNumberInstance(new Locale("tr", "TR"));
-            { nf.setMinimumFractionDigits(2); nf.setMaximumFractionDigits(2); }
-            @Override protected void updateItem(BigDecimal v, boolean empty) {
-                super.updateItem(v, empty);
-                if (empty || v == null) { setText(null); setStyle(""); }
-                else { setText(nf.format(v)); setStyle("-fx-alignment: CENTER-RIGHT;"); }
-            }
-        });
+        priceColumn.setCellFactory(MoneyCells.twoDecimalsTR());
 
         productTable.setPlaceholder(new Label("Kayıtlı ürün yok"));
 
@@ -5380,14 +5374,6 @@ public class ViewRequestController {
             c = c.getCause();
         }
         return new SQLException(t.getMessage(), t);
-    }
-
-    private void showError(String title, String msg) {
-        Alert a = new Alert(Alert.AlertType.ERROR, msg, ButtonType.OK);
-        a.setTitle(title);
-        a.setHeaderText(null);
-        IconUtil.decorateAlert(a);
-        a.showAndWait();
     }
 }
 

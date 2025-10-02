@@ -6,15 +6,17 @@ import javafx.collections.ObservableList;
 import java.math.BigDecimal;
 import java.sql.*;
 
+/** Ürün (Stoklar) DAO */
 public class ProductDAO {
 
+    /** Tüm ürünler – yalnız gerekli kolonlar */
     public static ObservableList<Product> getAllProducts() throws SQLException {
         ObservableList<Product> productList = FXCollections.observableArrayList();
-        // YALNIZ GEREKLİ KOLONLAR
-        String sql = "SELECT Id, UrunAdi, Fiyat, Stok, Birim FROM Stoklar";
+        String sql = "SELECT Id, UrunAdi, Fiyat, Stok, Birim FROM dbo.Stoklar";
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql);
              ResultSet rs = stmt.executeQuery()) {
+
             while (rs.next()) {
                 productList.add(new Product(
                         rs.getInt("Id"),
@@ -28,9 +30,9 @@ public class ProductDAO {
         return productList;
     }
 
+    /** Tek ürün (yalnız gerekli kolonlar) */
     public static Product getProductById(int productId) throws SQLException {
-        // YALNIZ GEREKLİ KOLONLAR
-        String sql = "SELECT Id, UrunAdi, Fiyat, Stok, Birim FROM Stoklar WHERE Id = ?";
+        String sql = "SELECT Id, UrunAdi, Fiyat, Stok, Birim FROM dbo.Stoklar WHERE Id = ?";
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, productId);
@@ -49,10 +51,10 @@ public class ProductDAO {
         return null;
     }
 
+    /** Ürün ekle (fiyat tek noktadan ölçeklenir) */
     public static void addProduct(String urunAdi, BigDecimal fiyat, int stok, String birim) throws SQLException {
-        // Tek noktadan ölçekleme
         fiyat = Money.scale2(fiyat);
-        String sql = "INSERT INTO Stoklar (UrunAdi, Fiyat, Stok, Birim) VALUES (?, ?, ?, ?)";
+        String sql = "INSERT INTO dbo.Stoklar (UrunAdi, Fiyat, Stok, Birim) VALUES (?, ?, ?, ?)";
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, norm(urunAdi));
@@ -63,11 +65,10 @@ public class ProductDAO {
         }
     }
 
+    /** Ürün güncelle (fiyat tek noktadan ölçeklenir) */
     public static void updateProduct(Product product) throws SQLException {
-        // getFiyat() null gelebilir; her durumda tek noktadan ölçekle
         BigDecimal fiyat = Money.scale2(product.getFiyat());
-
-        String sql = "UPDATE Stoklar SET UrunAdi=?, Fiyat=?, Stok=?, Birim=? WHERE Id=?";
+        String sql = "UPDATE dbo.Stoklar SET UrunAdi=?, Fiyat=?, Stok=?, Birim=? WHERE Id=?";
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, norm(product.getUrunAdi()));
@@ -81,25 +82,46 @@ public class ProductDAO {
 
     /**
      * Güvenli stok güncellemesi.
-     * quantityChange < 0 ise: negatifleşmeyi engellemek için WHERE koşulu eklenir.
+     * quantityChange < 0 ise: negatifleşmeyi engellemek için WHERE koşulu zaten var.
+     * Başarısız olursa, ürün adını ve mevcut stoku içeren anlaşılır hata mesajı fırlatır.
      */
     public static void updateProductStock(int productId, int quantityChange) throws SQLException {
-        String sql = "UPDATE Stoklar SET Stok = Stok + ? WHERE Id = ? AND Stok + ? >= 0";
+        final String sql = "UPDATE dbo.Stoklar SET Stok = Stok + ? WHERE Id = ? AND Stok + ? >= 0";
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
+
             stmt.setInt(1, quantityChange);
             stmt.setInt(2, productId);
             stmt.setInt(3, quantityChange);
+
             int affected = stmt.executeUpdate();
-            if (affected != 1) {
-                throw new SQLException("Yetersiz stok veya ürün bulunamadı (Id=" + productId + ").");
+            if (affected == 1) return;
+
+            // Teşhis: aynı bağlantı üzerinde ürünü oku (ürün yok mu, stok mu yetersiz?)
+            Product p = getProductByIdTx(conn, productId);
+            if (p == null) {
+                throw new SQLException("Ürün bulunamadı (Id=" + productId + ").");
             }
+
+            int current = p.getStok();
+            int result = current + quantityChange;
+
+            if (quantityChange < 0 && result < 0) {
+                // Kullanıcı-dostu mesaj: ürün adı + stok detayları
+                throw new SQLException(
+                        p.getUrunAdi() + " için yetersiz stok: Mevcut=" + current +
+                                ", Değişim=" + quantityChange + ", Sonuç=" + result + "."
+                );
+            }
+
+            // Nadir durum: başka nedenle dokunulamadı
+            throw new SQLException("Stok güncellenemedi (Id=" + productId + ").");
         }
     }
 
     /**
      * Ürün silme: önce referans var mı diye kontrol eder,
-     * yine de yarış olursa FK kırılımını (SQLServer: 547) yakalayıp anlaşılır mesajla sarar.
+     * yarış olursa FK kırılımını yakalayıp anlaşılır mesajla sarar.
      */
     public static void deleteProduct(int productId) throws SQLException {
         // 0) Bağımlılık ön-kontrolü (kullanıcıya net mesaj için)
@@ -107,7 +129,7 @@ public class ProductDAO {
             throw new SQLException("Ürün silinemedi: Bu ürüne bağlı talepler bulunduğundan silme işlemi engellendi.");
         }
 
-        String sql = "DELETE FROM Stoklar WHERE Id=?";
+        String sql = "DELETE FROM dbo.Stoklar WHERE Id=?";
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, productId);
@@ -117,7 +139,6 @@ public class ProductDAO {
             }
         } catch (SQLException e) {
             if (isForeignKeyViolation(e)) {
-                // yarış durumlarında yine de yakala
                 throw new SQLException("Ürün silinemedi: Bu ürüne bağlı talepler bulunduğundan silme işlemi engellendi.", e);
             }
             throw e;
@@ -126,7 +147,6 @@ public class ProductDAO {
 
     /** TalepKalemleri vb. tablolarda bu ürüne referans var mı? */
     private static boolean hasAnyReferences(int productId) throws SQLException {
-        // Şimdilik TalepKalemleri kontrolü. Başka referans tablolarınız varsa benzer kontroller ekleyin.
         final String sql = "SELECT COUNT(1) FROM dbo.TalepKalemleri WHERE UrunId = ?";
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -139,12 +159,10 @@ public class ProductDAO {
 
     /** SQL Server FK kırılımı: errorCode=547. SQLState 23*** bütünlük ihlali sınıfı. */
     private static boolean isForeignKeyViolation(SQLException e) {
-        // İlk exception
         if (e.getErrorCode() == 547) return true;
         String state = e.getSQLState();
         if (state != null && state.startsWith("23")) return true;
 
-        // Zincirdeki diğer exception'ları da tara
         SQLException next = e.getNextException();
         while (next != null) {
             if (next.getErrorCode() == 547) return true;
@@ -153,9 +171,26 @@ public class ProductDAO {
             next = next.getNextException();
         }
 
-        // Mesaj inceleme (son çare)
         String msg = String.valueOf(e.getMessage()).toLowerCase();
         return msg.contains("foreign key") || msg.contains("reference constraint");
+    }
+
+    /** Aynı connection içinde ürün oku (teşhis için) */
+    private static Product getProductByIdTx(Connection conn, int productId) throws SQLException {
+        String sql = "SELECT Id, UrunAdi, Fiyat, Stok, Birim FROM dbo.Stoklar WHERE Id = ?";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, productId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (!rs.next()) return null;
+                return new Product(
+                        rs.getInt("Id"),
+                        norm(rs.getString("UrunAdi")),
+                        rs.getBigDecimal("Fiyat"),
+                        rs.getInt("Stok"),
+                        norm(rs.getString("Birim"))
+                );
+            }
+        }
     }
 
     /** null-safe trim + iç boşluk sadeleştirme */

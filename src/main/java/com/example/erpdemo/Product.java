@@ -19,7 +19,7 @@ public class Product {
     public Product(int id, String urunAdi, BigDecimal fiyat, int stok, String birim) {
         this.id = new SimpleIntegerProperty(id);
         this.urunAdi = new SimpleStringProperty(norm(urunAdi));
-        this.fiyat = new SimpleObjectProperty<>(fiyat == null ? BigDecimal.ZERO : fiyat);
+        this.fiyat = new SimpleObjectProperty<>(fiyat == null ? BigDecimal.ZERO : fiyat.setScale(2, RoundingMode.HALF_UP));
         this.stok = new SimpleIntegerProperty(stok);
         this.birim = new SimpleStringProperty(norm(birim));
     }
