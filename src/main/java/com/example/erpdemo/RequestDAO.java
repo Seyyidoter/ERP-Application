@@ -201,7 +201,7 @@ public class RequestDAO {
         return list;
     }
 
-    /** ONAYLANMIŞ talepleri tarih aralığına göre döndürür. */
+    /** ✅ ONAYLANMIŞ talepleri **TALEP TARİHİNE** göre (from/to dahil) döndürür. */
     public static ObservableList<Request> getApprovedRequestsBetween(LocalDate from, LocalDate to) throws SQLException {
         ObservableList<Request> list = FXCollections.observableArrayList();
 
@@ -211,15 +211,16 @@ public class RequestDAO {
              WHERE Durum = N'Onaylandı'
         """);
 
-        if (from != null) sb.append(" AND OnayTarihi >= ? ");
-        if (to   != null) sb.append(" AND OnayTarihi <  ? ");
-        sb.append(" ORDER BY OnayTarihi DESC, Id DESC ");
+        // TalepTarihi bazlı filtre
+        if (from != null) sb.append(" AND TalepTarihi >= ? ");
+        if (to   != null) sb.append(" AND TalepTarihi <  ? ");
+        sb.append(" ORDER BY TalepTarihi DESC, Id DESC ");
 
         try (Connection c = DatabaseManager.getConnection();
              PreparedStatement ps = c.prepareStatement(sb.toString())) {
             int i = 1;
             if (from != null) ps.setTimestamp(i++, Timestamp.valueOf(from.atStartOfDay()));
-            if (to   != null) ps.setTimestamp(i++, Timestamp.valueOf(to.atStartOfDay()));
+            if (to   != null) ps.setTimestamp(i++, Timestamp.valueOf(to.plusDays(1).atStartOfDay())); // bitiş GÜNÜ DAHİL
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) list.add(mapRowToRequest(rs));
             }

@@ -1,0 +1,1 @@
+1 - müşteri silinince geçmiş taleplerine ne olacağını test et.

@@ -1,5 +1,7 @@
 package com.example.erpdemo;
 
+import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.SimpleBooleanProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
@@ -40,6 +42,9 @@ public class RequestController {
 
     private final ObservableList<Row> rows = FXCollections.observableArrayList();
 
+    // Ekranın meşgul durumu (UI kilitleme için)
+    private final BooleanProperty busy = new SimpleBooleanProperty(false);
+
     @FXML
     public void initialize() {
         // 1) Sütun–model bağları
@@ -54,10 +59,10 @@ public class RequestController {
         tblRequests.setPlaceholder(new Label("Kayıtlı talep yok"));
         tblRequests.setItems(rows);
 
-        // 3) Seçim yokken butonları pasifleştir
+        // 3) Seçim yokken butonları pasifleştir — ayrıca busy ile OR’lanır
         var noSel = tblRequests.getSelectionModel().selectedItemProperty().isNull();
-        viewBtn.disableProperty().bind(noSel);
-        deleteBtn.disableProperty().bind(noSel);
+        viewBtn.disableProperty().bind(noSel.or(busy));
+        deleteBtn.disableProperty().bind(noSel.or(busy));
 
         // 4) Tabloda boş alana tıklayınca seçimi/odağı temizle, çift tık → görüntüle
         tblRequests.setRowFactory(tv -> {
@@ -81,7 +86,7 @@ public class RequestController {
             scene.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, e -> {
                 Node n = e.getPickResult().getIntersectedNode();
                 boolean insideTable   = isChildOf(n, tblRequests);
-                boolean insideActions = isChildOf(n, actionsBar);
+                boolean insideActions = (actionsBar != null) && isChildOf(n, actionsBar);
                 if (!insideTable && !insideActions) {
                     tblRequests.getSelectionModel().clearSelection();
                     if (tblRequests.getParent() != null) tblRequests.getParent().requestFocus();
@@ -233,13 +238,16 @@ public class RequestController {
     }
 
     private void setControlsDisabled(boolean disabled) {
+        // Busy bayrağı: butonların disable binding’ine OR’lanıyor
+        busy.set(disabled);
+
         if (tblRequests != null) {
             tblRequests.setDisable(disabled);
             tblRequests.setMouseTransparent(disabled); // bazı temalarda gerekli
         }
         if (actionsBar != null)  actionsBar.setDisable(disabled);
-        if (viewBtn != null && viewBtn.isDisable() != disabled) viewBtn.setDisable(disabled);
-        if (deleteBtn != null && deleteBtn.isDisable() != disabled) deleteBtn.setDisable(disabled);
+
+        // ÖNEMLİ: viewBtn / deleteBtn için setDisable çağırmıyoruz; bağlanmış durumdalar.
     }
 
     /** Liste satırı modeli. */

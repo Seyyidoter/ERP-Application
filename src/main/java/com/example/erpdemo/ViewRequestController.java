@@ -34,10 +34,12 @@ public class ViewRequestController {
 
     @FXML
     public void initialize() {
+        // Sütun bağları
         productNameColumn.setCellValueFactory(new PropertyValueFactory<>("productName"));
         quantityColumn.setCellValueFactory(new PropertyValueFactory<>("quantity"));
         discountedPriceColumn.setCellValueFactory(new PropertyValueFactory<>("discountedPrice"));
 
+        // Hücre biçimlendirme
         quantityColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
         discountedPriceColumn.setCellFactory(MoneyCells.twoDecimalsTR());
 
@@ -66,7 +68,7 @@ public class ViewRequestController {
             scene.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, e -> {
                 Node n = e.getPickResult().getIntersectedNode();
                 boolean insideTable   = isChildOf(n, requestItemsTable);
-                boolean insideActions = isChildOf(n, actionsBar);
+                boolean insideActions = actionsBar != null && isChildOf(n, actionsBar);
                 if (!insideTable && !insideActions) {
                     requestItemsTable.getSelectionModel().clearSelection();
                     if (requestItemsTable.getParent() != null) requestItemsTable.getParent().requestFocus();
@@ -118,7 +120,8 @@ public class ViewRequestController {
 
                     requestItemsTable.getItems().setAll(items);
 
-                    updateActionButtons(h.status()); // yalnızca 'Onay Bekliyor' ise göster
+                    // yalnızca 'Onay Bekliyor' ise butonları göster/etkinleştir
+                    updateActionButtons(h.status());
                 },
                 ex -> {
                     AppDialogs.dbError("Talep detayı yükleme", toSql(ex));
@@ -205,7 +208,7 @@ public class ViewRequestController {
         approveBtn.setVisible(canDecide);  approveBtn.setManaged(canDecide);
         rejectBtn.setVisible(canDecide);   rejectBtn.setManaged(canDecide);
 
-        // Güvenlik için disable da et (ör. kısa bir anda görünürse)
+        // görünür değilse zaten devre dışı olur; yine de güvenlik için
         approveBtn.setDisable(!canDecide);
         rejectBtn.setDisable(!canDecide);
     }
@@ -217,10 +220,9 @@ public class ViewRequestController {
     }
 
     private void setBusy(boolean busy) {
+        // NOT: approve/reject butonlarına dokunmuyoruz; durumlarını updateActionButtons belirler.
         if (requestItemsTable != null) requestItemsTable.setDisable(busy);
         if (actionsBar != null)        actionsBar.setDisable(busy);
-        if (approveBtn != null)        approveBtn.setDisable(busy || approveBtn.isDisable());
-        if (rejectBtn != null)         rejectBtn.setDisable(busy || rejectBtn.isDisable());
         if (closeBtn != null)          closeBtn.setDisable(busy);
     }
 
