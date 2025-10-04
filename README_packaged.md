@@ -104,7 +104,7 @@ jpackage ^
   --name Omnis ^
   --input target\app ^
   --main-jar ERPDemo-1.0-SNAPSHOT.jar ^
-  --main-class com.example.erpdemo.HelloApplication ^
+  --main-class com.example.erpdemo.app.HelloApplication ^
   --icon src\main\resources\com\example\erpdemo\assets\logo.ico ^
   --app-version 1.0.0 ^
   --vendor "Omnis" ^

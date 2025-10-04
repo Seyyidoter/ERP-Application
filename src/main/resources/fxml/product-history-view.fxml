@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns="http://javafx.com/javafx/21"
+            xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="com.example.erpdemo.controller.ProductHistoryController">
+
+    <padding>
+        <Insets topRightBottomLeft="12"/>
+    </padding>
+
+    <top>
+        <VBox spacing="8">
+            <children>
+                <Label text="Ürün Sipariş Geçmişi" style="-fx-font-size: 18; -fx-font-weight: bold;"/>
+
+                <HBox spacing="10" alignment="CENTER_LEFT">
+                    <children>
+                        <Label text="Ürün:"/>
+                        <Label fx:id="lblProduct" style="-fx-font-weight: 700;"/>
+
+                        <Region HBox.hgrow="ALWAYS"/>
+
+                        <Label text="Başlangıç:"/>
+                        <DatePicker fx:id="dpFrom"/>
+
+                        <Label text="Bitiş:"/>
+                        <DatePicker fx:id="dpTo"/>
+
+                        <Label text="Durum:"/>
+                        <ComboBox fx:id="cbStatus" prefWidth="140"/>
+
+                        <Label text="Müşteri:"/>
+                        <TextField fx:id="txtCustomer" promptText="İsim ara" prefWidth="160"/>
+
+                        <Button text="Uygula" onAction="#handleApplyFilters"/>
+                        <Button text="Temizle" onAction="#handleClearFilters"/>
+                    </children>
+                </HBox>
+            </children>
+        </VBox>
+    </top>
+
+    <center>
+        <TableView fx:id="tblHistory">
+            <columns>
+                <TableColumn fx:id="colReqId"     text="Talep ID"      prefWidth="90"/>
+                <TableColumn fx:id="colDate"      text="Tarih"         prefWidth="130"/>
+                <TableColumn fx:id="colStatus"    text="Durum"         prefWidth="130"/>
+                <TableColumn fx:id="colCustomer"  text="Müşteri"       prefWidth="280"/>
+                <TableColumn fx:id="colQty"       text="Miktar"        prefWidth="110"/>
+                <!-- değişen başlık: -->
+                <TableColumn fx:id="colUnit"      text="İskontolu Fiyat" prefWidth="130"/>
+                <TableColumn fx:id="colSubtotal"  text="Ara Toplam"    prefWidth="140"/>
+            </columns>
+        </TableView>
+    </center>
+
+    <bottom>
+        <VBox spacing="8">
+            <children>
+                <HBox alignment="CENTER_RIGHT" spacing="18">
+                    <children>
+                        <Label text="Toplam Miktar (Onaylanan):"/>
+                        <Label fx:id="lblTotalQty" style="-fx-font-weight: 700;"/>
+                        <Label text="Toplam Tutar (Onaylanan):" style="-fx-padding:0 0 0 16;"/>
+                        <Label fx:id="lblTotalAmount" style="-fx-font-weight: 700;"/>
+                    </children>
+                </HBox>
+                <HBox alignment="CENTER_RIGHT">
+                    <Button text="Kapat" onAction="#handleClose"/>
+                </HBox>
+            </children>
+        </VBox>
+    </bottom>
+</BorderPane>

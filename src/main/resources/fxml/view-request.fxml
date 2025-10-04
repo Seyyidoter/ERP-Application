@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns="http://javafx.com/javafx/21"
+            xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="com.example.erpdemo.controller.ViewRequestController">
+
+    <!-- Kenarlardan genel boşluk -->
+    <padding>
+        <Insets topRightBottomLeft="12"/>
+    </padding>
+
+    <top>
+        <VBox spacing="8">
+            <children>
+                <Label text="Talep Detayı" style="-fx-font-size: 18; -fx-font-weight: bold;"/>
+                <GridPane hgap="12" vgap="8">
+                    <columnConstraints>
+                        <ColumnConstraints percentWidth="20"/>
+                        <ColumnConstraints percentWidth="80"/>
+                    </columnConstraints>
+                    <children>
+                        <Label text="Talep ID:" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
+                        <Label fx:id="requestIdLabel" GridPane.rowIndex="0" GridPane.columnIndex="1"/>
+
+                        <Label text="Müşteri:" GridPane.rowIndex="1" GridPane.columnIndex="0"/>
+                        <Label fx:id="customerNameLabel" GridPane.rowIndex="1" GridPane.columnIndex="1"/>
+
+                        <Label text="Durum:" GridPane.rowIndex="2" GridPane.columnIndex="0"/>
+                        <Label fx:id="statusLabel" GridPane.rowIndex="2" GridPane.columnIndex="1"/>
+
+                        <Label text="Tarih:" GridPane.rowIndex="3" GridPane.columnIndex="0"/>
+                        <Label fx:id="dateLabel" GridPane.rowIndex="3" GridPane.columnIndex="1"/>
+                    </children>
+                </GridPane>
+            </children>
+        </VBox>
+    </top>
+
+    <!-- Tablo + alttan boşluk -->
+    <center>
+        <VBox spacing="8">
+            <padding>
+                <Insets top="0" right="0" bottom="8" left="0"/>
+            </padding>
+            <!-- İlk açılışta fokus almasın (mavi çerçeve görünmesin) -->
+            <TableView fx:id="requestItemsTable" VBox.vgrow="ALWAYS" focusTraversable="false">
+                <columns>
+                    <TableColumn fx:id="productNameColumn"       text="Ürün"            prefWidth="280"/>
+                    <TableColumn fx:id="quantityColumn"          text="Miktar"          prefWidth="120"/>
+                    <TableColumn fx:id="discountedPriceColumn"   text="İskontolu Fiyat" prefWidth="160"/>
+                </columns>
+            </TableView>
+        </VBox>
+    </center>
+
+    <!-- Aksiyon butonları -->
+    <bottom>
+        <!-- actionsBar: dış tıklama filtresinde tablo dışı olarak sayılacak -->
+        <HBox fx:id="actionsBar" alignment="CENTER_RIGHT" spacing="8">
+            <padding>
+                <Insets topRightBottomLeft="8"/>
+            </padding>
+            <Button fx:id="approveBtn" text="Onayla" onAction="#handleApprove"/>
+            <Button fx:id="rejectBtn"  text="Reddet" onAction="#handleReject"/>
+            <Button fx:id="closeBtn"   text="Kapat"  onAction="#handleClose"/>
+        </HBox>
+    </bottom>
+</BorderPane>

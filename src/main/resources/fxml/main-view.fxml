@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns="http://javafx.com/javafx/21"
+            xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="com.example.erpdemo.controller.MainController"
+            stylesheets="@../css/main-view.css">
+
+    <!-- ÜST: App Bar -->
+    <top>
+        <HBox styleClass="appbar" alignment="CENTER_LEFT" spacing="14">
+            <Label fx:id="pageTitle" text="Gösterge Paneli" styleClass="appbar-title"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <MenuButton fx:id="userMenu" text="Kullanıcı" styleClass="user-menu" focusTraversable="false">
+                <items>
+                    <MenuItem text="Şifre Değiştir" onAction="#changePassword"/>
+                    <MenuItem text="Çıkış" onAction="#logout"/>
+                </items>
+            </MenuButton>
+        </HBox>
+    </top>
+
+    <!-- SOL: Sidebar -->
+    <left>
+        <VBox styleClass="sidebar" spacing="8">
+            <Separator/>
+            <Button text="Gösterge Paneli"  onAction="#goDashboard" styleClass="nav-btn" focusTraversable="false"/>
+            <Button text="Müşteri İşlemleri" onAction="#goCustomers" styleClass="nav-btn" focusTraversable="false"/>
+            <Button text="Talep/Teklif"      onAction="#goRequests"  styleClass="nav-btn" focusTraversable="false"/>
+            <Button text="Ürün İşlemleri"    onAction="#goProducts"  styleClass="nav-btn" focusTraversable="false"/>
+            <Button text="Onay İşlemleri"    onAction="#goApprovals" styleClass="nav-btn" focusTraversable="false"/>
+            <Button text="Raporlar"          onAction="#goReports"   styleClass="nav-btn" focusTraversable="false"/>
+            <Region VBox.vgrow="ALWAYS"/>
+            <Label text="v1.0.0" styleClass="sidebar-foot"/>
+        </VBox>
+    </left>
+
+    <!-- ORTA: İçerik kökü (Dashboard ile başlar) -->
+    <center>
+        <StackPane fx:id="contentRoot" styleClass="content-root">
+            <VBox fx:id="dashboardRoot" alignment="TOP_CENTER" spacing="18">
+                <Label text="Gösterge Paneli" styleClass="hero-title"/>
+
+                <!-- Kartlar -->
+                <HBox spacing="14" alignment="CENTER">
+                    <VBox styleClass="card">
+                        <Label text="Bugünkü Talep" styleClass="card-title"/>
+                        <Label fx:id="lblTodayRequests" text="0" styleClass="card-metric"/>
+                    </VBox>
+                    <VBox styleClass="card">
+                        <Label text="Toplam Ürün Adedi" styleClass="card-title"/>
+                        <Label fx:id="lblTodayProducts" text="0" styleClass="card-metric"/>
+                    </VBox>
+                    <VBox styleClass="card">
+                        <Label text="Toplam Gelir" styleClass="card-title"/>
+                        <Label fx:id="lblTodayRevenue" text="0.00 TL" styleClass="card-metric"/>
+                    </VBox>
+                </HBox>
+
+                <!-- Ürün bazında bugünkü talep tablosu -->
+                <VBox spacing="8" style="-fx-padding: 6 0 0 0;">
+                    <Label text="Bugün Ürün Bazında Talep" style="-fx-font-weight:700; -fx-text-fill:#38536d;"/>
+                    <!-- Mavi seçim için ekstra sınıf YOK -->
+                    <TableView fx:id="tblTodayProductDemand"
+                               VBox.vgrow="ALWAYS"
+                               prefHeight="260"
+                               focusTraversable="false">
+                        <columns>
+                            <TableColumn fx:id="colDemandProduct" text="Ürün" prefWidth="320"/>
+                            <TableColumn fx:id="colDemandQty"     text="Toplam Miktar" prefWidth="160"/>
+                        </columns>
+                    </TableView>
+                </VBox>
+            </VBox>
+        </StackPane>
+    </center>
+</BorderPane>
