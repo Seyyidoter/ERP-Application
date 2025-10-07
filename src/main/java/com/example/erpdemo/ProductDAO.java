@@ -9,10 +9,10 @@ import java.sql.*;
 /** Ürün (Stoklar) DAO */
 public class ProductDAO {
 
-    /** Tüm ürünler – yalnız gerekli kolonlar */
+    /** Tüm ürünler – yalnız gerekli kolonlar (isimle sıralı) */
     public static ObservableList<Product> getAllProducts() throws SQLException {
         ObservableList<Product> productList = FXCollections.observableArrayList();
-        String sql = "SELECT Id, UrunAdi, Fiyat, Stok, Birim FROM dbo.Stoklar";
+        String sql = "SELECT Id, UrunAdi, Fiyat, Stok, Birim FROM dbo.Stoklar ORDER BY UrunAdi ASC";
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql);
              ResultSet rs = stmt.executeQuery()) {
@@ -51,17 +51,30 @@ public class ProductDAO {
         return null;
     }
 
-    /** Ürün ekle (fiyat tek noktadan ölçeklenir) */
+    /** Ürün ekle (fiyat tek noktadan ölçeklenir) – geriye uyumlu sürüm */
     public static void addProduct(String urunAdi, BigDecimal fiyat, int stok, String birim) throws SQLException {
+        addProductReturningId(urunAdi, fiyat, stok, birim);
+    }
+
+    /** Ürün ekle ve oluşan Id’yi döndür */
+    public static int addProductReturningId(String urunAdi, BigDecimal fiyat, int stok, String birim) throws SQLException {
         fiyat = Money.scale2(fiyat);
         String sql = "INSERT INTO dbo.Stoklar (UrunAdi, Fiyat, Stok, Birim) VALUES (?, ?, ?, ?)";
         try (Connection conn = DatabaseManager.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+             PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             stmt.setString(1, norm(urunAdi));
             stmt.setBigDecimal(2, fiyat);
             stmt.setInt(3, stok);
             stmt.setString(4, norm(birim));
-            stmt.executeUpdate();
+
+            int affected = stmt.executeUpdate();
+            if (affected != 1) {
+                throw new SQLException("Ürün eklenemedi (beklenen=1, etkilenen=" + affected + ").");
+            }
+            try (ResultSet keys = stmt.getGeneratedKeys()) {
+                if (keys.next()) return ((Number) keys.getObject(1)).intValue();
+            }
+            throw new SQLException("Ürün eklendi ama oluşturulan Id alınamadı.");
         }
     }
 
@@ -76,7 +89,10 @@ public class ProductDAO {
             stmt.setInt(3, product.getStok());
             stmt.setString(4, norm(product.getBirim()));
             stmt.setInt(5, product.getId());
-            stmt.executeUpdate();
+            int affected = stmt.executeUpdate();
+            if (affected != 1) {
+                throw new SQLException("Ürün güncellenemedi veya bulunamadı (Id=" + product.getId() + ").");
+            }
         }
     }
 
@@ -107,14 +123,12 @@ public class ProductDAO {
             int result = current + quantityChange;
 
             if (quantityChange < 0 && result < 0) {
-                // Kullanıcı-dostu mesaj: ürün adı + stok detayları
                 throw new SQLException(
-                        p.getUrunAdi() + " için yetersiz stok: Mevcut=" + current +
+                        p.getUrunAdi() + " için yetersiz stok. Mevcut=" + current +
                                 ", Değişim=" + quantityChange + ", Sonuç=" + result + "."
                 );
             }
 
-            // Nadir durum: başka nedenle dokunulamadı
             throw new SQLException("Stok güncellenemedi (Id=" + productId + ").");
         }
     }

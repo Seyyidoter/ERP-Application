@@ -98,7 +98,7 @@ public class HelloController {
         Alert a = new Alert(Alert.AlertType.ERROR, msg, ButtonType.OK);
         a.setTitle(title);
         a.setHeaderText(null);
-        IconUtil.decorateAlert(a); // ← EKLENDİ: tüm uyarılar tutarlı
+        IconUtil.decorateAlert(a);
         a.showAndWait();
     }
 }

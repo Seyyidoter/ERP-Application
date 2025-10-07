@@ -262,27 +262,59 @@ public class RequestDAO {
         return items;
     }
 
-    /** Talebi ve tüm kalemlerini siler. */
+    /**
+     * Talebi siler (yalnızca 'Onay Bekliyor' durumundaysa).
+     * Yarışlara karşı satırı UPDLOCK ile kilitler; sonra kalemleri ve başlığı tek transaction’da kaldırır.
+     * @return 1 -> silindi; 0 -> bulunamadı (veya beklemede değil)
+     */
     public static int deleteRequestById(int id) throws SQLException {
         try (Connection c = DatabaseManager.getConnection()) {
-            boolean old = c.getAutoCommit();
+            boolean oldAuto = c.getAutoCommit();
             c.setAutoCommit(false);
-            try (PreparedStatement ps1 = c.prepareStatement("DELETE FROM dbo.TalepKalemleri WHERE TalepId=?");
-                 PreparedStatement ps2 = c.prepareStatement("DELETE FROM dbo.Talepler       WHERE Id=?")) {
 
-                ps1.setInt(1, id);
-                ps1.executeUpdate();
+            try (Statement st = c.createStatement()) {
+                st.execute("SET XACT_ABORT ON; SET LOCK_TIMEOUT 5000");
+            }
 
-                ps2.setInt(1, id);
-                int affected = ps2.executeUpdate();
+            try {
+                // 1) Satırı kilitleyip mevcut durumunu kontrol et
+                String status = null;
+                try (PreparedStatement ps = c.prepareStatement(
+                        "SELECT Durum FROM dbo.Talepler WITH (UPDLOCK, ROWLOCK) WHERE Id=?")) {
+                    ps.setInt(1, id);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        if (rs.next()) status = rs.getString(1);
+                    }
+                }
+                if (status == null) { c.rollback(); return 0; } // yok
+                if (!"Onay Bekliyor".equalsIgnoreCase(status)) {
+                    c.rollback();
+                    throw new SQLException("Yalnızca 'Onay Bekliyor' durumundaki talepler silinebilir.");
+                }
+
+                // 2) Önce kalemleri sil
+                try (PreparedStatement ps1 =
+                             c.prepareStatement("DELETE FROM dbo.TalepKalemleri WHERE TalepId=?")) {
+                    ps1.setInt(1, id);
+                    ps1.executeUpdate();
+                }
+
+                // 3) Sonra başlığı sil
+                int affected;
+                try (PreparedStatement ps2 =
+                             c.prepareStatement("DELETE FROM dbo.Talepler WHERE Id=?")) {
+                    ps2.setInt(1, id);
+                    affected = ps2.executeUpdate();
+                }
 
                 c.commit();
                 return affected;
+
             } catch (SQLException ex) {
-                try { c.rollback(); } catch (SQLException ignore) { }
+                try { c.rollback(); } catch (SQLException ignore) {}
                 throw ex;
             } finally {
-                try { c.setAutoCommit(old); } catch (SQLException ignore) { }
+                try { c.setAutoCommit(oldAuto); } catch (SQLException ignore) {}
             }
         }
     }

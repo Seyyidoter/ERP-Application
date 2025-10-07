@@ -8,7 +8,53 @@
     -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.12), 16, 0.2, 0, 2);
 }
 .appbar-title { -fx-text-fill: white; -fx-font-size: 18px; -fx-font-weight: 700; }
-.user-menu { -fx-background-color: rgba(255,255,255,0.15); -fx-text-fill: white; -fx-background-radius: 10; -fx-padding: 6 10; }
+
+/* ===== Kullanıcı rol menüsü (MenuButton) – buton üstünde yazı/ok beyaz ===== */
+.user-menu {
+    -fx-background-color: rgba(255,255,255,0.15);
+    -fx-text-fill: white;
+    -fx-background-radius: 10;
+    -fx-padding: 6 10;
+}
+.user-menu .label { -fx-text-fill: white; }
+.user-menu:hover,
+.user-menu:hover .label,
+.user-menu:armed,
+.user-menu:armed .label { -fx-text-fill: white; }
+/* Ok simgesi */
+.user-menu > .arrow-button > .arrow { -fx-background-color: white; }
+
+/* ===== Açılır liste (ContextMenu) – görünürlük düzeltmeleri ===== */
+.context-menu {
+    -fx-background-color: white;
+    -fx-padding: 6;
+    -fx-background-radius: 8;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.20), 18, 0.2, 0, 4);
+}
+
+/* Menü satırı normal halde şeffaf zemin ve KOYU metin */
+.context-menu .menu-item {
+    -fx-background-color: transparent;
+    -fx-background-insets: 0;
+    -fx-background-radius: 6;
+    -fx-padding: 6 10;
+}
+.context-menu .menu-item > .label {
+    -fx-text-fill: #111827;     /* görünür koyu metin */
+    -fx-font-weight: 600;
+}
+
+/* Hover/odak halinde vurgulu zemin ve beyaz metin */
+.context-menu .menu-item:focused {
+    -fx-background-color: #1e4fd6;
+    -fx-background-radius: 6;
+}
+.context-menu .menu-item:focused > .label {
+    -fx-text-fill: white;
+}
+
+/* Ayırıcı çizgi */
+.context-menu .separator:horizontal .line { -fx-background-color: rgba(0,0,0,0.08); }
 
 /* ================== Sidebar ================== */
 .sidebar { -fx-padding: 16 12; -fx-pref-width: 220; -fx-background-color: #142c45; }

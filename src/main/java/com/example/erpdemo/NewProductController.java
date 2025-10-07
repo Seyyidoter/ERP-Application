@@ -7,8 +7,8 @@ import javafx.scene.control.TextFormatter;
 import javafx.stage.Stage;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.function.UnaryOperator;
+import java.util.regex.Pattern;
 
 public class NewProductController {
 
@@ -29,14 +29,8 @@ public class NewProductController {
         priceField.setTextFormatter(new TextFormatter<>(numericDecimalFilter()));
         stockField.setTextFormatter(new TextFormatter<>(numericIntFilter()));
 
-        // BİRİM alanında SAYI YAZMAYI ENGELLE
-        unitField.setTextFormatter(new TextFormatter<>(change -> {
-            String t = change.getText();
-            // silme/taşıma işlemlerinde t genelde "" olur, engelleme
-            if (t == null || t.isEmpty()) return change;
-            // eklenen/paste edilen metinde herhangi bir rakam varsa engelle
-            return t.matches(".*\\d.*") ? null : change;
-        }));
+        // BİRİM: Rakam yasak, uzunluk limiti, tüm metin üzerinde doğrulama
+        unitField.setTextFormatter(new TextFormatter<>(unitFilter(50)));
     }
 
     public void setProduct(Product product) {
@@ -58,7 +52,9 @@ public class NewProductController {
     private void handleSave() {
         try {
             String name = safeTrim(nameField.getText());
-            String unit = safeTrim(unitField.getText());
+            // Birim: trim + çoklu boşlukları teke indir
+            String unit = safeTrim(unitField.getText()).replaceAll("\\s+", " ");
+
             if (name.isBlank()) { AppDialogs.warn("Ürün adı boş olamaz."); return; }
             if (unit.isBlank()) { AppDialogs.warn("Birim boş olamaz.");   return; }
 
@@ -132,9 +128,22 @@ public class NewProductController {
         return change -> {
             String s = change.getControlNewText();
             if (s.isEmpty()) return change;
+            // Yalnızca rakam, nokta veya virgül; en fazla 1 adet ayırıcı
             if (!s.matches("[0-9.,]*")) return null;
             long sep = s.chars().filter(ch -> ch == '.' || ch == ',').count();
             return sep <= 1 ? change : null;
+        };
+    }
+
+    /** Birim alanı filtresi: rakam yasak; opsiyonel uzunluk sınırı. */
+    private static UnaryOperator<TextFormatter.Change> unitFilter(int maxLen) {
+        // Rakam içermesin (tüm Unicode rakamlar için \\p{Digit})
+        Pattern noDigits = Pattern.compile("^[^\\p{Digit}]*$");
+        return change -> {
+            String next = change.getControlNewText();
+            if (next == null) return change; // güvence
+            if (maxLen > 0 && next.length() > maxLen) return null;
+            return noDigits.matcher(next).matches() ? change : null;
         };
     }
 }

@@ -1,21 +1,25 @@
 package com.example.erpdemo;
 
-import com.example.erpdemo.Money;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Node;
 import javafx.scene.Parent;
+import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.image.Image;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
+import javafx.stage.WindowEvent;
+import javafx.event.EventHandler;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.net.URL;
 import java.sql.SQLException;
 import java.util.Objects;
@@ -43,6 +47,9 @@ public class MainController {
     /** Dashboard görünümünün snapshot’ı (FXML’den gelen dashboardRoot’un ta kendisi). */
     private Node dashboardViewSnapshot;
 
+    // Scene’e eklenen “dış tıklama” filtresi için referans (leak/katlanma önler)
+    private EventHandler<MouseEvent> outsideClickFilter;
+
     @FXML
     public void initialize() {
         // Snapshot’ı FXML’den gelen node ile HEMEN ata
@@ -69,23 +76,49 @@ public class MainController {
                 return row;
             });
 
-            // Tablo DIŞINA tıklanınca da seçim/odak temizle
-            Platform.runLater(() -> {
-                var scene = tblTodayProductDemand.getScene();
-                if (scene == null) return;
-                scene.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, e -> {
-                    javafx.scene.Node n = e.getPickResult().getIntersectedNode();
-                    boolean inside = false;
-                    while (n != null) {
-                        if (n == tblTodayProductDemand) { inside = true; break; }
-                        n = n.getParent();
+            // “Tablo DIŞINA tıklama” filtresi — scene yaşam döngüsüne bağla (ekle/çıkar)
+            tblTodayProductDemand.sceneProperty().addListener((obs, oldScene, newScene) -> {
+                // Eski sahneden filtremiz varsa sökelim
+                if (oldScene != null && outsideClickFilter != null) {
+                    oldScene.removeEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
+                }
+                if (newScene != null) {
+                    outsideClickFilter = e -> {
+                        Node n = e.getPickResult().getIntersectedNode();
+                        boolean inside = false;
+                        while (n != null) {
+                            if (n == tblTodayProductDemand) { inside = true; break; }
+                            n = n.getParent();
+                        }
+                        if (!inside) {
+                            tblTodayProductDemand.getSelectionModel().clearSelection();
+                            if (tblTodayProductDemand.getParent() != null)
+                                tblTodayProductDemand.getParent().requestFocus();
+                        }
+                    };
+                    newScene.addEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
+
+                    // Pencere kapanırken de temizle (ekstra güvenlik)
+                    if (newScene.getWindow() != null) {
+                        newScene.getWindow().addEventHandler(WindowEvent.WINDOW_HIDDEN, we -> {
+                            if (outsideClickFilter != null) {
+                                newScene.removeEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
+                                outsideClickFilter = null;
+                            }
+                        });
+                    } else {
+                        newScene.windowProperty().addListener((o, ow, nw) -> {
+                            if (nw != null) {
+                                nw.addEventHandler(WindowEvent.WINDOW_HIDDEN, we -> {
+                                    if (outsideClickFilter != null) {
+                                        newScene.removeEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
+                                        outsideClickFilter = null;
+                                    }
+                                });
+                            }
+                        });
                     }
-                    if (!inside) {
-                        tblTodayProductDemand.getSelectionModel().clearSelection();
-                        if (tblTodayProductDemand.getParent() != null)
-                            tblTodayProductDemand.getParent().requestFocus();
-                    }
-                });
+                }
             });
         }
 
@@ -99,8 +132,11 @@ public class MainController {
 
     public void setUser(User user) {
         this.loggedInUser = user;
-        userMenu.setText(user != null && user.getRole() != null && !user.getRole().isBlank()
-                ? user.getRole() : "Kullanıcı");
+        if (userMenu != null) {
+            String label = (user != null && user.getRole() != null && !user.getRole().isBlank())
+                    ? user.getRole() : "Kullanıcı";
+            userMenu.setText(label);
+        }
         updateApprovalsVisibility();
     }
 
@@ -228,10 +264,12 @@ public class MainController {
         try {
             int req = DashboardDAO.getTodayRequestCount();
             int qty = DashboardDAO.getTodayProductQuantity();
-            double rev = DashboardDAO.getTodayRevenue();
+
+            // 🔧 HASSASİYET: double yerine BigDecimal ile formatla
+            BigDecimal rev = DashboardDAO.getTodayRevenueBD();
             lblTodayRequests.setText(String.valueOf(req));
             lblTodayProducts.setText(String.valueOf(qty));
-            lblTodayRevenue.setText(Money.fmtTRWithSymbol(java.math.BigDecimal.valueOf(rev)));
+            lblTodayRevenue.setText(Money.fmtTRWithSymbol(rev));
         } catch (SQLException e) {
             lblTodayRequests.setText("-");
             lblTodayProducts.setText("-");

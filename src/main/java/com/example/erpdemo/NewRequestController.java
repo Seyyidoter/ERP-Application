@@ -5,15 +5,16 @@ import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.control.ListCell;
 import javafx.stage.Stage;
 import javafx.util.StringConverter;
-import javafx.scene.control.ListCell;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.sql.SQLException;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.function.UnaryOperator;
 
 public class NewRequestController {
 
@@ -72,6 +73,12 @@ public class NewRequestController {
 
         // Liste değiştikçe toplamı güncelle
         requestItems.addListener((javafx.collections.ListChangeListener<RequestItem>) c -> updateTotalAmount());
+
+        // Miktar alanı: sadece rakam kabul et
+        quantityField.setTextFormatter(new TextFormatter<>(onlyDigitsFilter()));
+
+        // Enter ile hızlı ekleme (opsiyonel ama kullanışlı)
+        quantityField.setOnAction(e -> handleAddProduct());
     }
 
     /** Dışarıdan: Kaydet başarılı olursa çağrılacak aksiyonu ver. */
@@ -99,7 +106,7 @@ public class NewRequestController {
         confirm.setContentText("Müşteri değiştirildiğinde mevcut ürün listesi temizlenecek.\nDevam edilsin mi?");
 
         // Türkçe butonlar
-        ButtonType evetBtn = new ButtonType("Evet", ButtonBar.ButtonData.YES);
+        ButtonType evetBtn  = new ButtonType("Evet", ButtonBar.ButtonData.YES);
         ButtonType hayirBtn = new ButtonType("Hayır", ButtonBar.ButtonData.NO);
         confirm.getButtonTypes().setAll(evetBtn, hayirBtn);
 
@@ -162,6 +169,7 @@ public class NewRequestController {
         catch (NumberFormatException e) { AppDialogs.warn("Miktar sayısal olmalı."); return; }
         if (qty <= 0) { AppDialogs.warn("Miktar 0'dan büyük olmalı."); return; }
 
+        // Listedeki mevcut toplam miktar + eklenecek miktar stoktan büyük olmasın
         int alreadyAdded = collectQuantitiesByProduct().getOrDefault(prd.getId(), 0);
         if (qty + alreadyAdded > prd.getStok()) {
             AppDialogs.warn("Stok yetersiz! (Stok: " + prd.getStok() +
@@ -177,7 +185,33 @@ public class NewRequestController {
         );
         discounted = Money.scale2(discounted);
 
-        requestItems.add(new RequestItem(0, 0, prd.getId(), prd.getUrunAdi(), qty, price, discounted));
+        // --- Aynı ürün varsa merge et, yoksa yeni satır ekle ---
+        int existingIdx = -1;
+        for (int i = 0; i < requestItems.size(); i++) {
+            if (requestItems.get(i).getProductId() == prd.getId()) {
+                existingIdx = i;
+                break;
+            }
+        }
+
+        if (existingIdx >= 0) {
+            RequestItem old = requestItems.get(existingIdx);
+            int newQty = old.getQuantity() + qty;
+            // (stok zaten üstte kontrol edildi)
+            RequestItem merged = new RequestItem(
+                    0, 0,
+                    prd.getId(),
+                    prd.getUrunAdi(),
+                    newQty,
+                    price,
+                    discounted
+            );
+            requestItems.set(existingIdx, merged);
+        } else {
+            requestItems.add(new RequestItem(
+                    0, 0, prd.getId(), prd.getUrunAdi(), qty, price, discounted
+            ));
+        }
 
         clearProductInputs();
     }
@@ -257,5 +291,26 @@ public class NewRequestController {
                 .map(RequestItem::getSubtotal)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         totalAmountLabel.setText(Money.fmtTRWithSymbol(Money.scale2(total)));
+    }
+
+    // --------- Yardımcılar ---------
+
+    private static UnaryOperator<TextFormatter.Change> onlyDigitsFilter() {
+        return change -> change.getControlNewText().matches("\\d*") ? change : null;
+    }
+
+    // Görünüm için converter’lar
+    private static class CustomerStringConverter extends StringConverter<Customer> {
+        @Override public String toString(Customer c) {
+            return c == null ? "" : c.getCompanyName();
+        }
+        @Override public Customer fromString(String s) { return null; }
+    }
+
+    private static class ProductStringConverter extends StringConverter<Product> {
+        @Override public String toString(Product p) {
+            return p == null ? "" : p.getUrunAdi();
+        }
+        @Override public Product fromString(String s) { return null; }
     }
 }

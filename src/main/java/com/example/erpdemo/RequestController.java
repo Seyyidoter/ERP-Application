@@ -1,9 +1,12 @@
 package com.example.erpdemo;
 
+import javafx.beans.binding.Bindings;
+import javafx.beans.binding.BooleanBinding;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.event.EventHandler;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Node;
@@ -11,9 +14,11 @@ import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.HBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
+import javafx.stage.WindowEvent;
 
 import java.io.IOException;
 import java.sql.SQLException;
@@ -45,6 +50,9 @@ public class RequestController {
     // Ekranın meşgul durumu (UI kilitleme için)
     private final BooleanProperty busy = new SimpleBooleanProperty(false);
 
+    // Scene genelindeki dış tıklama filtresi (leak olmaması için referans tutuyoruz)
+    private EventHandler<MouseEvent> outsideClickFilter;
+
     @FXML
     public void initialize() {
         // 1) Sütun–model bağları
@@ -59,10 +67,22 @@ public class RequestController {
         tblRequests.setPlaceholder(new Label("Kayıtlı talep yok"));
         tblRequests.setItems(rows);
 
-        // 3) Seçim yokken butonları pasifleştir — ayrıca busy ile OR’lanır
-        var noSel = tblRequests.getSelectionModel().selectedItemProperty().isNull();
+        // 3) Seçim/busy durumuna göre butonlar
+        var selected = tblRequests.getSelectionModel().selectedItemProperty();
+        var noSel    = selected.isNull();
+
+        // Görüntüle: seçimsiz veya busy iken kapalı
         viewBtn.disableProperty().bind(noSel.or(busy));
-        deleteBtn.disableProperty().bind(noSel.or(busy));
+
+        // Sil: yalnızca seçili ve DURUM=Onay Bekliyor ve busy değilken açık
+        BooleanBinding notPending = Bindings.createBooleanBinding(
+                () -> {
+                    Row r = selected.get();
+                    return r == null || !isPending(r.getStatus());
+                },
+                selected
+        );
+        deleteBtn.disableProperty().bind(busy.or(notPending));
 
         // 4) Tabloda boş alana tıklayınca seçimi/odağı temizle, çift tık → görüntüle
         tblRequests.setRowFactory(tv -> {
@@ -80,22 +100,55 @@ public class RequestController {
         });
 
         // 5) SAHNE GENELİ: tablo ve actionsBar dışına tıklanırsa seçimi temizle
-        javafx.application.Platform.runLater(() -> {
-            Scene scene = tblRequests.getScene();
-            if (scene == null) return;
-            scene.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, e -> {
-                Node n = e.getPickResult().getIntersectedNode();
-                boolean insideTable   = isChildOf(n, tblRequests);
-                boolean insideActions = (actionsBar != null) && isChildOf(n, actionsBar);
-                if (!insideTable && !insideActions) {
-                    tblRequests.getSelectionModel().clearSelection();
-                    if (tblRequests.getParent() != null) tblRequests.getParent().requestFocus();
+        //    — filtreyi scene yaşam döngüsüne bağla (ekle/çıkar), leak/katlanma olmasın
+        tblRequests.sceneProperty().addListener((obs, oldScene, newScene) -> {
+            // Eski sahneden varsa filtremizi sökelim
+            if (oldScene != null && outsideClickFilter != null) {
+                oldScene.removeEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
+            }
+            if (newScene != null) {
+                outsideClickFilter = e -> {
+                    Node n = e.getPickResult().getIntersectedNode();
+                    boolean insideTable   = isChildOf(n, tblRequests);
+                    boolean insideActions = (actionsBar != null) && isChildOf(n, actionsBar);
+                    if (!insideTable && !insideActions) {
+                        tblRequests.getSelectionModel().clearSelection();
+                        if (tblRequests.getParent() != null) tblRequests.getParent().requestFocus();
+                    }
+                };
+                newScene.addEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
+
+                // Pencere kapanırken de temizle (ekstra güvenlik)
+                if (newScene.getWindow() != null) {
+                    newScene.getWindow().addEventHandler(WindowEvent.WINDOW_HIDDEN, we -> {
+                        if (outsideClickFilter != null) {
+                            newScene.removeEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
+                            outsideClickFilter = null;
+                        }
+                    });
+                } else {
+                    newScene.windowProperty().addListener((o, ow, nw) -> {
+                        if (nw != null) {
+                            nw.addEventHandler(WindowEvent.WINDOW_HIDDEN, we -> {
+                                if (outsideClickFilter != null) {
+                                    newScene.removeEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
+                                    outsideClickFilter = null;
+                                }
+                            });
+                        }
+                    });
                 }
-            });
+            }
         });
 
         // 6) İlk yükleme
         refresh();
+    }
+
+    private static boolean isPending(String status) {
+        if (status == null) return false;
+        String s = status.trim().toLowerCase(java.util.Locale.ROOT);
+        return s.equals("onay bekliyor");
     }
 
     /** n düğümü root’un altındaysa true. */
@@ -192,13 +245,20 @@ public class RequestController {
         Row sel = tblRequests.getSelectionModel().getSelectedItem();
         if (sel == null) return;
 
-        Alert q = new Alert(Alert.AlertType.CONFIRMATION,
-                "Talep #" + sel.getId() + " silinsin mi?", ButtonType.YES, ButtonType.NO);
-        q.setHeaderText(null); q.setTitle("Onay");
+        ButtonType EVET  = new ButtonType("Evet", ButtonBar.ButtonData.YES);
+        ButtonType HAYIR = new ButtonType("Hayır", ButtonBar.ButtonData.NO);
+
+        Alert q = new Alert(
+                Alert.AlertType.CONFIRMATION,
+                "Talep #" + sel.getId() + " silinsin mi?",
+                EVET, HAYIR
+        );
+        q.setHeaderText(null);
+        q.setTitle("Onay");
         IconUtil.decorateAlert(q);
         q.showAndWait();
 
-        if (q.getResult() != ButtonType.YES) return;
+        if (q.getResult() != EVET) return;
 
         setControlsDisabled(true);
         Async.runVoid(() -> {
@@ -246,8 +306,7 @@ public class RequestController {
             tblRequests.setMouseTransparent(disabled); // bazı temalarda gerekli
         }
         if (actionsBar != null)  actionsBar.setDisable(disabled);
-
-        // ÖNEMLİ: viewBtn / deleteBtn için setDisable çağırmıyoruz; bağlanmış durumdalar.
+        // viewBtn / deleteBtn için setDisable çağırmıyoruz; binding var.
     }
 
     /** Liste satırı modeli. */

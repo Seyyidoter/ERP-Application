@@ -7,35 +7,40 @@ import java.math.BigDecimal;
 import java.sql.*;
 import java.time.LocalDate;
 
-/** Ürün sipariş geçmişi sorguları – tarih filtrelerinde CAST kullanımı yok. */
+/** Ürün sipariş geçmişi sorguları – tarih filtrelerinde CAST YOK (indeks-dostu). */
 public class ProductHistoryDAO {
 
     public static ObservableList<ProductHistoryRow> findHistoryForProduct(
             int productId,
             LocalDate from, LocalDate to,
             String statusLike,
-            String customerLike) throws SQLException {
+            String customerLike
+    ) throws SQLException {
+
+        // null/boş-string normalize
+        statusLike   = norm(statusLike);
+        customerLike = norm(customerLike);
 
         StringBuilder sb = new StringBuilder("""
             SELECT
-                t.Id AS ReqId,
-                CAST(t.TalepTarihi AS date) AS Tarih,   -- SELECT tarafında CAST zararsız; sadece görsellik için
-                t.Durum,
-                m.FirmaAdi AS Musteri,
-                k.Miktar,
-                k.TeklifFiyati
+                t.Id                                  AS ReqId,
+                CAST(t.TalepTarihi AS date)           AS Tarih,   -- SELECT tarafındaki CAST yalnız görsellik için
+                t.Durum                               AS Durum,
+                m.FirmaAdi                            AS Musteri,
+                k.Miktar                              AS Miktar,
+                k.TeklifFiyati                        AS TeklifFiyati
             FROM dbo.Talepler t
-            JOIN dbo.TalepKalemleri k ON k.TalepId = t.Id
-            JOIN dbo.Musteriler m      ON m.Id = t.MusteriId
+            JOIN dbo.TalepKalemleri k ON k.TalepId  = t.Id
+            JOIN dbo.Musteriler   m ON m.Id         = t.MusteriId
             WHERE k.UrunId = ?
         """);
 
-        // --- Tarih aralığı: CAST YOK, indeks dostu ---
+        // --- Tarih aralığı: indeks-dostu (>= from 00:00, < to+1 00:00) ---
         if (from != null) sb.append(" AND t.TalepTarihi >= ? ");
         if (to   != null) sb.append(" AND t.TalepTarihi <  ? ");
 
-        if (statusLike   != null && !statusLike.isBlank())   sb.append(" AND t.Durum = ? ");
-        if (customerLike != null && !customerLike.isBlank()) sb.append(" AND m.FirmaAdi LIKE ? ");
+        if (statusLike   != null) sb.append(" AND t.Durum = ? ");
+        if (customerLike != null) sb.append(" AND m.FirmaAdi LIKE ? ");
 
         sb.append(" ORDER BY t.Id DESC, k.Id ");
 
@@ -47,39 +52,50 @@ public class ProductHistoryDAO {
             int i = 1;
             ps.setInt(i++, productId);
 
-            // from >= 00:00
             if (from != null) {
                 ps.setTimestamp(i++, Timestamp.valueOf(from.atStartOfDay()));
             }
-            // to  <  nextDay 00:00
             if (to != null) {
                 LocalDate next = to.plusDays(1);
                 ps.setTimestamp(i++, Timestamp.valueOf(next.atStartOfDay()));
             }
 
-            if (statusLike != null && !statusLike.isBlank()) {
+            if (statusLike != null) {
                 ps.setString(i++, statusLike);
             }
-            if (customerLike != null && !customerLike.isBlank()) {
+            if (customerLike != null) {
                 ps.setString(i++, "%" + customerLike + "%");
             }
 
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    int reqId = rs.getInt("ReqId");
-                    Date d = rs.getDate("Tarih");
-                    LocalDate date = (d == null ? null : d.toLocalDate());
-                    String status = rs.getString("Durum");
+                    int reqId       = rs.getInt("ReqId");
+                    Date d          = rs.getDate("Tarih");
+                    LocalDate date  = (d == null ? null : d.toLocalDate());
+                    String status   = rs.getString("Durum");
                     String customer = rs.getString("Musteri");
-                    int qty = rs.getInt("Miktar");
-                    BigDecimal unit = rs.getBigDecimal("TeklifFiyati");
-                    BigDecimal subtotal = (unit == null ? BigDecimal.ZERO : unit.multiply(BigDecimal.valueOf(qty)));
+                    int qty         = rs.getInt("Miktar");
 
-                    rows.add(new ProductHistoryRow(reqId, date, status, customer, qty,
-                            unit == null ? BigDecimal.ZERO : unit, subtotal));
+                    // Parasal alanları 2 ondalığa normalize et
+                    BigDecimal unit = rs.getBigDecimal("TeklifFiyati");
+                    if (unit == null) unit = BigDecimal.ZERO;
+                    else unit = Money.scale2(unit);
+
+                    BigDecimal subtotal = Money.scale2(unit.multiply(BigDecimal.valueOf(qty)));
+
+                    rows.add(new ProductHistoryRow(
+                            reqId, date, status, customer, qty, unit, subtotal
+                    ));
                 }
             }
         }
         return rows;
+    }
+
+    /** null-safe trim; boşsa null döndür. */
+    private static String norm(String s) {
+        if (s == null) return null;
+        String t = s.trim();
+        return t.isEmpty() ? null : t;
     }
 }

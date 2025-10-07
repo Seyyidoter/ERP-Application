@@ -8,7 +8,7 @@ import java.sql.SQLException;
 public class UserDAO {
 
     public static User getUserByUsername(String username) throws SQLException {
-        String sql = "SELECT Id, KullaniciAdi, Rol FROM Kullanicilar WHERE KullaniciAdi = ?";
+        String sql = "SELECT Id, KullaniciAdi, Rol FROM dbo.Kullanicilar WHERE KullaniciAdi = ?";
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, username);
@@ -24,6 +24,7 @@ public class UserDAO {
         }
         return null;
     }
+
 
     /**
      * Mevcut şifre doğruysa tek atomik UPDATE ile yeni şifreyi yazar.

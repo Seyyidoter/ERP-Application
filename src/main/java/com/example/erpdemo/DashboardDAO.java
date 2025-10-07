@@ -45,7 +45,7 @@ public class DashboardDAO {
     /** Güvenli: Bugünkü toplam gelir (BigDecimal, 2 ondalık). */
     public static BigDecimal getTodayRevenueBD() throws SQLException {
         String sql = """
-            SELECT COALESCE(SUM(CAST(tk.Miktar AS decimal(18,2)) * tk.TeklifFiyati), 0)
+            SELECT COALESCE(SUM(CAST(tk.Miktar AS decimal(18,4)) * CAST(tk.TeklifFiyati AS decimal(18,4))), 0)
             FROM dbo.TalepKalemleri tk
             JOIN dbo.Talepler t ON t.Id = tk.TalepId
             WHERE t.TalepTarihi >= CAST(GETDATE() AS date)

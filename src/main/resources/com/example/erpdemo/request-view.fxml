@@ -20,7 +20,7 @@
                 <Insets bottom="10"/>
             </BorderPane.margin>
             <children>
-                <Label text="Talep / Teklif">
+                <Label text="Talep / Teklif" styleClass="page-title">
                     <font>
                         <Font name="System Bold" size="24.0"/>
                     </font>

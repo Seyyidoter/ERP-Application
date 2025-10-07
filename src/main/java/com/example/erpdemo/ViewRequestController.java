@@ -1,9 +1,12 @@
 package com.example.erpdemo;
 
+import javafx.event.EventHandler;
 import javafx.fxml.FXML;
 import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.input.MouseEvent;
+import javafx.stage.WindowEvent;
 
 import java.math.BigDecimal;
 import java.sql.SQLException;
@@ -32,6 +35,9 @@ public class ViewRequestController {
     private int requestId;
     private Runnable onChange; // üst ekranı yenilemek için
 
+    // Scene geneline eklediğimiz filtre referansı
+    private EventHandler<MouseEvent> outsideClickFilter;
+
     @FXML
     public void initialize() {
         // Sütun bağları
@@ -57,23 +63,48 @@ public class ViewRequestController {
             return row;
         });
 
-        // Pencere açıldığında tablo fokus almasın, dış tıklamalarda seçimi temizle
-        javafx.application.Platform.runLater(() -> {
-            if (requestItemsTable.getParent() != null) {
-                requestItemsTable.getParent().requestFocus();
-            }
-            var scene = requestItemsTable.getScene();
-            if (scene == null) return;
+        // Pencere açıldığında tablo fokus almasın
+        if (requestItemsTable.getParent() != null) {
+            requestItemsTable.getParent().requestFocus();
+        }
 
-            scene.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, e -> {
-                Node n = e.getPickResult().getIntersectedNode();
-                boolean insideTable   = isChildOf(n, requestItemsTable);
-                boolean insideActions = actionsBar != null && isChildOf(n, actionsBar);
-                if (!insideTable && !insideActions) {
-                    requestItemsTable.getSelectionModel().clearSelection();
-                    if (requestItemsTable.getParent() != null) requestItemsTable.getParent().requestFocus();
+        // Dış tıklama filtresini scene yaşam döngüsüne bağla
+        requestItemsTable.sceneProperty().addListener((obs, oldScene, newScene) -> {
+            if (oldScene != null && outsideClickFilter != null) {
+                oldScene.removeEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
+            }
+            if (newScene != null) {
+                outsideClickFilter = e -> {
+                    Node n = e.getPickResult().getIntersectedNode();
+                    boolean insideTable   = isChildOf(n, requestItemsTable);
+                    boolean insideActions = actionsBar != null && isChildOf(n, actionsBar);
+                    if (!insideTable && !insideActions) {
+                        requestItemsTable.getSelectionModel().clearSelection();
+                        if (requestItemsTable.getParent() != null) requestItemsTable.getParent().requestFocus();
+                    }
+                };
+                newScene.addEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
+
+                if (newScene.getWindow() != null) {
+                    newScene.getWindow().addEventHandler(WindowEvent.WINDOW_HIDDEN, we -> {
+                        if (outsideClickFilter != null) {
+                            newScene.removeEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
+                            outsideClickFilter = null;
+                        }
+                    });
+                } else {
+                    newScene.windowProperty().addListener((o, ow, nw) -> {
+                        if (nw != null) {
+                            nw.addEventHandler(WindowEvent.WINDOW_HIDDEN, we -> {
+                                if (outsideClickFilter != null) {
+                                    newScene.removeEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
+                                    outsideClickFilter = null;
+                                }
+                            });
+                        }
+                    });
                 }
-            });
+            }
         });
     }
 

@@ -2,6 +2,8 @@ package com.example.erpdemo;
 
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.collections.transformation.FilteredList;
+import javafx.collections.transformation.SortedList;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Node;
@@ -9,6 +11,7 @@ import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.input.KeyCode;
 import javafx.scene.layout.HBox;
 
 import java.io.IOException;
@@ -36,7 +39,8 @@ public class StockController {
     @FXML private HBox actionsBar;
 
     private final ObservableList<Product> master = FXCollections.observableArrayList();
-    private javafx.collections.transformation.FilteredList<Product> filtered;
+    private FilteredList<Product> filtered;
+    private SortedList<Product>   sorted;
 
     @FXML
     public void initialize() {
@@ -55,13 +59,23 @@ public class StockController {
         productTable.setPlaceholder(new Label("Kayıtlı ürün yok"));
 
         // 3) Filtreleme + sıralama
-        filtered = new javafx.collections.transformation.FilteredList<>(master, p -> true);
-        var sorted = new javafx.collections.transformation.SortedList<>(filtered);
+        filtered = new FilteredList<>(master, p -> true);
+        sorted   = new SortedList<>(filtered);
         sorted.comparatorProperty().bind(productTable.comparatorProperty());
         productTable.setItems(sorted);
 
-        // 4) Arama
+        // 4) Arama + Enter kısayolu
         searchField.textProperty().addListener((obs, old, q) -> applyFilter(q));
+        searchField.setOnKeyPressed(e -> {
+            if (e.getCode() == KeyCode.ENTER) {
+                Product sel = productTable.getSelectionModel().getSelectedItem();
+                if (sel == null && !productTable.getItems().isEmpty()) {
+                    productTable.getSelectionModel().select(0);
+                    sel = productTable.getSelectionModel().getSelectedItem();
+                }
+                if (sel != null) openEditDialog(sel);
+            }
+        });
 
         // 5) Seçim yokken butonları kapat
         var noSel = productTable.getSelectionModel().selectedItemProperty().isNull();
@@ -69,13 +83,17 @@ public class StockController {
         deleteButton.disableProperty().bind(noSel);
         productHistoryButton.disableProperty().bind(noSel);
 
-        // 6) Tablo içinde boş alana tıklanınca seçimi/odağı temizle
+        // 6) Tablo içinde boş alana tıklanınca seçimi/odağı temizle,
+        //    satıra çift tık → düzenle
         productTable.setRowFactory(tv -> {
             TableRow<Product> row = new TableRow<>();
             row.setOnMouseClicked(e -> {
                 if (row.isEmpty()) {
                     productTable.getSelectionModel().clearSelection();
                     if (productTable.getParent() != null) productTable.getParent().requestFocus();
+                } else if (e.getClickCount() == 2) {
+                    productTable.getSelectionModel().select(row.getIndex());
+                    openEditDialog(row.getItem());
                 }
             });
             return row;
@@ -92,7 +110,7 @@ public class StockController {
             scene.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, e -> {
                 Node n = e.getPickResult().getIntersectedNode();
                 boolean insideTable   = isChildOf(n, productTable);
-                boolean insideActions = isChildOf(n, actionsBar);
+                boolean insideActions = actionsBar != null && isChildOf(n, actionsBar);
                 if (!insideTable && !insideActions) {
                     productTable.getSelectionModel().clearSelection();
                     if (productTable.getParent() != null) productTable.getParent().requestFocus();
@@ -137,8 +155,16 @@ public class StockController {
         return s != null && s.toLowerCase(Locale.ROOT).contains(q);
     }
 
-    /** Ürünleri arka planda yükler; UI donmaz. */
+    // ... dosyanın üstü aynı ...
+
+    /** Ürünleri arka planda yükler; UI donmaz. Seçimi korumaya çalışır. */
     private void loadProducts() {
+        // mevcut seçim ID’sini hatırla (effectively final)
+        final Integer selectedId =
+                (productTable.getSelectionModel().getSelectedItem() != null)
+                        ? productTable.getSelectionModel().getSelectedItem().getId()
+                        : null;
+
         setBusy(true);
         Async.run(
                 () -> {
@@ -148,10 +174,29 @@ public class StockController {
                         throw new RuntimeException(e);
                     }
                 },
-                list -> master.setAll(list),
+                list -> {
+                    master.setAll(list);
+                    // mümkünse aynı ID’yi tekrar seç
+                    if (selectedId != null) {
+                        selectById(selectedId);
+                    }
+                },
                 ex -> AppDialogs.dbError("Ürün verileri yüklenmesi", toSql(ex)),
                 ()  -> setBusy(false)
         );
+    }
+
+    /** Sorted/Filtered list üzerinde ID’ye göre seçim yapar. */
+    private void selectById(int id) {
+        for (Product p : productTable.getItems()) {
+            if (p != null && p.getId() == id) {
+                productTable.getSelectionModel().select(p);
+                productTable.scrollTo(p);
+                return;
+            }
+        }
+        // bulunamadıysa seçim temiz
+        productTable.getSelectionModel().clearSelection();
     }
 
     private void setBusy(boolean busy) {
@@ -187,13 +232,16 @@ public class StockController {
     private void handleEditButton() {
         Product sel = productTable.getSelectionModel().getSelectedItem();
         if (sel == null) return;
+        openEditDialog(sel);
+    }
 
+    private void openEditDialog(Product product) {
         try {
             FXMLLoader loader = new FXMLLoader(getClass().getResource("new-product.fxml"));
             Parent root = loader.load();
 
             NewProductController controller = loader.getController();
-            controller.setProduct(sel); // aynı dialog: düzenleme
+            controller.setProduct(product); // aynı dialog: düzenleme
 
             var dialogStage = new javafx.stage.Stage();
             dialogStage.setTitle("Ürün Düzenle");
@@ -202,7 +250,7 @@ public class StockController {
             IconUtil.setAppIcon(dialogStage);
             dialogStage.showAndWait();
 
-            loadProducts(); // async
+            loadProducts(); // async + seçim koruma
         } catch (IOException e) {
             AppDialogs.unexpectedError("Ürün düzenleme penceresi açma", e);
         }
@@ -213,14 +261,20 @@ public class StockController {
         Product sel = productTable.getSelectionModel().getSelectedItem();
         if (sel == null) return;
 
-        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
-                "Ürünü silmek istediğinizden emin misiniz?", ButtonType.YES, ButtonType.NO);
+        ButtonType EVET  = new ButtonType("Evet", ButtonBar.ButtonData.YES);
+        ButtonType HAYIR = new ButtonType("Hayır", ButtonBar.ButtonData.NO);
+
+        Alert confirm = new Alert(
+                Alert.AlertType.CONFIRMATION,
+                "Ürünü silmek istediğinizden emin misiniz?",
+                EVET, HAYIR
+        );
         confirm.setHeaderText(null);
         confirm.setTitle("Onay");
         IconUtil.decorateAlert(confirm);
         confirm.showAndWait();
 
-        if (confirm.getResult() == ButtonType.YES) {
+        if (confirm.getResult() == EVET) {
             setBusy(true);
             Async.runVoid(
                     () -> {
