@@ -22,7 +22,8 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.net.URL;
 import java.sql.SQLException;
-import java.util.Objects;
+import java.util.*;
+import java.util.function.Consumer;
 
 public class MainController {
 
@@ -49,6 +50,11 @@ public class MainController {
 
     // Scene’e eklenen “dış tıklama” filtresi için referans (leak/katlanma önler)
     private EventHandler<MouseEvent> outsideClickFilter;
+
+    /* ----------- YENİ: Görünüm/Controller önbelleği ----------- */
+    private final Map<String, Parent> viewCache = new HashMap<>();
+    private final Map<String, Object> controllerCache = new HashMap<>();
+    private String currentKey = "__dashboard__"; // başlangıçta dashboard
 
     @FXML
     public void initialize() {
@@ -125,7 +131,8 @@ public class MainController {
         // Dashboard verilerini yükle ve ekrana getir
         loadDashboardMetrics();
         loadTodayDemandTable();
-        goDashboard();
+        // Başlangıçta dashboard’u göster
+        showDashboardOnly();
 
         Platform.runLater(() -> { if (contentRoot != null) contentRoot.requestFocus(); });
     }
@@ -146,56 +153,96 @@ public class MainController {
 
     @FXML
     public void goDashboard() {
-        pageTitle.setText("Gösterge Paneli");
+        // Zaten dashboard’taysak hiçbir şey yapma (göz kırpma yok)
+        if ("__dashboard__".equals(currentKey)) {
+            selectNav("Gösterge Paneli");
+            return;
+        }
+        showDashboardOnly();
+    }
 
+    private void showDashboardOnly() {
+        pageTitle.setText("Gösterge Paneli");
         if (dashboardViewSnapshot != null) {
             contentRoot.getChildren().setAll(dashboardViewSnapshot);
+            currentKey = "__dashboard__";
+            // İlk geçişte metrikleri yenileyelim
             loadDashboardMetrics();
             loadTodayDemandTable();
             selectNav("Gösterge Paneli");
             contentRoot.requestFocus();
         } else {
-            // Güvence: olağan dışı bir durumda bilgi mesajı
             loadInlineMessage("Gösterge Paneli yüklenemedi.");
             selectNav("Gösterge Paneli");
         }
     }
 
-    @FXML public void goCustomers() { loadContent("customer-view.fxml", "Müşteri İşlemleri", "Müşteri İşlemleri"); }
-    @FXML public void goRequests()  { loadContent("request-view.fxml",  "Talep/Teklif",      "Talep/Teklif"); }
-    @FXML public void goProducts()  { loadContent("stock-view.fxml",    "Ürün İşlemleri",    "Ürün İşlemleri"); }
+    @FXML public void goCustomers() { loadContentCached("customer-view.fxml", "Müşteri İşlemleri", "Müşteri İşlemleri", true); }
+    @FXML public void goRequests()  { loadContentCached("request-view.fxml",  "Talep/Teklif",      "Talep/Teklif", true); }
+    @FXML public void goProducts()  { loadContentCached("stock-view.fxml",    "Ürün İşlemleri",    "Ürün İşlemleri", true); }
 
     @FXML
     public void goApprovals() {
-        if (isAdmin()) loadContent("approval-view.fxml", "Onay İşlemleri", "Onay İşlemleri");
+        if (isAdmin()) loadContentCached("approval-view.fxml", "Onay İşlemleri", "Onay İşlemleri", true);
         else { loadInlineMessage("Bu alana erişim yetkiniz yok."); selectNav(null); }
     }
 
-    @FXML public void goReports() { loadContent("reports-view.fxml", "Raporlar", "Raporlar"); }
+    @FXML public void goReports() { loadContentCached("reports-view.fxml", "Raporlar", "Raporlar", false); }
 
-    private void loadContent(String fxmlFile, String title, String navTextToSelect) {
+    /**
+     * YENİ: FXML’i ilkinde yüklüyor, sonraki tıklamalarda cache’ten getiriyor.
+     * @param callRefreshOnce true ise, controller’da varsa refresh() sadece ilk yüklemede çağrılır.
+     */
+    private void loadContentCached(String fxmlFile, String title, String navTextToSelect, boolean callRefreshOnce) {
         pageTitle.setText(title);
-        try {
-            URL url = getClass().getResource(fxmlFile);
-            if (url == null) {
-                System.err.println("Uyarı: FXML bulunamadı: " + fxmlFile);
-                loadInlineMessage(title + " görünümü yüklenemedi (dosya yok).");
-                selectNav(navTextToSelect);
-                return;
-            }
-            FXMLLoader loader = new FXMLLoader(url);
-            Parent view = loader.load();
 
-            Object controller = loader.getController();
-            try {
-                try { controller.getClass().getMethod("refresh").invoke(controller); }
-                catch (NoSuchMethodException ignore) {}
+        // Aynı sayfa zaten ekranda mı?
+        if (Objects.equals(currentKey, fxmlFile)) {
+            selectNav(navTextToSelect);
+            // Yeniden yükleme yok, göz kırpma yok.
+            return;
+        }
+
+        try {
+            Parent view = viewCache.get(fxmlFile);
+            Object controller = controllerCache.get(fxmlFile);
+
+            if (view == null) {
+                // İlk yükleme
+                URL url = getClass().getResource(fxmlFile);
+                if (url == null) {
+                    System.err.println("Uyarı: FXML bulunamadı: " + fxmlFile);
+                    loadInlineMessage(title + " görünümü yüklenemedi (dosya yok).");
+                    selectNav(navTextToSelect);
+                    return;
+                }
+                FXMLLoader loader = new FXMLLoader(url);
+                view = loader.load();
+                controller = loader.getController();
+
+                // Controller özel entegrasyonları
                 if (controller instanceof ApprovalController ac && loggedInUser != null) {
                     ac.setCurrentUserId(loggedInUser.getId());
                 }
-            } catch (ReflectiveOperationException ignore) { }
 
+                // Varsa refresh() — SADECE İLK YÜKLEMEDE
+                if (callRefreshOnce) {
+                    try {
+                        controller.getClass().getMethod("refresh").invoke(controller);
+                    } catch (NoSuchMethodException ignore) {
+                    } catch (ReflectiveOperationException re) {
+                        re.printStackTrace();
+                    }
+                }
+
+                // Cache’e koy
+                viewCache.put(fxmlFile, view);
+                controllerCache.put(fxmlFile, controller);
+            }
+
+            // Ekrana getir
             contentRoot.getChildren().setAll(view);
+            currentKey = fxmlFile;
             selectNav(navTextToSelect);
             contentRoot.requestFocus();
 
@@ -214,6 +261,7 @@ public class MainController {
         box.setStyle("-fx-alignment: center;");
         contentRoot.getChildren().setAll(box);
         contentRoot.requestFocus();
+        currentKey = "__message__";
     }
 
     private boolean isAdmin() {
