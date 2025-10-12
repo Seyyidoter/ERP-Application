@@ -4,6 +4,7 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
 import javafx.collections.transformation.SortedList;
+import javafx.event.EventHandler;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Node;
@@ -11,9 +12,11 @@ import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.HBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
+import javafx.stage.WindowEvent;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -40,11 +43,18 @@ public class CustomerController {
     @FXML private Button takePaymentButton; // Ödeme Al
     @FXML private Button historyButton;     // Geçmiş
 
-    // 🔧 Alt buton çubuğu (FXML'de fx:id="actionsBar")
+    // Alt buton çubuğu (FXML'de fx:id="actionsBar")
     @FXML private HBox actionsBar;
 
     private final ObservableList<Customer> master = FXCollections.observableArrayList();
     private FilteredList<Customer> filtered;
+
+    // Dış tıklama filtresi için referans & yaşam döngüsü koruması
+    private EventHandler<MouseEvent> outsideClickFilter;
+    private volatile boolean disposed = false;
+
+    // Ödeme tutarı için üst limit (örn. 1 trilyon TL)
+    private static final BigDecimal MAX_PAYMENT = new BigDecimal("1000000000000"); // 1e12
 
     @FXML
     public void initialize() {
@@ -92,23 +102,60 @@ public class CustomerController {
             return row;
         });
 
-        // SAHNE GENELİ: tablo DA değilse VE actionsBar DA değilse → seçimi temizle
-        javafx.application.Platform.runLater(() -> {
-            Scene scene = customerTable.getScene();
-            if (scene == null) return;
-            scene.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, e -> {
-                Node n = e.getPickResult().getIntersectedNode();
-                boolean insideTable   = isChildOf(n, customerTable);
-                boolean insideActions = isChildOf(n, actionsBar);
-                if (!insideTable && !insideActions) {
-                    customerTable.getSelectionModel().clearSelection();
-                    if (customerTable.getParent() != null) customerTable.getParent().requestFocus();
+        // SAHNE GENELİ: tablo ve actionsBar dışına tıklanınca seçimi temizle
+        // — filtreyi scene yaşam döngüsüne bağla; kapanınca sök
+        customerTable.sceneProperty().addListener((obs, oldScene, newScene) -> {
+            if (oldScene != null && outsideClickFilter != null) {
+                oldScene.removeEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
+            }
+            if (newScene != null) {
+                outsideClickFilter = e -> {
+                    Node n = e.getPickResult().getIntersectedNode();
+                    boolean insideTable   = isChildOf(n, customerTable);
+                    boolean insideActions = actionsBar != null && isChildOf(n, actionsBar);
+                    if (!insideTable && !insideActions) {
+                        customerTable.getSelectionModel().clearSelection();
+                        if (customerTable.getParent() != null) customerTable.getParent().requestFocus();
+                    }
+                };
+                newScene.addEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
+
+                if (newScene.getWindow() != null) {
+                    newScene.getWindow().addEventHandler(WindowEvent.WINDOW_HIDDEN, ev -> {
+                        disposed = true;
+                        if (outsideClickFilter != null) {
+                            newScene.removeEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
+                            outsideClickFilter = null;
+                        }
+                    });
+                } else {
+                    newScene.windowProperty().addListener((o, ow, nw) -> {
+                        if (nw != null) {
+                            nw.addEventHandler(WindowEvent.WINDOW_HIDDEN, ev -> {
+                                disposed = true;
+                                if (outsideClickFilter != null) {
+                                    newScene.removeEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
+                                    outsideClickFilter = null;
+                                }
+                            });
+                        }
+                    });
                 }
-            });
+            }
         });
 
         // veri yükle (ASYNC)
         loadCustomers();
+    }
+
+    /** UI kapandıysa (veya sahne/pençe yoksa) true döner; asenkron dönüşlerde UI dokunmayız. */
+    private boolean uiDead() {
+        if (disposed) return true;
+        if (customerTable == null) return true;
+        Scene scene = customerTable.getScene();
+        if (scene == null) return true;
+        var win = scene.getWindow();
+        return (win == null || !win.isShowing());
     }
 
     /** n düğümü root’un altındaysa true. */
@@ -151,9 +198,18 @@ public class CustomerController {
                     try { return CustomerDAO.getAllCustomers(); }
                     catch (SQLException e) { throw new RuntimeException(e); }
                 },
-                list -> master.setAll(list),
-                ex -> AppDialogs.dbError("Müşteri verileri yüklenmesi", toSql(ex)),
-                ()  -> setBusy(false)
+                list -> {
+                    if (uiDead()) return;
+                    master.setAll(list);
+                },
+                ex -> {
+                    if (uiDead()) return;
+                    AppDialogs.dbError("Müşteri verileri yüklenmesi", toSql(ex));
+                },
+                ()  -> {
+                    if (uiDead()) return;
+                    setBusy(false);
+                }
         );
     }
 
@@ -161,6 +217,10 @@ public class CustomerController {
         if (customerTable != null) customerTable.setDisable(busy);
         if (searchField != null)   searchField.setDisable(busy);
         if (actionsBar != null)    actionsBar.setDisable(busy);
+
+        // İsteğe bağlı: kök node’u da kilitlemek istersen (geniş kapsam)
+        // if (customerTable != null && customerTable.getScene() != null)
+        //     customerTable.getScene().getRoot().setDisable(busy);
     }
 
     @FXML private void handleClearSearch() { searchField.clear(); }
@@ -177,7 +237,11 @@ public class CustomerController {
             stage.setTitle("Yeni Müşteri Ekle");
             stage.setScene(new Scene(parent));
             IconUtil.setAppIcon(stage);
+
+            // (Opsiyonel) kök disable – showAndWait modal olduğundan şart değil
+            // setBusy(true);
             stage.showAndWait();
+            // setBusy(false);
 
             loadCustomers(); // async
         } catch (IOException e) {
@@ -205,7 +269,10 @@ public class CustomerController {
             controller.setDialogStage(dialogStage);
             controller.setCustomer(selectedCustomer);
 
+            // setBusy(true);
             dialogStage.showAndWait();
+            // setBusy(false);
+
             loadCustomers(); // async
         } catch (IOException e) {
             AppDialogs.unexpectedError("Müşteri düzenleme penceresi açma", e);
@@ -235,9 +302,19 @@ public class CustomerController {
                         try { CustomerDAO.deleteCustomer(selectedCustomer.getId()); }
                         catch (SQLException e) { throw new RuntimeException(e); }
                     },
-                    () -> { AppDialogs.info("Müşteri başarıyla silindi."); loadCustomers(); },
-                    ex  -> AppDialogs.dbError("Müşteri silme", toSql(ex)),
-                    ()  -> setBusy(false)
+                    () -> {
+                        if (uiDead()) return;
+                        AppDialogs.info("Müşteri başarıyla silindi.");
+                        loadCustomers();
+                    },
+                    ex  -> {
+                        if (uiDead()) return;
+                        AppDialogs.dbError("Müşteri silme", toSql(ex));
+                    },
+                    ()  -> {
+                        if (uiDead()) return;
+                        setBusy(false);
+                    }
             );
         }
     }
@@ -264,6 +341,11 @@ public class CustomerController {
         try {
             amountBD = Money.parseTR(res.get().trim());
             if (amountBD.signum() <= 0) throw new IllegalArgumentException();
+            if (amountBD.compareTo(MAX_PAYMENT) > 0) {
+                AppDialogs.warn("Tutar çok yüksek görünüyor (üst limit: " +
+                        Money.fmtTRWithSymbol(MAX_PAYMENT) + "). Lütfen daha küçük bir tutar girin.");
+                return;
+            }
         } catch (Exception ex) {
             AppDialogs.warn("Geçerli bir tutar girin (0'dan büyük, örn: 1.234,56).");
             return;
@@ -287,9 +369,19 @@ public class CustomerController {
                     try { PaymentDAO.addPayment(sel.getId(), amountBD, desc); }
                     catch (SQLException e) { throw new RuntimeException(e); }
                 },
-                () -> { AppDialogs.info("Ödeme kaydedildi."); loadCustomers(); },
-                ex  -> AppDialogs.dbError("Ödeme kaydı", toSql(ex)),
-                ()  -> setBusy(false)
+                () -> {
+                    if (uiDead()) return;
+                    AppDialogs.info("Ödeme kaydedildi.");
+                    loadCustomers();
+                },
+                ex  -> {
+                    if (uiDead()) return;
+                    AppDialogs.dbError("Ödeme kaydı", toSql(ex));
+                },
+                ()  -> {
+                    if (uiDead()) return;
+                    setBusy(false);
+                }
         );
     }
 
@@ -315,7 +407,10 @@ public class CustomerController {
             controller.setDialogStage(dlg);
             controller.setCustomer(sel);
 
+            // setBusy(true);
             dlg.showAndWait();
+            // setBusy(false);
+
         } catch (Exception ex) {
             AppDialogs.unexpectedError("Geçmiş penceresi açma", ex);
         }

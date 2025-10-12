@@ -13,6 +13,7 @@ import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.input.KeyCode;
 import javafx.scene.layout.HBox;
+import javafx.stage.WindowEvent;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -41,6 +42,8 @@ public class StockController {
     private final ObservableList<Product> master = FXCollections.observableArrayList();
     private FilteredList<Product> filtered;
     private SortedList<Product>   sorted;
+
+    private volatile boolean disposed = false;
 
     @FXML
     public void initialize() {
@@ -116,6 +119,14 @@ public class StockController {
                     if (productTable.getParent() != null) productTable.getParent().requestFocus();
                 }
             });
+
+            if (scene.getWindow() != null) {
+                scene.getWindow().addEventHandler(WindowEvent.WINDOW_HIDDEN, ev -> disposed = true);
+            } else {
+                scene.windowProperty().addListener((o, ow, nw) -> {
+                    if (nw != null) nw.addEventHandler(WindowEvent.WINDOW_HIDDEN, ev -> disposed = true);
+                });
+            }
         });
 
         // 8) Veriyi yükle (ASYNC)
@@ -129,6 +140,15 @@ public class StockController {
             n = n.getParent();
         }
         return false;
+    }
+
+    private boolean uiDead() {
+        if (disposed) return true;
+        if (productTable == null) return true;
+        var scene = productTable.getScene();
+        if (scene == null) return true;
+        var win = scene.getWindow();
+        return (win == null || !win.isShowing());
     }
 
     private void applyFilter(String query) {
@@ -155,8 +175,6 @@ public class StockController {
         return s != null && s.toLowerCase(Locale.ROOT).contains(q);
     }
 
-    // ... dosyanın üstü aynı ...
-
     /** Ürünleri arka planda yükler; UI donmaz. Seçimi korumaya çalışır. */
     private void loadProducts() {
         // mevcut seçim ID’sini hatırla (effectively final)
@@ -175,14 +193,21 @@ public class StockController {
                     }
                 },
                 list -> {
+                    if (uiDead()) return;
                     master.setAll(list);
                     // mümkünse aynı ID’yi tekrar seç
                     if (selectedId != null) {
                         selectById(selectedId);
                     }
                 },
-                ex -> AppDialogs.dbError("Ürün verileri yüklenmesi", toSql(ex)),
-                ()  -> setBusy(false)
+                ex -> {
+                    if (uiDead()) return;
+                    AppDialogs.dbError("Ürün verileri yüklenmesi", toSql(ex));
+                },
+                ()  -> {
+                    if (uiDead()) return;
+                    setBusy(false);
+                }
         );
     }
 
@@ -281,9 +306,19 @@ public class StockController {
                         try { ProductDAO.deleteProduct(sel.getId()); }
                         catch (SQLException e) { throw new RuntimeException(e); }
                     },
-                    () -> { AppDialogs.info("Ürün başarıyla silindi."); loadProducts(); },
-                    ex  -> AppDialogs.dbError("Ürün silme", toSql(ex)),
-                    ()  -> setBusy(false)
+                    () -> {
+                        if (uiDead()) return;
+                        AppDialogs.info("Ürün başarıyla silindi.");
+                        loadProducts();
+                    },
+                    ex  -> {
+                        if (uiDead()) return;
+                        AppDialogs.dbError("Ürün silme", toSql(ex));
+                    },
+                    ()  -> {
+                        if (uiDead()) return;
+                        setBusy(false);
+                    }
             );
         }
     }

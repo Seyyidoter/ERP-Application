@@ -10,8 +10,6 @@ import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.time.LocalDate;
 
-import com.example.erpdemo.Money;
-
 public class ProductHistoryController {
 
     @FXML private Label lblProduct;
@@ -33,6 +31,8 @@ public class ProductHistoryController {
     private Stage dialogStage;
     private Product product;
 
+    private volatile boolean disposed = false;
+
     @FXML
     public void initialize() {
         colReqId.setCellValueFactory(new PropertyValueFactory<>("requestId"));
@@ -52,9 +52,36 @@ public class ProductHistoryController {
         cbStatus.getSelectionModel().selectFirst();
 
         try { DateUtil.setDateColumnDMY(colDate); } catch (Throwable ignore) {}
+
+        // pencere dışından da kapatılmış olabilir – kapanınca disposed
+        tblHistory.sceneProperty().addListener((o, os, ns) -> {
+            if (ns != null) {
+                if (ns.getWindow() != null) {
+                    ns.getWindow().setOnHidden(e -> disposed = true);
+                } else {
+                    ns.windowProperty().addListener((oo, ow, nw) -> {
+                        if (nw != null) nw.setOnHidden(e -> disposed = true);
+                    });
+                }
+            }
+        });
     }
 
-    public void setDialogStage(Stage s) { this.dialogStage = s; }
+    private boolean uiDead() {
+        if (disposed) return true;
+        if (tblHistory == null) return true;
+        var scene = tblHistory.getScene();
+        if (scene == null) return true;
+        var win = scene.getWindow();
+        return (win == null || !win.isShowing());
+    }
+
+    public void setDialogStage(Stage s) {
+        this.dialogStage = s;
+        if (this.dialogStage != null) {
+            this.dialogStage.setOnHidden(e -> disposed = true);
+        }
+    }
 
     public void setProduct(Product p) {
         this.product = p;
@@ -95,6 +122,7 @@ public class ProductHistoryController {
                     }
                 },
                 list -> {
+                    if (uiDead()) return;
                     tblHistory.setItems(list);
 
                     int totalQty = list.stream()
@@ -110,17 +138,26 @@ public class ProductHistoryController {
                     lblTotalQty.setText(String.valueOf(totalQty));
                     lblTotalAmount.setText(Money.fmtTRWithSymbol(totalAmount));
                 },
-                ex -> AppDialogs.dbError("Ürün geçmişi yükleme", toSql(ex)),
-                () -> setBusy(false));
+                ex -> {
+                    if (uiDead()) return;
+                    AppDialogs.dbError("Ürün geçmişi yükleme", toSql(ex));
+                },
+                () -> {
+                    if (uiDead()) return;
+                    setBusy(false);
+                });
     }
 
     private void setBusy(boolean busy) {
-        tblHistory.setDisable(busy);
-        if (dialogStage != null) dialogStage.getScene().getRoot().setDisable(busy);
+        if (tblHistory != null) tblHistory.setDisable(busy);
+        if (dialogStage != null && dialogStage.getScene() != null) {
+            dialogStage.getScene().getRoot().setDisable(busy);
+        }
     }
 
     @FXML
     private void handleClose() {
+        disposed = true;
         if (dialogStage != null) dialogStage.close();
         else if (tblHistory != null && tblHistory.getScene() != null) {
             tblHistory.getScene().getWindow().hide();

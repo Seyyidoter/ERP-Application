@@ -53,6 +53,8 @@ public class RequestController {
     // Scene genelindeki dış tıklama filtresi (leak olmaması için referans tutuyoruz)
     private EventHandler<MouseEvent> outsideClickFilter;
 
+    private volatile boolean disposed = false;
+
     @FXML
     public void initialize() {
         // 1) Sütun–model bağları
@@ -118,9 +120,10 @@ public class RequestController {
                 };
                 newScene.addEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
 
-                // Pencere kapanırken de temizle (ekstra güvenlik)
+                // Pencere kapanınca disposed
                 if (newScene.getWindow() != null) {
                     newScene.getWindow().addEventHandler(WindowEvent.WINDOW_HIDDEN, we -> {
+                        disposed = true;
                         if (outsideClickFilter != null) {
                             newScene.removeEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
                             outsideClickFilter = null;
@@ -130,6 +133,7 @@ public class RequestController {
                     newScene.windowProperty().addListener((o, ow, nw) -> {
                         if (nw != null) {
                             nw.addEventHandler(WindowEvent.WINDOW_HIDDEN, we -> {
+                                disposed = true;
                                 if (outsideClickFilter != null) {
                                     newScene.removeEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
                                     outsideClickFilter = null;
@@ -159,6 +163,15 @@ public class RequestController {
             n = n.getParent();
         }
         return false;
+    }
+
+    private boolean uiDead() {
+        if (disposed) return true;
+        if (tblRequests == null) return true;
+        var scene = tblRequests.getScene();
+        if (scene == null) return true;
+        var win = scene.getWindow();
+        return (win == null || !win.isShowing());
     }
 
     // 🔸 Filtre butonları
@@ -191,6 +204,7 @@ public class RequestController {
             // Kapanışta odağı ve etkileşimi garanti altına al
             dlg.setOnHidden(e -> {
                 try {
+                    if (uiDead()) return;
                     tblRequests.setDisable(false);
                     tblRequests.setMouseTransparent(false);
                     tblRequests.requestFocus();
@@ -201,17 +215,21 @@ public class RequestController {
             dlg.showAndWait();
 
             // showAndWait dönüşünde de güvence
-            tblRequests.setDisable(false);
-            tblRequests.setMouseTransparent(false);
-            tblRequests.requestFocus();
+            if (!uiDead()) {
+                tblRequests.setDisable(false);
+                tblRequests.setMouseTransparent(false);
+                tblRequests.requestFocus();
+            }
 
         } catch (IOException ex) {
             AppDialogs.unexpectedError("Talep oluşturma penceresi açma", ex);
             try {
-                tblRequests.setDisable(false);
-                tblRequests.setMouseTransparent(false);
-                ((Stage) tblRequests.getScene().getWindow()).requestFocus();
-                tblRequests.requestFocus();
+                if (!uiDead()) {
+                    tblRequests.setDisable(false);
+                    tblRequests.setMouseTransparent(false);
+                    ((Stage) tblRequests.getScene().getWindow()).requestFocus();
+                    tblRequests.requestFocus();
+                }
             } catch (Throwable ignore) {}
         }
     }
@@ -265,9 +283,19 @@ public class RequestController {
                     try { RequestDAO.deleteRequestById(sel.getId()); }
                     catch (SQLException ex) { throw new RuntimeException(ex); }
                 },
-                () -> { AppDialogs.info("Talep silindi."); refresh(); },
-                ex -> AppDialogs.dbError("Talep silme", toSql(ex)),
-                () -> setControlsDisabled(false));
+                () -> {
+                    if (uiDead()) return;
+                    AppDialogs.info("Talep silindi.");
+                    refresh();
+                },
+                ex -> {
+                    if (uiDead()) return;
+                    AppDialogs.dbError("Talep silme", toSql(ex));
+                },
+                () -> {
+                    if (uiDead()) return;
+                    setControlsDisabled(false);
+                });
     }
 
     /** JOIN’li özetleri tarih filtresiyle yükler; arka planda. */
@@ -292,9 +320,18 @@ public class RequestController {
                         throw new RuntimeException(ex);
                     }
                 },
-                tmp -> rows.setAll(tmp),
-                ex  -> AppDialogs.dbError("Taleplerin yüklenmesi", toSql(ex)),
-                ()  -> setControlsDisabled(false));
+                tmp -> {
+                    if (uiDead()) return;
+                    rows.setAll(tmp);
+                },
+                ex  -> {
+                    if (uiDead()) return;
+                    AppDialogs.dbError("Taleplerin yüklenmesi", toSql(ex));
+                },
+                ()  -> {
+                    if (uiDead()) return;
+                    setControlsDisabled(false);
+                });
     }
 
     private void setControlsDisabled(boolean disabled) {

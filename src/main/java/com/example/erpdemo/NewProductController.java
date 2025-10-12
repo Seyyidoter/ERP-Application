@@ -7,9 +7,11 @@ import javafx.scene.control.TextFormatter;
 import javafx.stage.Stage;
 
 import java.math.BigDecimal;
+import java.sql.SQLException;
 import java.util.function.UnaryOperator;
 import java.util.regex.Pattern;
 
+/** Yeni/Düzenle Ürün dialogu — asenkron kaydetme ile UI donmasını engeller. */
 public class NewProductController {
 
     @FXML private Label     titleLabel;
@@ -25,11 +27,13 @@ public class NewProductController {
 
     @FXML
     public void initialize() {
-        // Sayısal alanlar için sınırlandırma
-        priceField.setTextFormatter(new TextFormatter<>(numericDecimalFilter()));
+        // Fiyat: TextFormatter yok — TR (1.234,56) gibi girişleri Money.parseTR çözer.
+        // priceField.setTextFormatter(new TextFormatter<>(numericDecimalFilter()));
+
+        // Stok: yalnızca tam sayı
         stockField.setTextFormatter(new TextFormatter<>(numericIntFilter()));
 
-        // BİRİM: Rakam yasak, uzunluk limiti, tüm metin üzerinde doğrulama
+        // Birim: rakam yasak + uzunluk limiti
         unitField.setTextFormatter(new TextFormatter<>(unitFilter(50)));
     }
 
@@ -50,52 +54,78 @@ public class NewProductController {
 
     @FXML
     private void handleSave() {
-        try {
-            String name = safeTrim(nameField.getText());
-            // Birim: trim + çoklu boşlukları teke indir
-            String unit = safeTrim(unitField.getText()).replaceAll("\\s+", " ");
+        // Önce hızlı doğrulama (FX thread)
+        String name = safeTrim(nameField.getText());
+        String unit = safeTrim(unitField.getText()).replaceAll("\\s+", " ");
 
-            if (name.isBlank()) { AppDialogs.warn("Ürün adı boş olamaz."); return; }
-            if (unit.isBlank()) { AppDialogs.warn("Birim boş olamaz.");   return; }
+        if (name.isBlank()) { AppDialogs.warn("Ürün adı boş olamaz."); return; }
+        if (unit.isBlank()) { AppDialogs.warn("Birim boş olamaz.");   return; }
 
-            BigDecimal price = parsePriceBD(priceField.getText());
-            if (price == null) { AppDialogs.warn("Fiyat girin (örn. 12,50)."); return; }
-            if (price.signum() < 0) { AppDialogs.warn("Fiyat negatif olamaz."); return; }
+        BigDecimal price = parsePriceBD(priceField.getText());
+        if (price == null)        { AppDialogs.warn("Fiyat girin (örn. 12,50).");   return; }
+        if (price.signum() < 0)   { AppDialogs.warn("Fiyat negatif olamaz.");       return; }
 
-            Integer stock = parseInt(stockField.getText());
-            if (stock == null) { AppDialogs.warn("Stok sayısal bir tam sayı olmalı."); return; }
-            if (stock < 0)     { AppDialogs.warn("Stok negatif olamaz.");              return; }
+        Integer stock = parseInt(stockField.getText());
+        if (stock == null)        { AppDialogs.warn("Stok sayısal bir tam sayı olmalı."); return; }
+        if (stock < 0)            { AppDialogs.warn("Stok negatif olamaz.");              return; }
 
-            if (product == null) {
-                ProductDAO.addProduct(name, price, stock, unit);
-                AppDialogs.info("Yeni ürün başarıyla eklendi.");
-            } else {
-                product.setUrunAdi(name);
-                product.setFiyat(price);
-                product.setStok(stock);
-                product.setBirim(unit);
-                ProductDAO.updateProduct(product);
-                AppDialogs.info("Ürün bilgileri başarıyla güncellendi.");
-            }
+        // UI’yi kilitle ve asenkron kaydet
+        setBusy(true);
 
-            closeWindowIfPossible();
+        final boolean isCreate = (product == null);
+        final String  finalName  = name;
+        final BigDecimal finalPrice = price;
+        final int     finalStock = stock;
+        final String  finalUnit  = unit;
 
-        } catch (Exception e) {
-            if (e instanceof java.sql.SQLException se) {
-                AppDialogs.dbError("Ürün kaydetme", se);
-            } else {
-                AppDialogs.unexpectedError("Ürün kaydetme", e);
-            }
-        }
+        Async.runVoid(
+                () -> {
+                    try {
+                        if (isCreate) {
+                            ProductDAO.addProduct(finalName, finalPrice, finalStock, finalUnit);
+                        } else {
+                            product.setUrunAdi(finalName);
+                            product.setFiyat(finalPrice);
+                            product.setStok(finalStock);
+                            product.setBirim(finalUnit);
+                            ProductDAO.updateProduct(product);
+                        }
+                    } catch (SQLException e) {
+                        throw new RuntimeException(e);
+                    }
+                },
+                () -> {
+                    AppDialogs.info(isCreate ? "Yeni ürün başarıyla eklendi."
+                            : "Ürün bilgileri başarıyla güncellendi.");
+                    closeWindowIfPossible();
+                },
+                ex -> AppDialogs.dbError("Ürün kaydetme", toSql(ex)),
+                () -> setBusy(false)
+        );
     }
 
     @FXML
     private void handleCancel() { closeWindowIfPossible(); }
 
+    private void setBusy(boolean busy) {
+        // Buton referanslarımız yok; alanları ve (varsa) pencere kökünü kilitleyelim
+        if (nameField  != null) nameField.setDisable(busy);
+        if (priceField != null) priceField.setDisable(busy);
+        if (stockField != null) stockField.setDisable(busy);
+        if (unitField  != null) unitField.setDisable(busy);
+
+        if (dialogStage != null && dialogStage.getScene() != null) {
+            var root = dialogStage.getScene().getRoot();
+            if (root != null) root.setDisable(busy);
+        }
+    }
+
     private void closeWindowIfPossible() {
-        if (nameField != null && nameField.getScene() != null) {
+        if (nameField != null && nameField.getScene() != null && nameField.getScene().getWindow() != null) {
             var w = nameField.getScene().getWindow();
             if (w instanceof Stage s) s.close(); else w.hide();
+        } else if (dialogStage != null) {
+            dialogStage.close();
         }
     }
 
@@ -124,17 +154,6 @@ public class NewProductController {
         return change -> change.getControlNewText().matches("\\d*") ? change : null;
     }
 
-    private static UnaryOperator<TextFormatter.Change> numericDecimalFilter() {
-        return change -> {
-            String s = change.getControlNewText();
-            if (s.isEmpty()) return change;
-            // Yalnızca rakam, nokta veya virgül; en fazla 1 adet ayırıcı
-            if (!s.matches("[0-9.,]*")) return null;
-            long sep = s.chars().filter(ch -> ch == '.' || ch == ',').count();
-            return sep <= 1 ? change : null;
-        };
-    }
-
     /** Birim alanı filtresi: rakam yasak; opsiyonel uzunluk sınırı. */
     private static UnaryOperator<TextFormatter.Change> unitFilter(int maxLen) {
         // Rakam içermesin (tüm Unicode rakamlar için \\p{Digit})
@@ -145,5 +164,16 @@ public class NewProductController {
             if (maxLen > 0 && next.length() > maxLen) return null;
             return noDigits.matcher(next).matches() ? change : null;
         };
+    }
+
+    /** Throwable → SQLException (zincirde varsa onu döndürür) */
+    private static SQLException toSql(Throwable t) {
+        if (t instanceof SQLException se) return se;
+        Throwable c = t.getCause();
+        while (c != null && c != t) {
+            if (c instanceof SQLException se) return se;
+            c = c.getCause();
+        }
+        return new SQLException(t.getMessage(), t);
     }
 }

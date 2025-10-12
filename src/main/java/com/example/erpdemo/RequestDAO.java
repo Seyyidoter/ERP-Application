@@ -107,30 +107,37 @@ public class RequestDAO {
             c.setAutoCommit(false);
             int requestId = -1;
 
-            try (PreparedStatement psHdr = c.prepareStatement(insertHeaderSql, Statement.RETURN_GENERATED_KEYS)) {
-                psHdr.setInt(1, customerId);
-                psHdr.executeUpdate();
-                try (ResultSet keys = psHdr.getGeneratedKeys()) {
-                    if (keys.next()) requestId = ((Number) keys.getObject(1)).intValue();
+            try {
+                try (PreparedStatement psHdr = c.prepareStatement(insertHeaderSql, Statement.RETURN_GENERATED_KEYS)) {
+                    psHdr.setInt(1, customerId);
+                    psHdr.executeUpdate();
+                    try (ResultSet keys = psHdr.getGeneratedKeys()) {
+                        if (keys.next()) requestId = ((Number) keys.getObject(1)).intValue();
+                    }
                 }
-            }
-            if (requestId <= 0) throw new SQLException("Yeni talep Id alınamadı (generated keys).");
+                if (requestId <= 0) throw new SQLException("Yeni talep Id alınamadı (generated keys).");
 
-            try (PreparedStatement psItem = c.prepareStatement(insertItemSql)) {
-                for (RequestItem it : items) {
-                    BigDecimal discounted = Money.scale2(it.getDiscountedPrice());
-                    psItem.setInt(1, requestId);
-                    psItem.setInt(2, it.getProductId());
-                    psItem.setInt(3, it.getQuantity());
-                    psItem.setBigDecimal(4, discounted);
-                    psItem.addBatch();
+                try (PreparedStatement psItem = c.prepareStatement(insertItemSql)) {
+                    for (RequestItem it : items) {
+                        BigDecimal discounted = Money.scale2(it.getDiscountedPrice());
+                        psItem.setInt(1, requestId);
+                        psItem.setInt(2, it.getProductId());
+                        psItem.setInt(3, it.getQuantity());
+                        psItem.setBigDecimal(4, discounted);
+                        psItem.addBatch();
+                    }
+                    psItem.executeBatch();
                 }
-                psItem.executeBatch();
-            }
 
-            c.commit();
-            try { c.setAutoCommit(oldAuto); } catch (SQLException ignore) {}
-            return requestId;
+                c.commit();
+                return requestId;
+
+            } catch (SQLException ex) {
+                try { c.rollback(); } catch (SQLException ignore) {}
+                throw ex;
+            } finally {
+                try { c.setAutoCommit(oldAuto); } catch (SQLException ignore) {}
+            }
         }
     }
 
@@ -272,6 +279,7 @@ public class RequestDAO {
             boolean oldAuto = c.getAutoCommit();
             c.setAutoCommit(false);
 
+            // Session ayarlarını aç
             try (Statement st = c.createStatement()) {
                 st.execute("SET XACT_ABORT ON; SET LOCK_TIMEOUT 5000");
             }
@@ -314,6 +322,10 @@ public class RequestDAO {
                 try { c.rollback(); } catch (SQLException ignore) {}
                 throw ex;
             } finally {
+                // Session ayarlarını eski haline getir
+                try (Statement stOff = c.createStatement()) {
+                    stOff.execute("SET XACT_ABORT OFF; SET LOCK_TIMEOUT -1");
+                } catch (SQLException ignore) {}
                 try { c.setAutoCommit(oldAuto); } catch (SQLException ignore) {}
             }
         }
@@ -357,6 +369,7 @@ public class RequestDAO {
                 c.setAutoCommit(false);
                 c.setTransactionIsolation(Connection.TRANSACTION_READ_COMMITTED);
 
+                // Oturum ayarlarını AÇ
                 try (Statement st = c.createStatement()) {
                     st.execute("SET XACT_ABORT ON; SET LOCK_TIMEOUT 5000");
                 }
@@ -411,7 +424,8 @@ public class RequestDAO {
                             "UPDATE m WITH (ROWLOCK) SET m.Bakiye = m.Bakiye - ? FROM dbo.Musteriler m WHERE m.Id = ?")) {
                         bal.setBigDecimal(1, total);
                         bal.setInt(2, customerId);
-                        bal.executeUpdate();
+                        int affected = bal.executeUpdate();
+                        if (affected != 1) throw new SQLException("Müşteri bakiyesi güncellenemedi (Id=" + customerId + ").");
                     }
 
                     try (PreparedStatement ps = c.prepareStatement(
@@ -435,6 +449,10 @@ public class RequestDAO {
                     }
                     throw ex;
                 } finally {
+                    // Oturum ayarlarını KAPAT (havuz hijyeni)
+                    try (Statement stOff = c.createStatement()) {
+                        stOff.execute("SET XACT_ABORT OFF; SET LOCK_TIMEOUT -1");
+                    } catch (SQLException ignore) {}
                     try { c.setTransactionIsolation(oldIso); } catch (SQLException ignore) {}
                     try { c.setAutoCommit(oldAuto); } catch (SQLException ignore) {}
                 }

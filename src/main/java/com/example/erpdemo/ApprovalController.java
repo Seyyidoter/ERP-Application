@@ -1,7 +1,13 @@
 package com.example.erpdemo;
 
+import javafx.application.Platform;
+import javafx.beans.binding.Bindings;
+import javafx.beans.binding.BooleanBinding;
+import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.SimpleBooleanProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.event.EventHandler;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Node;
@@ -9,9 +15,11 @@ import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.HBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
+import javafx.stage.WindowEvent;
 
 import java.io.IOException;
 import java.sql.SQLException;
@@ -35,6 +43,13 @@ public class ApprovalController {
 
     private final ObservableList<RequestRow> rows = FXCollections.observableArrayList();
 
+    /** UI yaşam döngüsü/yarış koruması için */
+    private final BooleanProperty busy = new SimpleBooleanProperty(false);
+    private volatile boolean disposed = false;
+
+    /** Scene genelinde eklediğimiz filtresi; leak olmaması için saklıyoruz */
+    private EventHandler<MouseEvent> outsideClickFilter;
+
     @FXML
     public void initialize() {
         // --- Sütun–model bağları
@@ -48,27 +63,23 @@ public class ApprovalController {
         pendingRequestsTable.setItems(rows);
         pendingRequestsTable.setPlaceholder(new Label("Bekleyen talep yok"));
 
-        // --- GENİŞLİK KİLİTLEME / SÜTUN OYNATILMASIN (FXML’e koymuyoruz)
+        // --- Genişlikleri kilitle (tercih; UX için ileride esnetilebilir)
         pendingRequestsTable.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
-        // pref genişliklerini sabitle (min=pref=max etkisi)
-        idColumn.setPrefWidth(80);          idColumn.setMinWidth(80);          idColumn.setMaxWidth(80);
-        customerIdColumn.setPrefWidth(100); customerIdColumn.setMinWidth(100); customerIdColumn.setMaxWidth(100);
+        idColumn.setPrefWidth(80);            idColumn.setMinWidth(80);            idColumn.setMaxWidth(80);
+        customerIdColumn.setPrefWidth(100);   customerIdColumn.setMinWidth(100);   customerIdColumn.setMaxWidth(100);
         customerNameColumn.setPrefWidth(220); customerNameColumn.setMinWidth(220); customerNameColumn.setMaxWidth(220);
-        dateColumn.setPrefWidth(150);       dateColumn.setMinWidth(150);       dateColumn.setMaxWidth(150);
-        statusColumn.setPrefWidth(200);     statusColumn.setMinWidth(200);     statusColumn.setMaxWidth(200);
+        dateColumn.setPrefWidth(150);         dateColumn.setMinWidth(150);         dateColumn.setMaxWidth(150);
+        statusColumn.setPrefWidth(200);       statusColumn.setMinWidth(200);       statusColumn.setMaxWidth(200);
+        pendingRequestsTable.getColumns().forEach(c -> { c.setReorderable(false); c.setResizable(false); });
 
-        pendingRequestsTable.getColumns().forEach(c -> {
-            c.setReorderable(false);
-            c.setResizable(false);
-        });
+        // --- Seçime + busy durumuna bağlı butonlar
+        var selected = pendingRequestsTable.getSelectionModel().selectedItemProperty();
+        BooleanBinding noSelOrBusy = selected.isNull().or(busy);
+        viewBtn.disableProperty().bind(noSelOrBusy);
+        approveBtn.disableProperty().bind(noSelOrBusy);
+        rejectBtn.disableProperty().bind(noSelOrBusy);
 
-        // Seçime bağlı butonlar
-        var noSel = pendingRequestsTable.getSelectionModel().selectedItemProperty().isNull();
-        viewBtn.disableProperty().bind(noSel);
-        approveBtn.disableProperty().bind(noSel);
-        rejectBtn.disableProperty().bind(noSel);
-
-        // Tablo içi davranışlar
+        // --- Tablo içi davranışlar
         pendingRequestsTable.setRowFactory(tv -> {
             TableRow<RequestRow> row = new TableRow<>();
             row.setOnMouseClicked(e -> {
@@ -76,34 +87,76 @@ public class ApprovalController {
                     pendingRequestsTable.getSelectionModel().clearSelection();
                     if (pendingRequestsTable.getParent() != null)
                         pendingRequestsTable.getParent().requestFocus();
-                } else if (e.getClickCount() == 2) {
+                } else if (e.getClickCount() == 2 && !busy.get()) {
                     handleView();
                 }
             });
             return row;
         });
 
-        // Tablo dışına tıklama
-        javafx.application.Platform.runLater(() -> {
-            if (pendingRequestsTable.getParent() != null)
-                pendingRequestsTable.getParent().requestFocus();
+        // --- Scene değişiminde event filter ekle/çıkar (leak olmasın)
+        pendingRequestsTable.sceneProperty().addListener((obs, oldScene, newScene) -> {
+            // Eski sahnede filtre varsa sök
+            if (oldScene != null && outsideClickFilter != null) {
+                oldScene.removeEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
+            }
 
-            Scene scene = pendingRequestsTable.getScene();
-            if (scene == null) return;
+            if (newScene != null) {
+                // Filtreyi oluştur
+                outsideClickFilter = e -> {
+                    Node n = e.getPickResult().getIntersectedNode();
+                    boolean insideTable   = isChildOf(n, pendingRequestsTable);
+                    boolean insideActions = actionsBar != null && isChildOf(n, actionsBar);
+                    if (!insideTable && !insideActions) {
+                        pendingRequestsTable.getSelectionModel().clearSelection();
+                        if (pendingRequestsTable.getParent() != null)
+                            pendingRequestsTable.getParent().requestFocus();
+                    }
+                };
+                newScene.addEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
 
-            scene.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, e -> {
-                Node n = e.getPickResult().getIntersectedNode();
-                boolean insideTable   = isChildOf(n, pendingRequestsTable);
-                boolean insideActions = isChildOf(n, actionsBar);
-                if (!insideTable && !insideActions) {
-                    pendingRequestsTable.getSelectionModel().clearSelection();
-                    if (pendingRequestsTable.getParent() != null)
-                        pendingRequestsTable.getParent().requestFocus();
+                // Pencere kapanınca filtreyi sök ve disposed işaretle
+                if (newScene.getWindow() != null) {
+                    newScene.getWindow().addEventHandler(WindowEvent.WINDOW_HIDDEN, we -> {
+                        if (outsideClickFilter != null) {
+                            newScene.removeEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
+                            outsideClickFilter = null;
+                        }
+                        disposed = true;
+                    });
+                } else {
+                    newScene.windowProperty().addListener((o, ow, nw) -> {
+                        if (nw != null) {
+                            nw.addEventHandler(WindowEvent.WINDOW_HIDDEN, we -> {
+                                if (outsideClickFilter != null) {
+                                    newScene.removeEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
+                                    outsideClickFilter = null;
+                                }
+                                disposed = true;
+                            });
+                        }
+                    });
                 }
-            });
+            }
         });
 
+        // İlk odak
+        Platform.runLater(() -> {
+            if (pendingRequestsTable.getParent() != null)
+                pendingRequestsTable.getParent().requestFocus();
+        });
+
+        // İlk yükleme
         refresh();
+    }
+
+    private boolean uiDead() {
+        if (disposed) return true;
+        if (pendingRequestsTable == null) return true;
+        var scene = pendingRequestsTable.getScene();
+        if (scene == null) return true;
+        var win = scene.getWindow();
+        return (win == null || !win.isShowing());
     }
 
     private static boolean isChildOf(Node n, Node root) {
@@ -117,6 +170,7 @@ public class ApprovalController {
 
     @FXML
     private void handleView() {
+        if (busy.get()) return;
         RequestRow sel = pendingRequestsTable.getSelectionModel().getSelectedItem();
         if (sel == null) return;
 
@@ -143,7 +197,7 @@ public class ApprovalController {
     @FXML
     private void handleApprove() {
         RequestRow sel = pendingRequestsTable.getSelectionModel().getSelectedItem();
-        if (sel == null) return;
+        if (sel == null || busy.get()) return;
 
         setBusy(true);
         Async.runVoid(() -> {
@@ -155,17 +209,24 @@ public class ApprovalController {
                     }
                 },
                 () -> {
+                    if (uiDead()) return;
                     AppDialogs.info("Talep onaylandı. Stok ve müşteri bakiyesi güncellendi.");
                     refresh();
                 },
-                ex -> AppDialogs.dbError("Talep onaylama", toSql(ex)),
-                () -> setBusy(false));
+                ex -> {
+                    if (uiDead()) return;
+                    AppDialogs.dbError("Talep onaylama", toSql(ex));
+                },
+                () -> {
+                    if (uiDead()) return;
+                    setBusy(false);
+                });
     }
 
     @FXML
     private void handleReject() {
         RequestRow sel = pendingRequestsTable.getSelectionModel().getSelectedItem();
-        if (sel == null) return;
+        if (sel == null || busy.get()) return;
 
         setBusy(true);
         Async.runVoid(() -> {
@@ -176,11 +237,18 @@ public class ApprovalController {
                     }
                 },
                 () -> {
+                    if (uiDead()) return;
                     AppDialogs.info("Talep reddedildi.");
                     refresh();
                 },
-                ex -> AppDialogs.dbError("Talep reddetme", toSql(ex)),
-                () -> setBusy(false));
+                ex -> {
+                    if (uiDead()) return;
+                    AppDialogs.dbError("Talep reddetme", toSql(ex));
+                },
+                () -> {
+                    if (uiDead()) return;
+                    setBusy(false);
+                });
     }
 
     /** Bekleyen talepleri yükle – müşteri adı zaten JOIN ile geliyor. */
@@ -202,15 +270,25 @@ public class ApprovalController {
                     }
                 },
                 tmp -> {
+                    if (uiDead()) return;
                     rows.setAll(tmp);
                     pendingRequestsTable.getSelectionModel().clearSelection();
                 },
-                ex -> AppDialogs.dbError("Bekleyen taleplerin yüklenmesi", toSql(ex)),
-                () -> setBusy(false));
+                ex -> {
+                    if (uiDead()) return;
+                    AppDialogs.dbError("Bekleyen taleplerin yüklenmesi", toSql(ex));
+                },
+                () -> {
+                    if (uiDead()) return;
+                    setBusy(false);
+                });
     }
 
-    private void setBusy(boolean busy) {
-        pendingRequestsTable.setDisable(busy);
+    private void setBusy(boolean isBusy) {
+        busy.set(isBusy);
+        if (pendingRequestsTable != null) pendingRequestsTable.setDisable(isBusy);
+        if (actionsBar != null) actionsBar.setDisable(isBusy);
+        // view/approve/reject butonları busy binding ile otomatik disable olur
     }
 
     private static SQLException toSql(Throwable t) {

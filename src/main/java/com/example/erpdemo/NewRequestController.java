@@ -16,6 +16,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.function.UnaryOperator;
 
+/** Talep oluşturma penceresi – Müşteri/Ürün asenkron yükleme + validasyon */
 public class NewRequestController {
 
     @FXML private ComboBox<Customer> customerComboBox;
@@ -39,26 +40,22 @@ public class NewRequestController {
     /** Müşteri seçiminde geri alma yaparken uyarının tekrar açılmasını engellemek için. */
     private boolean suppressCustomerChange = false;
 
+    /** Sahne kapandıysa (veya pencere görünmüyorsa) UI güncellemeyi durdurmak için. */
+    private volatile boolean disposed = false;
+
     @FXML
     public void initialize() {
-        try {
-            customerComboBox.setItems(CustomerDAO.getAllCustomers());
-            customerComboBox.setConverter(new CustomerStringConverter());
+        // --- Prompt’ları buton hücresinde gösterebilmek için önce set et
+        customerComboBox.setPromptText("Müşteri seçin");
+        productComboBox.setPromptText("Ürün seçin");
 
-            productComboBox.setItems(ProductDAO.getAllProducts());
-            productComboBox.setConverter(new ProductStringConverter());
-        } catch (SQLException e) {
-            AppDialogs.dbError("Müşteri/ürün verileri yükleme", e);
-        }
-
-        // Boşken promptText görünsün
         installPromptOnEmpty(customerComboBox);
         installPromptOnEmpty(productComboBox);
 
-        // Müşteri değişimi → doğrulama / sıfırlama
+        // --- Müşteri değişimi → doğrulama / sıfırlama
         customerComboBox.valueProperty().addListener((obs, oldCus, newCus) -> onCustomerChanged(oldCus, newCus));
 
-        // Tablo sütunları
+        // --- Tablo sütunları
         productNameColumn.setCellValueFactory(new PropertyValueFactory<>("productName"));
         quantityColumn.setCellValueFactory(new PropertyValueFactory<>("quantity"));
         priceColumn.setCellValueFactory(new PropertyValueFactory<>("listPrice"));
@@ -71,18 +68,85 @@ public class NewRequestController {
         productTable.setItems(requestItems);
         productTable.setPlaceholder(new Label("Listeye henüz ürün eklenmedi."));
 
-        // Liste değiştikçe toplamı güncelle
+        // --- Liste değiştikçe toplamı güncelle
         requestItems.addListener((javafx.collections.ListChangeListener<RequestItem>) c -> updateTotalAmount());
 
-        // Miktar alanı: sadece rakam kabul et
+        // --- Miktar alanı: sadece rakam kabul et
         quantityField.setTextFormatter(new TextFormatter<>(onlyDigitsFilter()));
-
         // Enter ile hızlı ekleme (opsiyonel ama kullanışlı)
         quantityField.setOnAction(e -> handleAddProduct());
+
+        // --- Pencere kapanınca disposed=true
+        if (productTable != null && productTable.getScene() != null && productTable.getScene().getWindow() != null) {
+            productTable.getScene().getWindow().setOnHidden(ev -> disposed = true);
+        }
+
+        // --- Referans verileri ASENKRON yükle
+        loadReferenceDataAsync();
     }
 
     /** Dışarıdan: Kaydet başarılı olursa çağrılacak aksiyonu ver. */
     public void setOnSaved(Runnable r) { this.onSaved = r; }
+
+    /** ComboBox boşken (value=null) butonda promptText’i gösterir. */
+    private static <T> void installPromptOnEmpty(ComboBox<T> combo) {
+        combo.setButtonCell(new ListCell<>() {
+            @Override protected void updateItem(T item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(combo.getPromptText());
+                } else {
+                    StringConverter<T> conv = combo.getConverter();
+                    setText(conv != null ? conv.toString(item) : String.valueOf(item));
+                }
+            }
+        });
+    }
+
+    /** Referans müşteri/ürün listelerini arka planda çeker; UI donmaz. */
+    private void loadReferenceDataAsync() {
+        setBusy(true);
+        Async.run(() -> {
+                    try {
+                        ObservableList<Customer> customers = CustomerDAO.getAllCustomers();
+                        ObservableList<Product>  products  = ProductDAO.getAllProducts();
+                        return new Object[]{customers, products};
+                    } catch (SQLException e) {
+                        throw new RuntimeException(e);
+                    }
+                },
+                payload -> {
+                    if (uiDead()) return;
+                    @SuppressWarnings("unchecked")
+                    ObservableList<Customer> customers = (ObservableList<Customer>) payload[0];
+                    @SuppressWarnings("unchecked")
+                    ObservableList<Product>  products  = (ObservableList<Product>)  payload[1];
+
+                    // Combobox item’larını ve converter’larını ata
+                    customerComboBox.setItems(customers);
+                    customerComboBox.setConverter(new CustomerStringConverter());
+                    productComboBox.setItems(products);
+                    productComboBox.setConverter(new ProductStringConverter());
+                },
+                ex -> {
+                    if (uiDead()) return;
+                    AppDialogs.dbError("Müşteri/ürün verileri yükleme", toSql(ex));
+                },
+                () -> {
+                    if (uiDead()) return;
+                    setBusy(false);
+                });
+    }
+
+    /** UI hâlâ hayatta mı? (Pencere kapandıysa true döner ve UI güncellemesi yapılmaz) */
+    private boolean uiDead() {
+        if (disposed) return true;
+        if (productTable == null) return true;
+        var scene = productTable.getScene();
+        if (scene == null) return true;
+        var win = scene.getWindow();
+        return (win == null || !win.isShowing());
+    }
 
     /** Müşteri değiştirildiğinde liste/alanları kontrol ederek sıfırlar. */
     private void onCustomerChanged(Customer oldCus, Customer newCus) {
@@ -129,21 +193,6 @@ public class NewRequestController {
         productComboBox.setValue(null); // buttonCell prompt’ı gösterecek
         quantityField.clear();
         productComboBox.requestFocus();
-    }
-
-    /** ComboBox boşken (value=null) butonda promptText’i gösterir. */
-    private static <T> void installPromptOnEmpty(ComboBox<T> combo) {
-        combo.setButtonCell(new ListCell<>() {
-            @Override protected void updateItem(T item, boolean empty) {
-                super.updateItem(item, empty);
-                if (empty || item == null) {
-                    setText(combo.getPromptText());
-                } else {
-                    StringConverter<T> conv = combo.getConverter();
-                    setText(conv != null ? conv.toString(item) : String.valueOf(item));
-                }
-            }
-        });
     }
 
     private Map<Integer, Integer> collectQuantitiesByProduct() {
@@ -278,6 +327,7 @@ public class NewRequestController {
         if (s != null) {
             // Dialog kapanırken ana pencereyi etkinleştir + odak ver (garanti)
             s.setOnHidden(e -> {
+                disposed = true;
                 try {
                     var owner = s.getOwner();
                     if (owner != null) owner.requestFocus();
@@ -299,18 +349,32 @@ public class NewRequestController {
         return change -> change.getControlNewText().matches("\\d*") ? change : null;
     }
 
-    // Görünüm için converter’lar
     private static class CustomerStringConverter extends StringConverter<Customer> {
-        @Override public String toString(Customer c) {
-            return c == null ? "" : c.getCompanyName();
-        }
+        @Override public String toString(Customer c) { return c == null ? "" : c.getCompanyName(); }
         @Override public Customer fromString(String s) { return null; }
     }
 
     private static class ProductStringConverter extends StringConverter<Product> {
-        @Override public String toString(Product p) {
-            return p == null ? "" : p.getUrunAdi();
-        }
+        @Override public String toString(Product p) { return p == null ? "" : p.getUrunAdi(); }
         @Override public Product fromString(String s) { return null; }
+    }
+
+    /** Throwable → SQLException dönüştürücü (zincirde varsa onu döndürür) */
+    private static SQLException toSql(Throwable t) {
+        if (t instanceof SQLException se) return se;
+        Throwable c = t.getCause();
+        while (c != null && c != t) {
+            if (c instanceof SQLException se) return se;
+            c = c.getCause();
+        }
+        return new SQLException(t.getMessage(), t);
+    }
+
+    /** Formu geçici kilitle (başlıca combobox'lar ve miktar alanı) */
+    private void setBusy(boolean busy) {
+        if (customerComboBox != null) customerComboBox.setDisable(busy);
+        if (productComboBox  != null) productComboBox.setDisable(busy);
+        if (quantityField    != null) quantityField.setDisable(busy);
+        if (productTable     != null) productTable.setDisable(busy);
     }
 }

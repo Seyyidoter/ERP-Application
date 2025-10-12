@@ -38,6 +38,8 @@ public class ViewRequestController {
     // Scene geneline eklediğimiz filtre referansı
     private EventHandler<MouseEvent> outsideClickFilter;
 
+    private volatile boolean disposed = false;
+
     @FXML
     public void initialize() {
         // Sütun bağları
@@ -68,7 +70,7 @@ public class ViewRequestController {
             requestItemsTable.getParent().requestFocus();
         }
 
-        // Dış tıklama filtresini scene yaşam döngüsüne bağla
+        // Dış tıklama filtresini scene yaşam döngüsüne bağla + kapanınca disposed
         requestItemsTable.sceneProperty().addListener((obs, oldScene, newScene) -> {
             if (oldScene != null && outsideClickFilter != null) {
                 oldScene.removeEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
@@ -87,6 +89,7 @@ public class ViewRequestController {
 
                 if (newScene.getWindow() != null) {
                     newScene.getWindow().addEventHandler(WindowEvent.WINDOW_HIDDEN, we -> {
+                        disposed = true;
                         if (outsideClickFilter != null) {
                             newScene.removeEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
                             outsideClickFilter = null;
@@ -96,6 +99,7 @@ public class ViewRequestController {
                     newScene.windowProperty().addListener((o, ow, nw) -> {
                         if (nw != null) {
                             nw.addEventHandler(WindowEvent.WINDOW_HIDDEN, we -> {
+                                disposed = true;
                                 if (outsideClickFilter != null) {
                                     newScene.removeEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
                                     outsideClickFilter = null;
@@ -118,6 +122,15 @@ public class ViewRequestController {
         return false;
     }
 
+    private boolean uiDead() {
+        if (disposed) return true;
+        if (requestItemsTable == null) return true;
+        var scene = requestItemsTable.getScene();
+        if (scene == null) return true;
+        var win = scene.getWindow();
+        return (win == null || !win.isShowing());
+    }
+
     public void setRequestId(int requestId) {
         this.requestId = requestId;
         loadData();
@@ -138,6 +151,7 @@ public class ViewRequestController {
                     }
                 },
                 payload -> {
+                    if (uiDead()) return;
                     Header h = (Header) payload[0];
                     @SuppressWarnings("unchecked")
                     List<ItemRow> items = (List<ItemRow>) payload[1];
@@ -155,11 +169,15 @@ public class ViewRequestController {
                     updateActionButtons(h.status());
                 },
                 ex -> {
+                    if (uiDead()) return;
                     AppDialogs.dbError("Talep detayı yükleme", toSql(ex));
                     statusLabel.setText("Hata");
                     updateActionButtons("Hata");
                 },
-                () -> setBusy(false));
+                () -> {
+                    if (uiDead()) return;
+                    setBusy(false);
+                });
     }
 
     /** DAO’da hazır olmadığı için başlığı buradan çekiyoruz. */
@@ -219,10 +237,12 @@ public class ViewRequestController {
                 throw new RuntimeException(ex);
             }
         }, () -> {
+            if (uiDead()) return;
             AppDialogs.info(approve ? "Talep onaylandı." : "Talep reddedildi.");
             if (onChange != null) onChange.run(); // üst listeyi yenile
             handleClose();
         }, ex -> {
+            if (uiDead()) return;
             // Yarış/Geçersiz durum uyarısını kibar göster
             Throwable cause = ex.getCause();
             if (cause instanceof IllegalStateException ise) {
@@ -231,7 +251,10 @@ public class ViewRequestController {
             } else {
                 AppDialogs.dbError(approve ? "Talep onaylama" : "Talep reddetme", toSql(ex));
             }
-        }, () -> setBusy(false));
+        }, () -> {
+            if (uiDead()) return;
+            setBusy(false);
+        });
     }
 
     private void updateActionButtons(String status) {
