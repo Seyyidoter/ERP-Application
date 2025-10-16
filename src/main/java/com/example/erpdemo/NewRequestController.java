@@ -76,10 +76,18 @@ public class NewRequestController {
         // Enter ile hızlı ekleme (opsiyonel ama kullanışlı)
         quantityField.setOnAction(e -> handleAddProduct());
 
-        // --- Pencere kapanınca disposed=true
-        if (productTable != null && productTable.getScene() != null && productTable.getScene().getWindow() != null) {
-            productTable.getScene().getWindow().setOnHidden(ev -> disposed = true);
-        }
+        // Sahne/Window yaşam döngüsü: ne zaman sahne bağlanırsa o pencerenin kapanışını dinle
+        productTable.sceneProperty().addListener((o, oldScene, newScene) -> {
+            if (newScene != null) {
+                if (newScene.getWindow() != null) {
+                    newScene.getWindow().setOnHidden(e -> disposed = true);
+                } else {
+                    newScene.windowProperty().addListener((oo, oldWin, newWin) -> {
+                        if (newWin != null) newWin.setOnHidden(e -> disposed = true);
+                    });
+                }
+            }
+        });
 
         // --- Referans verileri ASENKRON yükle
         loadReferenceDataAsync();

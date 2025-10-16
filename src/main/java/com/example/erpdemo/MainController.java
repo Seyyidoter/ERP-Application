@@ -222,10 +222,11 @@ public class MainController {
     private void loadContentCached(String fxmlFile, String title, String navTextToSelect, boolean callRefreshOnce) {
         pageTitle.setText(title);
 
-        // Aynı sayfa zaten ekranda mı?
         if (Objects.equals(currentKey, fxmlFile)) {
             selectNav(navTextToSelect);
-            // Yeniden yükleme yok, göz kırpma yok.
+            // Aynı sayfaya tekrar gelindiyse sadece onResume tetikle
+            Object sameController = controllerCache.get(fxmlFile);
+            invokeIfExists(sameController, "onResume");
             return;
         }
 
@@ -234,7 +235,6 @@ public class MainController {
             Object controller = controllerCache.get(fxmlFile);
 
             if (view == null) {
-                // İlk yükleme
                 URL url = getClass().getResource(fxmlFile);
                 if (url == null) {
                     System.err.println("Uyarı: FXML bulunamadı: " + fxmlFile);
@@ -246,22 +246,16 @@ public class MainController {
                 view = loader.load();
                 controller = loader.getController();
 
-                // Controller özel entegrasyonları
+                // Controller özel entegrasyonları (ilk yükleme)
                 if (controller instanceof ApprovalController ac && loggedInUser != null) {
                     ac.setCurrentUserId(loggedInUser.getId());
                 }
 
-                // Varsa refresh() — SADECE İLK YÜKLEMEDE
+                // SADECE İLK YÜKLEMEDE refresh()
                 if (callRefreshOnce) {
-                    try {
-                        controller.getClass().getMethod("refresh").invoke(controller);
-                    } catch (NoSuchMethodException ignore) {
-                    } catch (ReflectiveOperationException re) {
-                        re.printStackTrace();
-                    }
+                    invokeIfExists(controller, "refresh");
                 }
 
-                // Cache’e koy
                 viewCache.put(fxmlFile, view);
                 controllerCache.put(fxmlFile, controller);
             }
@@ -271,6 +265,9 @@ public class MainController {
             currentKey = fxmlFile;
             selectNav(navTextToSelect);
             contentRoot.requestFocus();
+
+            // Her gösterimde onResume()
+            invokeIfExists(controller, "onResume");
 
         } catch (IOException e) {
             e.printStackTrace();
@@ -466,5 +463,18 @@ public class MainController {
             a.initOwner(contentRoot.getScene().getWindow());
         }
         a.showAndWait();
+    }
+
+    private static void invokeIfExists(Object controller, String methodName) {
+        if (controller == null) return;
+        try {
+            var m = controller.getClass().getMethod(methodName);
+            m.setAccessible(true);
+            m.invoke(controller);
+        } catch (NoSuchMethodException ignore) {
+            // controller bu metodu tanımlamadıysa sessizce geç
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 }
