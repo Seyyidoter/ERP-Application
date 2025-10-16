@@ -40,6 +40,7 @@ public class StockController {
     @FXML private HBox actionsBar;
 
     private final ObservableList<Product> master = FXCollections.observableArrayList();
+    private javafx.event.EventHandler<javafx.scene.input.MouseEvent> outsideClickFilter;
     private FilteredList<Product> filtered;
     private SortedList<Product>   sorted;
 
@@ -102,35 +103,53 @@ public class StockController {
             return row;
         });
 
-        // 7) Tablo DIŞINA tıklanınca seçimi/odağı temizle — actionsBar HARİÇ
-        javafx.application.Platform.runLater(() -> {
-            // mavi çerçeve ile açılmasın
-            if (productTable.getParent() != null) productTable.getParent().requestFocus();
+        // 7) Tablo DIŞINA tıklanınca seçimi/odağı temizle — actionsBar HARİÇ (LEAKSİZ)
+        productTable.sceneProperty().addListener((obs, oldScene, newScene) -> {
+            // Eski sahneden filtreyi sök
+            if (oldScene != null && outsideClickFilter != null) {
+                oldScene.removeEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, outsideClickFilter);
+                outsideClickFilter = null;
+            }
 
-            Scene scene = productTable.getScene();
-            if (scene == null) return;
+            if (newScene != null) {
+                // Yeni filtre oluştur
+                outsideClickFilter = e -> {
+                    Node n = e.getPickResult().getIntersectedNode();
+                    boolean insideTable   = isChildOf(n, productTable);
+                    boolean insideActions = actionsBar != null && isChildOf(n, actionsBar);
+                    if (!insideTable && !insideActions) {
+                        productTable.getSelectionModel().clearSelection();
+                        if (productTable.getParent() != null) productTable.getParent().requestFocus();
+                    }
+                };
+                newScene.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, outsideClickFilter);
 
-            scene.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, e -> {
-                Node n = e.getPickResult().getIntersectedNode();
-                boolean insideTable   = isChildOf(n, productTable);
-                boolean insideActions = actionsBar != null && isChildOf(n, actionsBar);
-                if (!insideTable && !insideActions) {
-                    productTable.getSelectionModel().clearSelection();
-                    if (productTable.getParent() != null) productTable.getParent().requestFocus();
+                // Pencere kapanırken filtreyi kaldır (çift kayıt/leak önler)
+                final javafx.event.EventHandler<WindowEvent> cleanup = we -> {
+                    if (outsideClickFilter != null) {
+                        newScene.removeEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, outsideClickFilter);
+                        outsideClickFilter = null;
+                    }
+                    disposed = true;
+                };
+
+                if (newScene.getWindow() != null) {
+                    newScene.getWindow().addEventHandler(WindowEvent.WINDOW_HIDING, cleanup);
+                    newScene.getWindow().addEventHandler(WindowEvent.WINDOW_HIDDEN, cleanup);
+                } else {
+                    newScene.windowProperty().addListener((o, ow, nw) -> {
+                        if (nw != null) {
+                            nw.addEventHandler(WindowEvent.WINDOW_HIDING, cleanup);
+                            nw.addEventHandler(WindowEvent.WINDOW_HIDDEN, cleanup);
+                        }
+                    });
                 }
-            });
-
-            if (scene.getWindow() != null) {
-                scene.getWindow().addEventHandler(WindowEvent.WINDOW_HIDDEN, ev -> disposed = true);
-            } else {
-                scene.windowProperty().addListener((o, ow, nw) -> {
-                    if (nw != null) nw.addEventHandler(WindowEvent.WINDOW_HIDDEN, ev -> disposed = true);
-                });
             }
         });
 
         // 8) Veriyi yükle (ASYNC)
         loadProducts();
+        if (productTable.getParent() != null) productTable.getParent().requestFocus();
     }
 
     private static boolean isChildOf(Node n, Node root) {
@@ -297,6 +316,7 @@ public class StockController {
         confirm.setHeaderText(null);
         confirm.setTitle("Onay");
         IconUtil.decorateAlert(confirm);
+        confirm.initOwner(productTable.getScene().getWindow());
         confirm.showAndWait();
 
         if (confirm.getResult() == EVET) {

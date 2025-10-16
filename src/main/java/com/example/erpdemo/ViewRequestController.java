@@ -216,6 +216,12 @@ public class ViewRequestController {
     @FXML private void handleReject()  { approveReject(false); }
 
     private void approveReject(boolean approve) {
+        int uid = HelloApplication.getLoggedInUserId();
+        if (uid <= 0) {
+            AppDialogs.warn("Oturum bilgisi eksik. Lütfen yeniden giriş yapın.");
+            return;
+        }
+
         setBusy(true);
 
         Async.runVoid(() -> {

@@ -115,25 +115,24 @@ public class ApprovalController {
                 };
                 newScene.addEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
 
-                // Pencere kapanınca filtreyi sök ve disposed işaretle
+                // Tek bir cleanup handler'ında topluyoruz
+                final EventHandler<WindowEvent> cleanup = we -> {
+                    if (outsideClickFilter != null) {
+                        newScene.removeEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
+                        outsideClickFilter = null;
+                    }
+                    disposed = true;
+                };
+
+                // Pencere kapanış akışındaki HER iki olayı da dinle
                 if (newScene.getWindow() != null) {
-                    newScene.getWindow().addEventHandler(WindowEvent.WINDOW_HIDDEN, we -> {
-                        if (outsideClickFilter != null) {
-                            newScene.removeEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
-                            outsideClickFilter = null;
-                        }
-                        disposed = true;
-                    });
+                    newScene.getWindow().addEventHandler(WindowEvent.WINDOW_HIDING, cleanup);
+                    newScene.getWindow().addEventHandler(WindowEvent.WINDOW_HIDDEN, cleanup);
                 } else {
                     newScene.windowProperty().addListener((o, ow, nw) -> {
                         if (nw != null) {
-                            nw.addEventHandler(WindowEvent.WINDOW_HIDDEN, we -> {
-                                if (outsideClickFilter != null) {
-                                    newScene.removeEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
-                                    outsideClickFilter = null;
-                                }
-                                disposed = true;
-                            });
+                            nw.addEventHandler(WindowEvent.WINDOW_HIDING, cleanup);
+                            nw.addEventHandler(WindowEvent.WINDOW_HIDDEN, cleanup);
                         }
                     });
                 }
@@ -196,6 +195,12 @@ public class ApprovalController {
 
     @FXML
     private void handleApprove() {
+        int uid = HelloApplication.getLoggedInUserId();
+        if (uid <= 0) {
+            AppDialogs.warn("Oturum bilgisi eksik. Lütfen yeniden giriş yapın.");
+            return;
+        }
+
         RequestRow sel = pendingRequestsTable.getSelectionModel().getSelectedItem();
         if (sel == null || busy.get()) return;
 
@@ -225,6 +230,12 @@ public class ApprovalController {
 
     @FXML
     private void handleReject() {
+        int uid = HelloApplication.getLoggedInUserId();
+        if (uid <= 0) {
+            AppDialogs.warn("Oturum bilgisi eksik. Lütfen yeniden giriş yapın.");
+            return;
+        }
+
         RequestRow sel = pendingRequestsTable.getSelectionModel().getSelectedItem();
         if (sel == null || busy.get()) return;
 

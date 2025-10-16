@@ -34,10 +34,15 @@ public final class Money {
 
     /** Kullanıcı girişini (1.234,56 / 1234.56 vb.) BigDecimal’a parse eder. */
     public static BigDecimal parseTR(String text) throws ParseException {
-        if (text == null || text.trim().isEmpty()) return BigDecimal.ZERO;
-        NumberFormat nf = NumberFormat.getNumberInstance(TR);
-        nf.setParseIntegerOnly(false);
-        Number n = nf.parse(text.trim());
-        return new BigDecimal(n.toString());
+        if (text == null || text.trim().isEmpty())
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+
+        // TR yereliyle BigDecimal parse edecek format
+        var df = (java.text.DecimalFormat) java.text.NumberFormat.getNumberInstance(TR);
+        df.setParseBigDecimal(true); // Double yerine direkt BigDecimal döner
+        df.setGroupingUsed(true);    // Binlik ayırıcıları destekle ("1.234,56" gibi)
+
+        BigDecimal val = (BigDecimal) df.parse(text.trim());
+        return val.setScale(2, RoundingMode.HALF_UP);
     }
 }

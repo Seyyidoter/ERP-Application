@@ -106,12 +106,6 @@ public class CustomerDAO {
         }
     }
 
-    /** double için aşırı yükleme (eski çağrılar uyumluluğu). */
-    public static void adjustBalance(int customerId, double delta) throws SQLException {
-        if (!Double.isFinite(delta)) throw new IllegalArgumentException("delta geçerli olmalı");
-        adjustBalance(customerId, BigDecimal.valueOf(delta));
-    }
-
     /** Toplu müşteri adı getirir. */
     public static Map<Integer, String> getCustomerNamesByIds(Set<Integer> ids) throws SQLException {
         Map<Integer, String> map = new HashMap<>();

@@ -48,11 +48,19 @@ public class HelloController {
         task.setOnSucceeded(ev -> {
             try {
                 if (Boolean.TRUE.equals(task.getValue())) {
+                    User loggedIn = UserDAO.getUserByUsername(username);
+                    if (loggedIn == null) {
+                        showError("Hata", "Kullanıcı bulunamadı.");
+                        return;
+                    }
+
+                    HelloApplication.setLoggedInUserId(loggedIn.getId());
+
                     FXMLLoader loader = new FXMLLoader(getClass().getResource("main-view.fxml"));
                     Parent root = loader.load();
 
                     MainController mc = loader.getController();
-                    mc.setUser(UserDAO.getUserByUsername(username));
+                    mc.setUser(loggedIn);
 
                     Stage st = new Stage();
                     st.setTitle("Omnis");
@@ -99,6 +107,9 @@ public class HelloController {
         a.setTitle(title);
         a.setHeaderText(null);
         IconUtil.decorateAlert(a);
+        if (btnLogin != null && btnLogin.getScene() != null) {
+            a.initOwner(btnLogin.getScene().getWindow());
+        }
         a.showAndWait();
     }
 }

@@ -34,6 +34,23 @@ public final class AppDialogs {
         show(Alert.AlertType.ERROR, "Hata", msg);
     }
 
+    private static void attachOwnerIfPossible(javafx.scene.control.Dialog<?> d) {
+        try {
+            javafx.stage.Window owner = null;
+            // Önce odaklı pencere
+            for (var w : javafx.stage.Window.getWindows()) {
+                if (w.isFocused() && w.isShowing()) { owner = w; break; }
+            }
+            // Odaklı yoksa, gösterimde olan ilk pencere
+            if (owner == null) {
+                for (var w : javafx.stage.Window.getWindows()) {
+                    if (w.isShowing()) { owner = w; break; }
+                }
+            }
+            if (owner != null) d.initOwner(owner);
+        } catch (Throwable ignore) {}
+    }
+
     /* ================== private helpers ================== */
 
     private static void show(Alert.AlertType type, String title, String message) {
@@ -45,6 +62,7 @@ public final class AppDialogs {
         } catch (Throwable ignore) {
             // Dekorasyonda sorun çıkarsa diyaloğun gösterimini engellemeyelim
         }
+        attachOwnerIfPossible(a);
         showSafely(a); // <-- kritik: her thread’den güvenle çağrılabilir
     }
 

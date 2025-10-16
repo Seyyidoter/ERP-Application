@@ -56,6 +56,17 @@ public class MainController {
     private final Map<String, Object> controllerCache = new HashMap<>();
     private String currentKey = "__dashboard__"; // başlangıçta dashboard
 
+    private volatile boolean disposed = false;
+
+    private boolean uiDead() {
+        if (disposed) return true;
+        if (contentRoot == null) return true;
+        Scene scene = contentRoot.getScene();
+        if (scene == null) return true;
+        var win = scene.getWindow();
+        return (win == null || !win.isShowing());
+    }
+
     @FXML
     public void initialize() {
         // Snapshot’ı FXML’den gelen node ile HEMEN ata
@@ -84,7 +95,6 @@ public class MainController {
 
             // “Tablo DIŞINA tıklama” filtresi — scene yaşam döngüsüne bağla (ekle/çıkar)
             tblTodayProductDemand.sceneProperty().addListener((obs, oldScene, newScene) -> {
-                // Eski sahneden filtremiz varsa sökelim
                 if (oldScene != null && outsideClickFilter != null) {
                     oldScene.removeEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
                 }
@@ -104,23 +114,21 @@ public class MainController {
                     };
                     newScene.addEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
 
-                    // Pencere kapanırken de temizle (ekstra güvenlik)
+                    final EventHandler<WindowEvent> cleanup = we -> {
+                        if (outsideClickFilter != null) {
+                            newScene.removeEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
+                            outsideClickFilter = null;
+                        }
+                    };
+
                     if (newScene.getWindow() != null) {
-                        newScene.getWindow().addEventHandler(WindowEvent.WINDOW_HIDDEN, we -> {
-                            if (outsideClickFilter != null) {
-                                newScene.removeEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
-                                outsideClickFilter = null;
-                            }
-                        });
+                        newScene.getWindow().addEventHandler(WindowEvent.WINDOW_HIDING, cleanup);
+                        newScene.getWindow().addEventHandler(WindowEvent.WINDOW_HIDDEN, cleanup);
                     } else {
                         newScene.windowProperty().addListener((o, ow, nw) -> {
                             if (nw != null) {
-                                nw.addEventHandler(WindowEvent.WINDOW_HIDDEN, we -> {
-                                    if (outsideClickFilter != null) {
-                                        newScene.removeEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
-                                        outsideClickFilter = null;
-                                    }
-                                });
+                                nw.addEventHandler(WindowEvent.WINDOW_HIDING, cleanup);
+                                nw.addEventHandler(WindowEvent.WINDOW_HIDDEN, cleanup);
                             }
                         });
                     }
@@ -128,9 +136,24 @@ public class MainController {
             });
         }
 
-        // Dashboard verilerini yükle ve ekrana getir
-        loadDashboardMetrics();
-        loadTodayDemandTable();
+        Platform.runLater(() -> {
+            if (contentRoot == null) return;
+            Scene sc = contentRoot.getScene();
+            if (sc == null) return;
+
+            if (sc.getWindow() != null) {
+                sc.getWindow().addEventHandler(WindowEvent.WINDOW_HIDING, ev -> disposed = true);
+                sc.getWindow().addEventHandler(WindowEvent.WINDOW_HIDDEN, ev -> disposed = true);
+            } else {
+                sc.windowProperty().addListener((o, ow, nw) -> {
+                    if (nw != null) {
+                        nw.addEventHandler(WindowEvent.WINDOW_HIDING, ev -> disposed = true);
+                        nw.addEventHandler(WindowEvent.WINDOW_HIDDEN, ev -> disposed = true);
+                    }
+                });
+            }
+        });
+
         // Başlangıçta dashboard’u göster
         showDashboardOnly();
 
@@ -147,7 +170,10 @@ public class MainController {
         updateApprovalsVisibility();
     }
 
-    @FXML public void logout() { LogoutUtil.performLogout(contentRoot); }
+    @FXML public void logout() {
+        HelloApplication.setLoggedInUserId(0);
+        LogoutUtil.performLogout(contentRoot);
+    }
 
     // ===================== NAV =====================
 
@@ -309,32 +335,66 @@ public class MainController {
     // ================= Dashboard veri yükleme =================
     private void loadDashboardMetrics() {
         if (lblTodayRequests == null || lblTodayProducts == null || lblTodayRevenue == null) return;
-        try {
-            int req = DashboardDAO.getTodayRequestCount();
-            int qty = DashboardDAO.getTodayProductQuantity();
 
-            // 🔧 HASSASİYET: double yerine BigDecimal ile formatla
-            BigDecimal rev = DashboardDAO.getTodayRevenueBD();
-            lblTodayRequests.setText(String.valueOf(req));
-            lblTodayProducts.setText(String.valueOf(qty));
-            lblTodayRevenue.setText(Money.fmtTRWithSymbol(rev));
-        } catch (SQLException e) {
-            lblTodayRequests.setText("-");
-            lblTodayProducts.setText("-");
-            lblTodayRevenue.setText("-");
-            e.printStackTrace();
-        }
+        // İsteğe bağlı: “yükleniyor” göstergesi
+        lblTodayRequests.setText("…");
+        lblTodayProducts.setText("…");
+        lblTodayRevenue.setText("…");
+
+        Async.run(
+                // BACKGROUND
+                () -> {
+                    int req = DashboardDAO.getTodayRequestCount();
+                    int qty = DashboardDAO.getTodayProductQuantity();
+                    BigDecimal rev = DashboardDAO.getTodayRevenueBD();
+                    return new Object[]{req, qty, rev};
+                },
+                // SUCCESS (FX thread)
+                data -> {
+                    if (uiDead() || !"__dashboard__".equals(currentKey)) return;
+                    int req = (int) data[0];
+                    int qty = (int) data[1];
+                    BigDecimal rev = (BigDecimal) data[2];
+
+                    lblTodayRequests.setText(String.valueOf(req));
+                    lblTodayProducts.setText(String.valueOf(qty));
+                    lblTodayRevenue.setText(Money.fmtTRWithSymbol(rev));
+                },
+                // ERROR
+                ex -> {
+                    if (uiDead()) return;
+                    lblTodayRequests.setText("-");
+                    lblTodayProducts.setText("-");
+                    lblTodayRevenue.setText("-");
+                },
+                // FINALLY
+                () -> { /* no-op */ }
+        );
     }
+
     private void loadTodayDemandTable() {
         if (tblTodayProductDemand == null) return;
-        try {
-            var list = DashboardDAO.getTodayDemandByProduct();
-            tblTodayProductDemand.setItems(FXCollections.observableArrayList(list));
-        } catch (SQLException e) {
-            tblTodayProductDemand.setItems(FXCollections.observableArrayList());
-            e.printStackTrace();
-        }
+
+        tblTodayProductDemand.setItems(FXCollections.observableArrayList()); // temizle/placeholder
+
+        Async.run(
+                // BACKGROUND
+                () -> DashboardDAO.getTodayDemandByProduct(),
+                // SUCCESS
+                list -> {
+                    if (uiDead() || !"__dashboard__".equals(currentKey)) return;
+                    tblTodayProductDemand.setItems(FXCollections.observableArrayList(list));
+                },
+                // ERROR
+                ex -> {
+                    if (uiDead()) return;
+                    tblTodayProductDemand.setItems(FXCollections.observableArrayList());
+                },
+                // FINALLY
+                () -> { /* no-op */ }
+        );
     }
+
 
     // ================= Şifre Değiştirme =================
     @FXML
@@ -347,6 +407,10 @@ public class MainController {
         Dialog<ButtonType> dlg = new Dialog<>();
         dlg.setTitle("Şifre Değiştir");
         dlg.setHeaderText(null);
+
+        if (contentRoot != null && contentRoot.getScene() != null) {
+            dlg.initOwner(contentRoot.getScene().getWindow()); // <-- EKLE (ÖNEMLİ)
+        }
 
         Stage stage = (Stage) dlg.getDialogPane().getScene().getWindow();
         stage.getIcons().add(new Image(Objects.requireNonNull(
@@ -398,6 +462,9 @@ public class MainController {
         Alert a = new Alert(type, msg, ButtonType.OK);
         a.setTitle(title); a.setHeaderText(null);
         IconUtil.decorateAlert(a);
+        if (contentRoot != null && contentRoot.getScene() != null) {
+            a.initOwner(contentRoot.getScene().getWindow());
+        }
         a.showAndWait();
     }
 }

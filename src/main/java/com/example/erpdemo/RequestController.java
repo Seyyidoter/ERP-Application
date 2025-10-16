@@ -104,11 +104,12 @@ public class RequestController {
         // 5) SAHNE GENELİ: tablo ve actionsBar dışına tıklanırsa seçimi temizle
         //    — filtreyi scene yaşam döngüsüne bağla (ekle/çıkar), leak/katlanma olmasın
         tblRequests.sceneProperty().addListener((obs, oldScene, newScene) -> {
-            // Eski sahneden varsa filtremizi sökelim
+            // Eski sahnede varsa filtremizi sökelim
             if (oldScene != null && outsideClickFilter != null) {
                 oldScene.removeEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
             }
             if (newScene != null) {
+                // tek filter
                 outsideClickFilter = e -> {
                     Node n = e.getPickResult().getIntersectedNode();
                     boolean insideTable   = isChildOf(n, tblRequests);
@@ -120,25 +121,23 @@ public class RequestController {
                 };
                 newScene.addEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
 
-                // Pencere kapanınca disposed
+                // tek cleanup
+                final EventHandler<WindowEvent> cleanup = we -> {
+                    if (outsideClickFilter != null) {
+                        newScene.removeEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
+                        outsideClickFilter = null;
+                    }
+                    disposed = true;
+                };
+
                 if (newScene.getWindow() != null) {
-                    newScene.getWindow().addEventHandler(WindowEvent.WINDOW_HIDDEN, we -> {
-                        disposed = true;
-                        if (outsideClickFilter != null) {
-                            newScene.removeEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
-                            outsideClickFilter = null;
-                        }
-                    });
+                    newScene.getWindow().addEventHandler(WindowEvent.WINDOW_HIDING, cleanup);
+                    newScene.getWindow().addEventHandler(WindowEvent.WINDOW_HIDDEN, cleanup);
                 } else {
                     newScene.windowProperty().addListener((o, ow, nw) -> {
                         if (nw != null) {
-                            nw.addEventHandler(WindowEvent.WINDOW_HIDDEN, we -> {
-                                disposed = true;
-                                if (outsideClickFilter != null) {
-                                    newScene.removeEventFilter(MouseEvent.MOUSE_PRESSED, outsideClickFilter);
-                                    outsideClickFilter = null;
-                                }
-                            });
+                            nw.addEventHandler(WindowEvent.WINDOW_HIDING, cleanup);
+                            nw.addEventHandler(WindowEvent.WINDOW_HIDDEN, cleanup);
                         }
                     });
                 }
@@ -274,6 +273,7 @@ public class RequestController {
         q.setHeaderText(null);
         q.setTitle("Onay");
         IconUtil.decorateAlert(q);
+        q.initOwner(tblRequests.getScene().getWindow());
         q.showAndWait();
 
         if (q.getResult() != EVET) return;
