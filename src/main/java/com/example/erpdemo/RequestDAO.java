@@ -208,26 +208,26 @@ public class RequestDAO {
         return list;
     }
 
-    /** ✅ ONAYLANMIŞ talepleri **TALEP TARİHİNE** göre (from/to dahil) döndürür. */
+    /** ✅ ONAYLANMIŞ talepleri **ONAY TARİHİNE** göre [from, to) aralığında döndürür. */
     public static ObservableList<Request> getApprovedRequestsBetween(LocalDate from, LocalDate to) throws SQLException {
         ObservableList<Request> list = FXCollections.observableArrayList();
 
         StringBuilder sb = new StringBuilder("""
-            SELECT Id, MusteriId, TalepTarihi, Durum, OnaylayanKullaniciId, OnayTarihi
-              FROM dbo.Talepler
-             WHERE Durum = N'Onaylandı'
-        """);
+        SELECT Id, MusteriId, TalepTarihi, Durum, OnaylayanKullaniciId, OnayTarihi
+          FROM dbo.Talepler
+         WHERE Durum = N'Onaylandı'
+    """);
 
-        // TalepTarihi bazlı filtre
-        if (from != null) sb.append(" AND TalepTarihi >= ? ");
-        if (to   != null) sb.append(" AND TalepTarihi <  ? ");
-        sb.append(" ORDER BY TalepTarihi DESC, Id DESC ");
+        // OnayTarihi bazlı filtre (to EXCLUSIVE!)
+        if (from != null) sb.append(" AND OnayTarihi >= ? ");
+        if (to   != null) sb.append(" AND OnayTarihi <  ? ");
+        sb.append(" ORDER BY OnayTarihi DESC, Id DESC ");
 
         try (Connection c = DatabaseManager.getConnection();
              PreparedStatement ps = c.prepareStatement(sb.toString())) {
             int i = 1;
             if (from != null) ps.setTimestamp(i++, Timestamp.valueOf(from.atStartOfDay()));
-            if (to   != null) ps.setTimestamp(i++, Timestamp.valueOf(to.plusDays(1).atStartOfDay())); // bitiş GÜNÜ DAHİL
+            if (to   != null) ps.setTimestamp(i++, Timestamp.valueOf(to.atStartOfDay())); // <-- plusDays(1) KALDIRILDI
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) list.add(mapRowToRequest(rs));
             }

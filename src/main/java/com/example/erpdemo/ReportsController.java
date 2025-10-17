@@ -59,12 +59,10 @@ public class ReportsController {
                 PDFont font = loadFont(document);
                 final String title = "Onaylanmış Talepler Raporu – " + periodTitle(period, from, to);
 
-                final List<Request> approved;
-                if (period == Period.ALL_TIME) {
-                    approved = RequestDAO.getApprovedRequests();
-                } else {
-                    approved = RequestDAO.getApprovedRequestsBetween(from, to);
-                }
+                final List<Request> approved =
+                        (period == Period.ALL_TIME)
+                                ? RequestDAO.getApprovedRequests()
+                                : RequestDAO.getApprovedRequestsBetween(from, to);
 
                 try (PdfWriter w = new PdfWriter(document, font)) {
                     w.startPage();
@@ -87,12 +85,14 @@ public class ReportsController {
                         for (Request r : approved) {
                             String cname   = nameMap.getOrDefault(r.getCustomerId(), "Bilinmiyor");
                             String dateStr = (r.getRequestDate() != null) ? r.getRequestDate().format(DF_DATE) : "";
+                            String approvedStr = (r.getApprovalDate() != null) ? r.getApprovalDate().format(DF_DATE) : ""; // YENİ
 
                             List<String> headerBlock = new ArrayList<>();
                             headerBlock.add(w.hrLine());
                             headerBlock.add("Talep ID      : " + r.getId());
                             headerBlock.addAll(w.kvLines("Müşteri Adı   : ", cname));
                             headerBlock.add("Talep Tarihi  : " + dateStr);
+                            headerBlock.add("Onay Tarihi   : " + approvedStr); // YENİ
                             headerBlock.add("Durum         : " + r.getStatus());
                             headerBlock.add(w.hrLine());
                             headerBlock.add(
@@ -211,7 +211,7 @@ public class ReportsController {
 
                 Row h = sh.createRow(r++);
                 String[] cols = {
-                        "Talep ID","Müşteri","Talep Tarihi","Durum",
+                        "Talep ID","Müşteri","Talep Tarihi","Onay Tarihi","Durum",
                         "Ürün","Miktar","Liste Fiyatı","İskontolu Fiyat","Ara Toplam"
                 };
                 for (int i = 0; i < cols.length; i++) {
@@ -233,32 +233,35 @@ public class ReportsController {
                     Map<Integer, List<ItemRow>> itemsMap = fetchItemsForRequests(requestIds);
 
                     for (Request rq : approved) {
-                        String cust = nameMap.getOrDefault(rq.getCustomerId(), "Bilinmiyor");
-                        String date = rq.getRequestDate() == null ? "" : rq.getRequestDate().format(DF_DATE);
+                        String cust        = nameMap.getOrDefault(rq.getCustomerId(), "Bilinmiyor");
+                        String date        = rq.getRequestDate()  == null ? "" : rq.getRequestDate().format(DF_DATE);
+                        String approvedDate= rq.getApprovalDate() == null ? "" : rq.getApprovalDate().format(DF_DATE);
 
                         List<ItemRow> items = itemsMap.getOrDefault(rq.getId(), List.of());
+
                         if (items.isEmpty()) {
                             Row row = sh.createRow(r++);
                             int c = 0;
-                            Cell id = row.createCell(c++); id.setCellValue(rq.getId()); id.setCellStyle(idStyle); // Talep ID ortalı
+                            Cell id = row.createCell(c++); id.setCellValue(rq.getId()); id.setCellStyle(idStyle);
                             row.createCell(c++).setCellValue(cust);
                             row.createCell(c++).setCellValue(date);
+                            row.createCell(c++).setCellValue(approvedDate);   // <--
                             row.createCell(c++).setCellValue(rq.getStatus());
                             row.createCell(c++).setCellValue("(kalem yok)");
                         } else {
                             for (ItemRow it : items) {
                                 Row row = sh.createRow(r++);
                                 int c = 0;
-                                Cell id = row.createCell(c++); id.setCellValue(rq.getId()); id.setCellStyle(idStyle); // Talep ID ortalı
+                                Cell id = row.createCell(c++); id.setCellValue(rq.getId()); id.setCellStyle(idStyle);
                                 row.createCell(c++).setCellValue(cust);
                                 row.createCell(c++).setCellValue(date);
+                                row.createCell(c++).setCellValue(approvedDate); // <--
                                 row.createCell(c++).setCellValue(rq.getStatus());
                                 row.createCell(c++).setCellValue(it.productName);
-                                Cell qty = row.createCell(c++); qty.setCellValue(it.quantity); qty.setCellStyle(intCs);
 
-                                // Tek noktadan ölçekleme sonra doubleValue
-                                Cell lp  = row.createCell(c++); lp.setCellValue(Money.scale2(it.listPrice).doubleValue());       lp.setCellStyle(money);
-                                Cell dp  = row.createCell(c++); dp.setCellValue(Money.scale2(it.discountedPrice).doubleValue());  dp.setCellStyle(money);
+                                Cell qty = row.createCell(c++); qty.setCellValue(it.quantity); qty.setCellStyle(intCs);
+                                Cell lp  = row.createCell(c++); lp.setCellValue(Money.scale2(it.listPrice).doubleValue());      lp.setCellStyle(money);
+                                Cell dp  = row.createCell(c++); dp.setCellValue(Money.scale2(it.discountedPrice).doubleValue()); dp.setCellStyle(money);
                                 Cell sub = row.createCell(c++); sub.setCellValue(
                                         Money.scale2(it.discountedPrice.multiply(BigDecimal.valueOf(it.quantity))).doubleValue()
                                 ); sub.setCellStyle(money);
@@ -267,7 +270,7 @@ public class ReportsController {
                     }
                 }
 
-                for (int i = 0; i < 9; i++) {
+                for (int i = 0; i < 10; i++) {
                     sh.autoSizeColumn(i);
                     sh.setColumnWidth(i, Math.min(sh.getColumnWidth(i), 10000));
                 }
@@ -529,6 +532,23 @@ public class ReportsController {
             return lines;
         }
 
+        private int fitBreakIndex(String w, int start, float maxWidth) throws IOException {
+            int lo = start + 1;
+            int hi = w.length();
+            int best = -1;
+            while (lo <= hi) {
+                int mid = (lo + hi) >>> 1;
+                float tw = textWidth(w.substring(start, mid));
+                if (tw <= maxWidth) {
+                    best = mid;       // bu kadar sığıyor, daha fazlasını dene
+                    lo = mid + 1;
+                } else {
+                    hi = mid - 1;     // fazla geniş, kısalt
+                }
+            }
+            return best; // -1 dönerse hiçbir karakter sığmadı
+        }
+
         String hrLine() throws IOException {
             float charW = Math.max(textWidth(lineChar), 1f);
             int count = Math.max(40, (int) (usableWidth / charW));
@@ -549,38 +569,50 @@ public class ReportsController {
             return font.getStringWidth(s) / 1000f * fontSize;
         }
 
+        // Eski wrapToWidth'un yerine geçsin
         private List<String> wrapToWidth(String text, float maxWidth) throws IOException {
             List<String> lines = new ArrayList<>();
-            if (text == null) { lines.add(""); return lines; }
+            if (text == null || text.isEmpty()) { lines.add(""); return lines; }
 
             String[] words = text.split("\\s+");
             StringBuilder current = new StringBuilder();
+
             for (String w : words) {
                 if (w.isEmpty()) continue;
-                String candidate = current.isEmpty() ? w : current + " " + w;
+
+                // Mevcut satıra boşlukla eklemeyi dene
+                String candidate = (current.length() == 0) ? w : (current + " " + w);
                 if (textWidth(candidate) <= maxWidth) {
                     current.setLength(0);
                     current.append(candidate);
-                } else {
-                    if (!current.isEmpty()) {
-                        lines.add(current.toString());
-                        current.setLength(0);
+                    continue;
+                }
+
+                // Sığmadıysa mevcut satırı yaz ve yeni satıra geç
+                if (current.length() > 0) {
+                    lines.add(current.toString());
+                    current.setLength(0);
+                }
+
+                // Kelimenin kendisi tek satıra sığıyorsa direkt al
+                if (textWidth(w) <= maxWidth) {
+                    current.append(w);
+                    continue;
+                }
+
+                // Çok uzun/boşluksuz kelime: ikili aramayla parçalara böl
+                int start = 0;
+                while (start < w.length()) {
+                    int end = fitBreakIndex(w, start, maxWidth);
+                    if (end == -1) { // hiçbir karakter sığmıyorsa en az bir karakter ilerle
+                        end = Math.min(start + 1, w.length());
                     }
-                    if (textWidth(w) <= maxWidth) {
-                        current.append(w);
-                    } else {
-                        int start = 0;
-                        while (start < w.length()) {
-                            int end = w.length();
-                            while (end > start && textWidth(w.substring(start, end)) > maxWidth) end--;
-                            if (end == start) end = Math.min(start + 1, w.length());
-                            lines.add(w.substring(start, end));
-                            start = end;
-                        }
-                    }
+                    lines.add(w.substring(start, end));
+                    start = end;
                 }
             }
-            if (!current.isEmpty()) lines.add(current.toString());
+
+            if (current.length() > 0) lines.add(current.toString());
             if (lines.isEmpty()) lines.add("");
             return lines;
         }

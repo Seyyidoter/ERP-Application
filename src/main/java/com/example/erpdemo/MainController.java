@@ -9,12 +9,9 @@ import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
-import javafx.scene.image.Image;
 import javafx.scene.input.MouseEvent;
-import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
-import javafx.stage.Stage;
 import javafx.stage.WindowEvent;
 import javafx.event.EventHandler;
 
@@ -23,7 +20,6 @@ import java.math.BigDecimal;
 import java.net.URL;
 import java.sql.SQLException;
 import java.util.*;
-import java.util.function.Consumer;
 
 public class MainController {
 
@@ -43,6 +39,13 @@ public class MainController {
     @FXML private TableView<ProductDemandStat> tblTodayProductDemand;
     @FXML private TableColumn<ProductDemandStat, String>  colDemandProduct;
     @FXML private TableColumn<ProductDemandStat, Integer> colDemandQty;
+
+    @FXML private Button btnDashboard;
+    @FXML private Button btnCustomers;
+    @FXML private Button btnRequests;
+    @FXML private Button btnProducts;
+    @FXML private Button btnApprovals;
+    @FXML private Button btnReports;
 
     private User loggedInUser;
     /** Dashboard görünümünün snapshot’ı (FXML’den gelen dashboardRoot’un ta kendisi). */
@@ -179,9 +182,8 @@ public class MainController {
 
     @FXML
     public void goDashboard() {
-        // Zaten dashboard’taysak hiçbir şey yapma (göz kırpma yok)
         if ("__dashboard__".equals(currentKey)) {
-            selectNav("Gösterge Paneli");
+            selectNav(btnDashboard);
             return;
         }
         showDashboardOnly();
@@ -192,38 +194,41 @@ public class MainController {
         if (dashboardViewSnapshot != null) {
             contentRoot.getChildren().setAll(dashboardViewSnapshot);
             currentKey = "__dashboard__";
-            // İlk geçişte metrikleri yenileyelim
             loadDashboardMetrics();
             loadTodayDemandTable();
-            selectNav("Gösterge Paneli");
+            selectNav(btnDashboard);     // <-- burada
             contentRoot.requestFocus();
         } else {
             loadInlineMessage("Gösterge Paneli yüklenemedi.");
-            selectNav("Gösterge Paneli");
+            selectNav(btnDashboard);     // <-- burada
         }
     }
 
-    @FXML public void goCustomers() { loadContentCached("customer-view.fxml", "Müşteri İşlemleri", "Müşteri İşlemleri", true); }
-    @FXML public void goRequests()  { loadContentCached("request-view.fxml",  "Talep/Teklif",      "Talep/Teklif", true); }
-    @FXML public void goProducts()  { loadContentCached("stock-view.fxml",    "Ürün İşlemleri",    "Ürün İşlemleri", true); }
+    public void goCustomers() { loadContentCached("customer-view.fxml", "Müşteri İşlemleri", btnCustomers, true); }
+    public void goRequests()  { loadContentCached("request-view.fxml",  "Talep/Teklif",      btnRequests,  true); }
+    public void goProducts()  { loadContentCached("stock-view.fxml",    "Ürün İşlemleri",    btnProducts,  true); }
 
     @FXML
     public void goApprovals() {
-        if (isAdmin()) loadContentCached("approval-view.fxml", "Onay İşlemleri", "Onay İşlemleri", true);
-        else { loadInlineMessage("Bu alana erişim yetkiniz yok."); selectNav(null); }
+        if (isAdmin()) {
+            loadContentCached("approval-view.fxml", "Onay İşlemleri", btnApprovals, true);
+        } else {
+            loadInlineMessage("Bu alana erişim yetkiniz yok.");
+            selectNav(null);
+        }
     }
 
-    @FXML public void goReports() { loadContentCached("reports-view.fxml", "Raporlar", "Raporlar", false); }
+    public void goReports()   { loadContentCached("reports-view.fxml",  "Raporlar", btnReports,   false); }
 
     /**
      * YENİ: FXML’i ilkinde yüklüyor, sonraki tıklamalarda cache’ten getiriyor.
      * @param callRefreshOnce true ise, controller’da varsa refresh() sadece ilk yüklemede çağrılır.
      */
-    private void loadContentCached(String fxmlFile, String title, String navTextToSelect, boolean callRefreshOnce) {
+    private void loadContentCached(String fxmlFile, String title, Button navToSelect, boolean callRefreshOnce) {
         pageTitle.setText(title);
 
         if (Objects.equals(currentKey, fxmlFile)) {
-            selectNav(navTextToSelect);
+            selectNav(navToSelect);
             // Aynı sayfaya tekrar gelindiyse sadece onResume tetikle
             Object sameController = controllerCache.get(fxmlFile);
             invokeIfExists(sameController, "onResume");
@@ -239,7 +244,7 @@ public class MainController {
                 if (url == null) {
                     System.err.println("Uyarı: FXML bulunamadı: " + fxmlFile);
                     loadInlineMessage(title + " görünümü yüklenemedi (dosya yok).");
-                    selectNav(navTextToSelect);
+                    selectNav(navToSelect);
                     return;
                 }
                 FXMLLoader loader = new FXMLLoader(url);
@@ -263,7 +268,7 @@ public class MainController {
             // Ekrana getir
             contentRoot.getChildren().setAll(view);
             currentKey = fxmlFile;
-            selectNav(navTextToSelect);
+            selectNav(navToSelect);
             contentRoot.requestFocus();
 
             // Her gösterimde onResume()
@@ -272,7 +277,7 @@ public class MainController {
         } catch (IOException e) {
             e.printStackTrace();
             loadInlineMessage(title + " görünümü yüklenemedi (hata).");
-            selectNav(navTextToSelect);
+            selectNav(navToSelect);
         }
     }
 
@@ -293,40 +298,25 @@ public class MainController {
     }
 
     // ---- Nav yardımcıları ----
-    private Button findNavButtonByText(String text) {
-        VBox sidebar = getSidebar();
-        if (sidebar == null) return null;
-        for (var node : sidebar.getChildren()) {
-            if (node instanceof Button b && text != null && text.equalsIgnoreCase(b.getText())) return b;
-        }
-        return null;
+    private List<Button> navButtons() {
+        return Arrays.asList(btnDashboard, btnCustomers, btnRequests, btnProducts, btnApprovals, btnReports);
     }
-    private void selectNav(String text) {
-        VBox sidebar = getSidebar();
-        if (sidebar == null) return;
-        for (var node : sidebar.getChildren()) {
-            if (node instanceof Button b) {
-                b.getStyleClass().remove("selected");
-                if (text != null && text.equalsIgnoreCase(b.getText())) {
-                    if (!b.getStyleClass().contains("selected")) b.getStyleClass().add("selected");
-                }
-            }
+
+    private void selectNav(Button selected) {
+        for (Button b : navButtons()) {
+            if (b == null) continue;
+            b.getStyleClass().remove("selected");
+        }
+        if (selected != null && !selected.getStyleClass().contains("selected")) {
+            //selected.getStyleClass().add("selected");
         }
     }
+
     private void updateApprovalsVisibility() {
-        Button approvalsBtn = findNavButtonByText("Onay İşlemleri");
-        if (approvalsBtn != null) {
-            boolean visible = isAdmin();
-            approvalsBtn.setVisible(visible);
-            approvalsBtn.setManaged(visible);
-        }
-    }
-    private VBox getSidebar() {
-        var parent1 = contentRoot.getParent();
-        if (parent1 == null) return null;
-        var parent2 = parent1.getParent();
-        if (parent2 instanceof BorderPane bp && bp.getLeft() instanceof VBox vbox) return vbox;
-        return null;
+        if (btnApprovals == null) return;
+        boolean visible = isAdmin();
+        btnApprovals.setVisible(visible);
+        btnApprovals.setManaged(visible);
     }
 
     // ================= Dashboard veri yükleme =================

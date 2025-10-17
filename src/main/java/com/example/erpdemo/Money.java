@@ -37,12 +37,21 @@ public final class Money {
         if (text == null || text.trim().isEmpty())
             return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
 
-        // TR yereliyle BigDecimal parse edecek format
-        var df = (java.text.DecimalFormat) java.text.NumberFormat.getNumberInstance(TR);
-        df.setParseBigDecimal(true); // Double yerine direkt BigDecimal döner
-        df.setGroupingUsed(true);    // Binlik ayırıcıları destekle ("1.234,56" gibi)
+        String s = text.trim();
 
-        BigDecimal val = (BigDecimal) df.parse(text.trim());
+        // 1) Boşluk ve para sembollerini ayıkla (gerekiyorsa):
+        s = s.replace("₺", "").replaceAll("\\s+", "");
+
+
+        if (!s.contains(",") && s.chars().filter(ch -> ch=='.').count()==1) {
+            s = s.replace('.', ',');
+        }
+
+        java.text.DecimalFormat df = (java.text.DecimalFormat) NumberFormat.getNumberInstance(TR);
+        df.setParseBigDecimal(true);
+        df.setGroupingUsed(true);
+
+        BigDecimal val = (BigDecimal) df.parse(s);
         return val.setScale(2, RoundingMode.HALF_UP);
     }
 }

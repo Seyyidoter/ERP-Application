@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<?import javafx.geometry.Insets?>
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 
@@ -26,12 +25,12 @@
     <left>
         <VBox styleClass="sidebar" spacing="8">
             <Separator/>
-            <Button text="Gösterge Paneli"  onAction="#goDashboard" styleClass="nav-btn" focusTraversable="false"/>
-            <Button text="Müşteri İşlemleri" onAction="#goCustomers" styleClass="nav-btn" focusTraversable="false"/>
-            <Button text="Talep/Teklif"      onAction="#goRequests"  styleClass="nav-btn" focusTraversable="false"/>
-            <Button text="Ürün İşlemleri"    onAction="#goProducts"  styleClass="nav-btn" focusTraversable="false"/>
-            <Button text="Onay İşlemleri"    onAction="#goApprovals" styleClass="nav-btn" focusTraversable="false"/>
-            <Button text="Raporlar"          onAction="#goReports"   styleClass="nav-btn" focusTraversable="false"/>
+            <Button fx:id="btnDashboard"  text="Gösterge Paneli"  onAction="#goDashboard" styleClass="nav-btn" focusTraversable="false"/>
+            <Button fx:id="btnCustomers"  text="Müşteri İşlemleri" onAction="#goCustomers" styleClass="nav-btn" focusTraversable="false"/>
+            <Button fx:id="btnRequests"   text="Talep/Teklif"      onAction="#goRequests"  styleClass="nav-btn" focusTraversable="false"/>
+            <Button fx:id="btnProducts"   text="Ürün İşlemleri"    onAction="#goProducts"  styleClass="nav-btn" focusTraversable="false"/>
+            <Button fx:id="btnApprovals"  text="Onay İşlemleri"    onAction="#goApprovals" styleClass="nav-btn" focusTraversable="false"/>
+            <Button fx:id="btnReports"    text="Raporlar"          onAction="#goReports"   styleClass="nav-btn" focusTraversable="false"/>
             <Region VBox.vgrow="ALWAYS"/>
             <Label text="v1.0.0" styleClass="sidebar-foot"/>
         </VBox>
