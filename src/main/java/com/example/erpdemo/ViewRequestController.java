@@ -235,9 +235,9 @@ public class ViewRequestController {
 
                 // --- 1) İşlem ---
                 if (approve) {
-                    RequestDAO.approveRequestTransactionally(requestId, HelloApplication.getLoggedInUserId());
+                    RequestDAO.approveRequestTransactionally(requestId, uid);
                 } else {
-                    RequestDAO.rejectRequest(requestId, HelloApplication.getLoggedInUserId());
+                    RequestDAO.rejectRequest(requestId, uid);
                 }
             } catch (SQLException ex) {
                 throw new RuntimeException(ex);

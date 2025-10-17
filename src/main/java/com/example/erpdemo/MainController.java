@@ -175,6 +175,7 @@ public class MainController {
 
     @FXML public void logout() {
         HelloApplication.setLoggedInUserId(0);
+        try { viewCache.clear(); controllerCache.clear(); } catch (Throwable ignore) {}
         LogoutUtil.performLogout(contentRoot);
     }
 
