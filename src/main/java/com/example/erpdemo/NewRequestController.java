@@ -171,25 +171,17 @@ public class NewRequestController {
             return;
         }
 
-        // Aksi halde onay iste
-        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
-        confirm.setHeaderText(null);
-        confirm.setTitle("Müşteri Değiştir");
-        confirm.setContentText("Müşteri değiştirildiğinde mevcut ürün listesi temizlenecek.\nDevam edilsin mi?");
+        boolean ok = AppDialogs.confirm(
+                "Müşteri Değiştir",
+                "Müşteri değiştirildiğinde mevcut ürün listesi temizlenecek.\nDevam edilsin mi?",
+                "Evet", "Hayır",
+                customerComboBox
+        );
 
-        // Türkçe butonlar
-        ButtonType evetBtn  = new ButtonType("Evet", ButtonBar.ButtonData.YES);
-        ButtonType hayirBtn = new ButtonType("Hayır", ButtonBar.ButtonData.NO);
-        confirm.getButtonTypes().setAll(evetBtn, hayirBtn);
-
-        IconUtil.decorateAlert(confirm);
-        confirm.showAndWait();
-
-        if (confirm.getResult() == evetBtn) {
+        if (ok) {
             requestItems.clear();
             clearProductInputs();
         } else {
-            // Eski müşteriye geri dön → bu değişiklikte listener çalışmasın
             suppressCustomerChange = true;
             customerComboBox.getSelectionModel().select(oldCus);
         }

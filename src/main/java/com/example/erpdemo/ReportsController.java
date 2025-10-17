@@ -9,6 +9,7 @@ import org.apache.pdfbox.pdmodel.font.PDType0Font;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import java.io.FileOutputStream;
@@ -193,13 +194,14 @@ public class ReportsController {
 
                 // stiller
                 CellStyle header = headerStyle(wb);
-                CellStyle money  = moneyStyle(wb);
-                CellStyle intCs  = integerStyle(wb);
+                CellStyle money  = moneyStyle(wb);      //  -> #,##0.00" TL"
+                CellStyle intCs  = integerStyle(wb);    //  -> #,##0
 
-                // YENİ: Talep ID için ortalı stiller
+                // Talep ID için ortalı stil
                 CellStyle idStyle = wb.createCellStyle();
                 idStyle.setAlignment(HorizontalAlignment.CENTER);
 
+                // Başlık için ortalı varyant (yalnızca "Talep ID")
                 CellStyle headerCenter = wb.createCellStyle();
                 headerCenter.cloneStyleFrom(header);
                 headerCenter.setAlignment(HorizontalAlignment.CENTER);
@@ -207,8 +209,11 @@ public class ReportsController {
                 int r = 0;
                 Row titleRow = sh.createRow(r++);
                 titleRow.createCell(0).setCellValue("Onaylanmış Talepler – " + periodTitle(period, from, to));
-                r++;
 
+                r++; // boş satır
+
+                // Başlık
+                final int headerRowIdx = r;
                 Row h = sh.createRow(r++);
                 String[] cols = {
                         "Talep ID","Müşteri","Talep Tarihi","Onay Tarihi","Durum",
@@ -220,6 +225,8 @@ public class ReportsController {
                     c.setCellStyle(i == 0 ? headerCenter : header); // Talep ID başlığı ortalı
                 }
 
+                final int firstDataRow = r; // veri buradan başlar (0-based satır index’i)
+
                 final List<Request> approved =
                         (period == Period.ALL_TIME)
                                 ? RequestDAO.getApprovedRequests()
@@ -228,14 +235,17 @@ public class ReportsController {
                 if (!approved.isEmpty()) {
                     Set<Integer> customerIds = new LinkedHashSet<>();
                     Set<Integer> requestIds  = new LinkedHashSet<>();
-                    for (Request rq : approved) { customerIds.add(rq.getCustomerId()); requestIds.add(rq.getId()); }
+                    for (Request rq : approved) {
+                        customerIds.add(rq.getCustomerId());
+                        requestIds.add(rq.getId());
+                    }
                     Map<Integer, String> nameMap  = CustomerDAO.getCustomerNamesByIds(customerIds);
                     Map<Integer, List<ItemRow>> itemsMap = fetchItemsForRequests(requestIds);
 
                     for (Request rq : approved) {
-                        String cust        = nameMap.getOrDefault(rq.getCustomerId(), "Bilinmiyor");
-                        String date        = rq.getRequestDate()  == null ? "" : rq.getRequestDate().format(DF_DATE);
-                        String approvedDate= rq.getApprovalDate() == null ? "" : rq.getApprovalDate().format(DF_DATE);
+                        String cust         = nameMap.getOrDefault(rq.getCustomerId(), "Bilinmiyor");
+                        String date         = rq.getRequestDate()  == null ? "" : rq.getRequestDate().format(DF_DATE);
+                        String approvedDate = rq.getApprovalDate() == null ? "" : rq.getApprovalDate().format(DF_DATE);
 
                         List<ItemRow> items = itemsMap.getOrDefault(rq.getId(), List.of());
 
@@ -245,9 +255,10 @@ public class ReportsController {
                             Cell id = row.createCell(c++); id.setCellValue(rq.getId()); id.setCellStyle(idStyle);
                             row.createCell(c++).setCellValue(cust);
                             row.createCell(c++).setCellValue(date);
-                            row.createCell(c++).setCellValue(approvedDate);   // <--
+                            row.createCell(c++).setCellValue(approvedDate);
                             row.createCell(c++).setCellValue(rq.getStatus());
                             row.createCell(c++).setCellValue("(kalem yok)");
+                            // Miktar / fiyat sütunları boş kalabilir
                         } else {
                             for (ItemRow it : items) {
                                 Row row = sh.createRow(r++);
@@ -255,7 +266,7 @@ public class ReportsController {
                                 Cell id = row.createCell(c++); id.setCellValue(rq.getId()); id.setCellStyle(idStyle);
                                 row.createCell(c++).setCellValue(cust);
                                 row.createCell(c++).setCellValue(date);
-                                row.createCell(c++).setCellValue(approvedDate); // <--
+                                row.createCell(c++).setCellValue(approvedDate);
                                 row.createCell(c++).setCellValue(rq.getStatus());
                                 row.createCell(c++).setCellValue(it.productName);
 
@@ -270,9 +281,48 @@ public class ReportsController {
                     }
                 }
 
-                for (int i = 0; i < 10; i++) {
-                    sh.autoSizeColumn(i);
-                    sh.setColumnWidth(i, Math.min(sh.getColumnWidth(i), 10000));
+                // Başlığı sabitle (veri başı)
+                sh.createFreezePane(0, firstDataRow);
+
+                // Otomatik filtre (yalnızca veri aralığı)
+                int lastDataRow = Math.max(firstDataRow, r - 1);
+                sh.setAutoFilter(new CellRangeAddress(headerRowIdx, lastDataRow, 0, 9));
+
+                // En alta toplam satırı (Ara Toplam = J sütunu = 9)
+                if (r > firstDataRow) {
+                    int excelFirstData = firstDataRow + 1;
+                    int excelLastData  = r;
+
+                    Row total = sh.createRow(r++);
+                    total.createCell(0).setCellValue("TOPLAM (İskontolu)");
+
+                    Font bold = wb.createFont();
+                    bold.setBold(true);
+                    CellStyle totalLabel = wb.createCellStyle();
+                    totalLabel.setFont(bold);
+                    totalLabel.setAlignment(HorizontalAlignment.CENTER);
+                    total.getCell(0).setCellStyle(totalLabel);
+
+                    Cell totalCell = total.createCell(9);
+                    totalCell.setCellFormula(String.format("SUM(J%d:J%d)", excelFirstData, excelLastData));
+                    totalCell.setCellStyle(money);
+                }
+
+                // >>> Otosize’ı EN SON yap <<<
+                for (int col = 0; col < 10; col++) {
+                    sh.autoSizeColumn(col);
+                    sh.setColumnWidth(col, Math.min(sh.getColumnWidth(col), 16000)); // biraz daha yüksek limit
+                }
+                // J sütunu yine dar kalırsa zorla genişlet:
+                sh.setColumnWidth(9, Math.max(sh.getColumnWidth(9), 20 * 256)); // ~20 karakter
+
+                // AutoFilter okları başlık metnini kapatmasın diye her sütuna küçük tampon ekle
+                final int PAD_CHARS = 3;  // istersen 2 veya 4 deneyebilirsin
+                final int MAX_WIDTH = 22000;
+                for (int col = 0; col < 10; col++) {
+                    int w = sh.getColumnWidth(col);
+                    int newW = Math.min(w + PAD_CHARS * 256, MAX_WIDTH);
+                    sh.setColumnWidth(col, newW);
                 }
 
                 String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH.mm.ss", LOCALE_TR));
@@ -286,7 +336,9 @@ public class ReportsController {
                     case ALL_TIME -> "TUM_ZAMANLAR";
                 };
                 Path outPath = outDir.resolve("SatisRaporu_" + suffix + "_" + ts + ".xlsx");
-                try (FileOutputStream fos = new FileOutputStream(outPath.toFile())) { wb.write(fos); }
+                try (FileOutputStream fos = new FileOutputStream(outPath.toFile())) {
+                    wb.write(fos);
+                }
 
                 Async.later(() -> AppDialogs.info("Excel oluşturuldu: " + outPath.toAbsolutePath()));
             } catch (SQLException e) {
@@ -310,12 +362,15 @@ public class ReportsController {
     }
     private CellStyle moneyStyle(Workbook wb) {
         CellStyle cs = wb.createCellStyle();
-        cs.setDataFormat(wb.createDataFormat().getFormat("#,##0.00"));
+        DataFormat df = wb.createDataFormat();
+        cs.setDataFormat(df.getFormat("#,##0.00\" TL\"")); // TL sabit metin
         return cs;
     }
+
     private CellStyle integerStyle(Workbook wb) {
         CellStyle cs = wb.createCellStyle();
-        cs.setDataFormat(wb.createDataFormat().getFormat("0"));
+        DataFormat df = wb.createDataFormat();
+        cs.setDataFormat(df.getFormat("#,##0")); // tam sayı
         return cs;
     }
 

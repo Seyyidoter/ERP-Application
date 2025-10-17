@@ -5,8 +5,13 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
 
 import java.sql.SQLException;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import javafx.stage.Modality;
+import javafx.stage.Window;
+import javafx.scene.Node;
+import java.util.Optional;
+import javafx.scene.control.ButtonBar;
 
 public final class AppDialogs {
 
@@ -62,19 +67,30 @@ public final class AppDialogs {
     private static void show(Alert.AlertType type, String title, String message) {
         // KAPANIŞ MODUNDAYSAN: diyalog basma, sessizce geç
         if (SUPPRESS.get()) {
-            // İstersen hafif bir log bırak:
-            System.out.println("[Dialog suppressed] " + title + ": " + String.valueOf(message));
+            System.out.println("[Dialog suppressed] " + String.valueOf(title) + ": " + String.valueOf(message));
             return;
         }
 
-        runFxAndWait(() -> {
-            Alert a = new Alert(type, message, ButtonType.OK);
-            a.setTitle(title);
-            a.setHeaderText(null);
-            try { IconUtil.decorateAlert(a); } catch (Throwable ignore) {}
-            attachOwnerIfPossible(a);
-            a.showAndWait();
-        });
+        // null güvenliği
+        final String safeTitle = (title == null || title.isBlank()) ? "Bilgi" : title;
+        final String raw = String.valueOf(message);
+        final String msg = "null".equals(raw) ? "" : raw;
+
+        try {
+            runFxAndWait(() -> {
+                Alert a = new Alert(type, msg, ButtonType.OK);
+                a.setTitle(safeTitle);
+                a.setHeaderText(null);
+                try { IconUtil.decorateAlert(a); } catch (Throwable ignore) {}
+                attachOwnerIfPossible(a);
+                // uzun mesajlar için okunabilirlik
+                try { a.getDialogPane().setMinWidth(420); } catch (Throwable ignore) {}
+                a.showAndWait();
+            });
+        } catch (IllegalStateException fxClosed) {
+            // FX platformu kapanırken çağrıldı; UI göstermeden logla
+            System.err.println("[Dialog skipped: FX not available] " + safeTitle + ": " + msg);
+        }
     }
 
     private static void log(String context, Throwable ex) {
@@ -88,12 +104,19 @@ public final class AppDialogs {
         if (Platform.isFxApplicationThread()) {
             r.run();
         } else {
-            final CountDownLatch latch = new CountDownLatch(1);
-            Platform.runLater(() -> {
-                try { r.run(); }
-                finally { latch.countDown(); }
-            });
-            try { latch.await(); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+            final java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+            try {
+                Platform.runLater(() -> {
+                    try { r.run(); }
+                    finally { latch.countDown(); }
+                });
+                latch.await();
+            } catch (IllegalStateException fxClosed) {
+                // FX platformu kapalı olabilir (kapanış sırasında); üst kata fırlat ki show() yakalasın
+                throw fxClosed;
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+            }
         }
     }
 
@@ -115,6 +138,56 @@ public final class AppDialogs {
         if (code == 2627 || code == 2601) return ctx + "aynı veriden zaten mevcut, benzersiz kayıt kısıtı ihlali.";
 
         return ctx + "işlem tamamlanamadı. Lütfen daha sonra tekrar deneyin.";
+    }
+
+    public static boolean confirm(String title, String content, String yesText, String noText, Window owner) {
+        if (SUPPRESS.get()) {
+            // Kapanış modunda otomatik hayır diyebilirsin (veya true döndür)
+            System.out.println("[Dialog suppressed] " + title + ": " + content);
+            return false;
+        }
+
+        // null güvenliği + varsayılanlar
+        final String safeTitle = (title == null || title.isBlank()) ? "Onay" : title;
+        final String msg = "null".equals(String.valueOf(content)) ? "" : String.valueOf(content);
+        final ButtonType yes = new ButtonType(yesText == null ? "Evet" : yesText, ButtonBar.ButtonData.YES);
+        final ButtonType no  = new ButtonType(noText  == null ? "Hayır" : noText, ButtonBar.ButtonData.NO);
+
+        final boolean[] resultHolder = new boolean[1];
+
+        runFxAndWait(() -> {
+            Alert a = new Alert(Alert.AlertType.CONFIRMATION, msg, yes, no);
+            a.setTitle(safeTitle);
+            a.setHeaderText(null);
+            try { IconUtil.decorateAlert(a); } catch (Throwable ignore) {}
+
+            // OWNER + MODAL
+            if (owner != null) {
+                a.initOwner(owner);
+                a.initModality(Modality.WINDOW_MODAL);
+            } else {
+                // Yine de mevcut bir pencere bulup owner verelim (fallback)
+                attachOwnerIfPossible(a);
+            }
+
+            try { a.getDialogPane().setMinWidth(420); } catch (Throwable ignore) {}
+
+            Optional<ButtonType> res = a.showAndWait();
+            resultHolder[0] = res.isPresent() && res.get() == yes;
+        });
+
+        return resultHolder[0];
+    }
+
+    /** Node üzerinden kolay kullanım (owner = node.getScene().getWindow()) */
+    public static boolean confirm(String title, String content, String yesText, String noText, Node ownerNode) {
+        Window w = null;
+        try {
+            if (ownerNode != null && ownerNode.getScene() != null) {
+                w = ownerNode.getScene().getWindow();
+            }
+        } catch (Throwable ignore) {}
+        return confirm(title, content, yesText, noText, w);
     }
 
     private static String safe(String s) { return s == null ? "" : s; }

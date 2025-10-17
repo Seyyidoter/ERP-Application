@@ -382,12 +382,11 @@ public class MainController {
         );
     }
 
-
     // ================= Şifre Değiştirme =================
     @FXML
     private void changePassword() {
         if (loggedInUser == null) {
-            loadInlineMessage("Oturum bilgisi alınamadı.");
+            AppDialogs.warn("Oturum bilgisi alınamadı.");
             return;
         }
 
@@ -396,10 +395,11 @@ public class MainController {
         dlg.setHeaderText(null);
 
         if (contentRoot != null && contentRoot.getScene() != null) {
-            dlg.initOwner(contentRoot.getScene().getWindow()); // <-- EKLE (ÖNEMLİ)
+            dlg.initOwner(contentRoot.getScene().getWindow());
         }
 
         IconUtil.decorateDialog(dlg);
+
         PasswordField currentPwd = new PasswordField();
         PasswordField newPwd     = new PasswordField();
         PasswordField newPwd2    = new PasswordField();
@@ -410,35 +410,65 @@ public class MainController {
 
         var gp = new javafx.scene.layout.GridPane();
         gp.setHgap(10); gp.setVgap(10);
-        gp.addRow(0, new Label("Mevcut Şifre:"), currentPwd);
-        gp.addRow(1, new Label("Yeni Şifre:"),   newPwd);
+        gp.addRow(0, new Label("Mevcut Şifre:"),       currentPwd);
+        gp.addRow(1, new Label("Yeni Şifre:"),         newPwd);
         gp.addRow(2, new Label("Yeni Şifre (Tekrar):"), newPwd2);
 
         dlg.getDialogPane().setContent(gp);
 
         ButtonType btnTamam = new ButtonType("Tamam", ButtonBar.ButtonData.OK_DONE);
-        ButtonType btnIptal = new ButtonType("İptal", ButtonBar.ButtonData.CANCEL_CLOSE);
+        ButtonType btnIptal = new ButtonType("İptal",  ButtonBar.ButtonData.CANCEL_CLOSE);
         dlg.getDialogPane().getButtonTypes().addAll(btnTamam, btnIptal);
+
+        // Canlı doğrulama: "Tamam" düğmesini şartlar sağlanana kadar kilitle
+        final Node okBtn = dlg.getDialogPane().lookupButton(btnTamam);
+        okBtn.disableProperty().bind(
+                currentPwd.textProperty().isEmpty()
+                        .or(newPwd.textProperty().isEmpty())
+                        .or(newPwd2.textProperty().isEmpty())
+                        .or(newPwd.textProperty().length().lessThan(4)) // dilerseniz min uzunluk
+                        .or(newPwd.textProperty().isNotEqualTo(newPwd2.textProperty()))
+        );
 
         dlg.setResultConverter(bt -> bt);
         var res = dlg.showAndWait();
         if (res.isEmpty() || res.get() != btnTamam) return;
 
-        String cur = currentPwd.getText();
-        String np1 = newPwd.getText();
-        String np2 = newPwd2.getText();
+        String cur = currentPwd.getText() == null ? "" : currentPwd.getText().trim();
+        String np1 = newPwd.getText()     == null ? "" : newPwd.getText().trim();
+        String np2 = newPwd2.getText()    == null ? "" : newPwd2.getText().trim();
 
-        if (np1 == null || np1.isBlank() || !np1.equals(np2)) {
-            showAlert(Alert.AlertType.WARNING, "Uyarı", "Yeni şifreler boş olamaz ve birbiriyle aynı olmalıdır.");
+        // Erken kontroller (DB’ye gitmeden)
+        if (cur.isBlank()) {
+            AppDialogs.warn("Mevcut şifreyi girin.");
+            return;
+        }
+        if (np1.isBlank() || np2.isBlank()) {
+            AppDialogs.warn("Yeni şifre alanları boş olamaz.");
+            return;
+        }
+        if (!np1.equals(np2)) {
+            AppDialogs.warn("Yeni şifreler birbiriyle aynı olmalıdır.");
+            return;
+        }
+        if (np1.length() < 4) { // isteğe bağlı politika
+            AppDialogs.warn("Yeni şifre en az 4 karakter olmalı.");
+            return;
+        }
+        if (np1.equals(cur)) { // isteğe bağlı politika
+            AppDialogs.warn("Yeni şifre mevcut şifreyle aynı olamaz.");
             return;
         }
 
         try {
             boolean updated = UserDAO.updatePassword(loggedInUser.getId(), cur, np1);
-            if (!updated) { showAlert(Alert.AlertType.ERROR, "Hata", "Mevcut şifre yanlış."); return; }
-            showAlert(Alert.AlertType.INFORMATION, "Başarılı", "Şifreniz güncellendi.");
+            if (!updated) {
+                AppDialogs.error("Mevcut şifre yanlış.");
+                return;
+            }
+            AppDialogs.info("Şifreniz güncellendi.");
         } catch (SQLException e) {
-            showAlert(Alert.AlertType.ERROR, "Hata", "Şifre güncellenemedi: " + e.getMessage());
+            AppDialogs.dbError("Şifre güncelleme", e);
         }
     }
 

@@ -6,20 +6,16 @@ import javafx.application.Platform;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
-import java.util.concurrent.Callable;
 
-/**
- * Uygulama genelinde asenkron işler için tek thread havuzu.
- * - JavaFX Task kullanıldığı için onSuccess/onError callback'leri FX Thread üzerinde çalışır.
- */
 public final class Async {
     private Async() {}
 
-    // Havuz ayarları (makul varsayılanlar)
+    // Havuz ayarları
     private static final int CORE = Math.max(2, Runtime.getRuntime().availableProcessors() / 2);
     private static final int MAX  = Math.max(2, Runtime.getRuntime().availableProcessors());
     private static final int QUEUE_CAP = 512;
 
+    // ⚠️ Değişiklik: CallerRunsPolicy → AbortPolicy (veya custom handler)
     private static final ExecutorService EXEC = new ThreadPoolExecutor(
             CORE,
             MAX,
@@ -27,23 +23,20 @@ public final class Async {
             new LinkedBlockingQueue<>(QUEUE_CAP),
             r -> {
                 Thread t = new Thread(r, "omnis-async");
-                t.setDaemon(true); // JVM kapanışını engellemesin
+                t.setDaemon(true);
                 t.setUncaughtExceptionHandler((th, ex) -> ex.printStackTrace());
                 return t;
             },
-            new ThreadPoolExecutor.CallerRunsPolicy()
+            new ThreadPoolExecutor.AbortPolicy() // <-- kritik değişiklik
     );
 
-    // Kapanış başlatıldı mı?
     private static final AtomicBoolean STOPPING = new AtomicBoolean(false);
 
-    /** Yeni iş kabulünü durdur (run/submit reddedilecek). */
     public static void blockNewTasks() { STOPPING.set(true); }
 
-    /** Düzgün kapatma: yeni iş yok, mevcutlar bitene kadar bekle. */
     public static boolean shutdownGracefully(long timeout, TimeUnit unit) {
         STOPPING.set(true);
-        EXEC.shutdown(); // yeni iş alma
+        EXEC.shutdown();
         try {
             return EXEC.awaitTermination(timeout, unit);
         } catch (InterruptedException ie) {
@@ -52,7 +45,6 @@ public final class Async {
         }
     }
 
-    /** Zorla kapat (kalanları interrupt eder). */
     public static void shutdownNow() {
         STOPPING.set(true);
         EXEC.shutdownNow();
@@ -64,9 +56,12 @@ public final class Async {
                                Consumer<Throwable> onError,
                                Runnable onFinally) {
 
-        // Havuz kapanıyorsa yeni iş planlama — onFinally'i FX'e post edip dön
         if (STOPPING.get() || EXEC.isShutdown() || EXEC.isTerminated()) {
+            // Havuz kapalıysa "nazikçe" bitir
             if (onFinally != null) Platform.runLater(onFinally);
+            // İsteğe bağlı: onError bildirimi
+            if (onError != null) Platform.runLater(() ->
+                    onError.accept(new RejectedExecutionException("Arkaplan havuzu kapalı.")));
             return;
         }
 
@@ -74,6 +69,7 @@ public final class Async {
             @Override protected T call() throws Exception { return work.call(); }
         };
 
+        // JavaFX Task callback’leri FX thread’de çalışır
         task.setOnSucceeded(e -> {
             try { if (onSuccess != null) onSuccess.accept(task.getValue()); }
             finally { if (onFinally != null) onFinally.run(); }
@@ -86,7 +82,12 @@ public final class Async {
         try {
             EXEC.submit(task);
         } catch (RejectedExecutionException rex) {
-            // Kapanış yarışı: yine de onFinally'i aksatmayalım
+            // ⚠️ Kuyruk dolu: UI’da BLOK YOK — kullanıcıya meşgul uyarısı ver
+            if (onError != null) {
+                Platform.runLater(() -> onError.accept(
+                        new RejectedExecutionException("Sistem meşgul: çok sayıda arkaplan işlem var. Lütfen tekrar deneyin.", rex)
+                ));
+            }
             if (onFinally != null) Platform.runLater(onFinally);
         }
     }
@@ -101,6 +102,6 @@ public final class Async {
                 onError, onFinally);
     }
 
-    /** FX thread'e atmak için kısayol */
+    /** FX thread kısayolu */
     public static void later(Runnable r) { Platform.runLater(r); }
 }

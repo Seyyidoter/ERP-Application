@@ -34,24 +34,39 @@ public final class Money {
 
     /** Kullanıcı girişini (1.234,56 / 1234.56 vb.) BigDecimal’a parse eder. */
     public static BigDecimal parseTR(String text) throws ParseException {
-        if (text == null || text.trim().isEmpty())
-            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-
+        if (text == null) return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         String s = text.trim();
+        if (s.isEmpty()) return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
 
-        // 1) Boşluk ve para sembollerini ayıkla (gerekiyorsa):
-        s = s.replace("₺", "").replaceAll("\\s+", "");
+        // 1) Para sembolleri ve boşlukları temizle
+        s = s.replace("₺", "")
+                .replace("TL", "")
+                .replaceAll("\\s+", "");
 
+        int lastComma = s.lastIndexOf(',');
+        int lastDot   = s.lastIndexOf('.');
 
-        if (!s.contains(",") && s.chars().filter(ch -> ch=='.').count()==1) {
-            s = s.replace('.', ',');
+        // Hem virgül hem nokta varsa → sonuncusu ondalık, diğeri binliktir
+        if (lastComma != -1 && lastDot != -1) {
+            if (lastComma > lastDot) {
+                s = s.replace(".", "").replace(',', '.');
+            } else {
+                s = s.replace(",", "");
+            }
+        } else if (lastComma != -1) {
+            // Sadece virgül varsa → ondalık kabul et
+            s = s.replace(',', '.');
+        } else {
+            // Hiçbiri yoksa veya sadece nokta varsa → olduğu gibi bırak
         }
-
-        java.text.DecimalFormat df = (java.text.DecimalFormat) NumberFormat.getNumberInstance(TR);
-        df.setParseBigDecimal(true);
-        df.setGroupingUsed(true);
-
-        BigDecimal val = (BigDecimal) df.parse(s);
-        return val.setScale(2, RoundingMode.HALF_UP);
+        if (!s.matches("[0-9.]+")) {
+            throw new ParseException("Geçersiz sayı biçimi: " + text, 0);
+        }
+        // 4) Double yerine BigDecimal oluştur
+        try {
+            return new BigDecimal(s).setScale(2, RoundingMode.HALF_UP);
+        } catch (NumberFormatException ex) {
+            throw new ParseException("Sayı ayrıştırılamadı: " + text, 0);
+        }
     }
 }
