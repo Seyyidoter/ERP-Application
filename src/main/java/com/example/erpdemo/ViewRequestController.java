@@ -43,9 +43,9 @@ public class ViewRequestController {
     @FXML
     public void initialize() {
         // Sütun bağları
-        productNameColumn.setCellValueFactory(new PropertyValueFactory<>("productName"));
-        quantityColumn.setCellValueFactory(new PropertyValueFactory<>("quantity"));
-        discountedPriceColumn.setCellValueFactory(new PropertyValueFactory<>("discountedPrice"));
+        productNameColumn.setCellValueFactory(c -> c.getValue().productNameProperty());
+        quantityColumn.setCellValueFactory(c -> c.getValue().quantityProperty().asObject());
+        discountedPriceColumn.setCellValueFactory(c -> c.getValue().discountedPriceProperty());
 
         // Hücre biçimlendirme
         quantityColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
@@ -244,7 +244,7 @@ public class ViewRequestController {
             }
         }, () -> {
             if (uiDead()) return;
-            AppDialogs.info(approve ? "Talep onaylandı." : "Talep reddedildi.");
+            AppDialogs.info(approve ? "Talep onaylandı. Stok ve müşteri bakiyesi güncellendi." : "Talep reddedildi.");
             if (onChange != null) onChange.run(); // üst listeyi yenile
             handleClose();
         }, ex -> {

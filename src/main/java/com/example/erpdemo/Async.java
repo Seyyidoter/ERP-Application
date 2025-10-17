@@ -3,13 +3,37 @@ package com.example.erpdemo;
 import javafx.concurrent.Task;
 import javafx.application.Platform;
 
-import java.util.concurrent.Callable;
+import java.util.concurrent.*;
 import java.util.function.Consumer;
+import java.util.concurrent.Callable;
 
-/** FX thread’ini kilitlemeden iş çalıştırmak için küçük yardımcı. */
+/**
+ * Uygulama genelinde asenkron işler için tek thread havuzu.
+ * - JavaFX Task kullanıldığı için onSuccess/onError callback'leri FX Thread üzerinde çalışır.
+ */
 public final class Async {
     private Async() {}
 
+    // Havuz ayarları (makul varsayılanlar)
+    private static final int CORE = Math.max(2, Runtime.getRuntime().availableProcessors() / 2);
+    private static final int MAX  = Math.max(2, Runtime.getRuntime().availableProcessors());
+    private static final int QUEUE_CAP = 512;
+
+    private static final ExecutorService EXEC = new ThreadPoolExecutor(
+            CORE,
+            MAX,
+            60L, TimeUnit.SECONDS,
+            new LinkedBlockingQueue<>(QUEUE_CAP),
+            r -> {
+                Thread t = new Thread(r, "omnis-async");
+                t.setDaemon(true); // JVM kapanışını engellemesin
+                t.setUncaughtExceptionHandler((th, ex) -> ex.printStackTrace());
+                return t;
+            },
+            new ThreadPoolExecutor.CallerRunsPolicy()
+    );
+
+    /** Sonuç döndüren iş */
     public static <T> void run(Callable<T> work,
                                Consumer<T> onSuccess,
                                Consumer<Throwable> onError,
@@ -17,28 +41,32 @@ public final class Async {
         Task<T> task = new Task<>() {
             @Override protected T call() throws Exception { return work.call(); }
         };
+
         task.setOnSucceeded(e -> {
-            if (onSuccess != null) onSuccess.accept(task.getValue());
-            if (onFinally != null) onFinally.run();
+            try { if (onSuccess != null) onSuccess.accept(task.getValue()); }
+            finally { if (onFinally != null) onFinally.run(); }
         });
         task.setOnFailed(e -> {
-            if (onError != null) onError.accept(task.getException());
-            if (onFinally != null) onFinally.run();
+            try { if (onError != null) onError.accept(task.getException()); }
+            finally { if (onFinally != null) onFinally.run(); }
         });
-        Thread t = new Thread(task, "async-task");
-        t.setDaemon(true);
-        t.start();
+
+        EXEC.submit(task);
     }
 
+    /** Sonuç dönmeyen iş */
     public static void runVoid(Runnable work,
                                Runnable onSuccess,
                                Consumer<Throwable> onError,
                                Runnable onFinally) {
-        run(() -> { work.run(); return null; }, x -> {
-            if (onSuccess != null) onSuccess.run();
-        }, onError, onFinally);
+        run(() -> { work.run(); return null; },
+                v -> { if (onSuccess != null) onSuccess.run(); },
+                onError, onFinally);
     }
 
-    /** Sırf Platform.runLater için küçük kısayol. */
+    /** FX thread'e atmak için kısayol */
     public static void later(Runnable r) { Platform.runLater(r); }
+
+    /** Uygulama kapanışında çağır. */
+    public static void shutdownNow() { EXEC.shutdownNow(); }
 }

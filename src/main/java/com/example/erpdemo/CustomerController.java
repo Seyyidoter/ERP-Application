@@ -1,5 +1,6 @@
 package com.example.erpdemo;
 
+import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
@@ -59,13 +60,13 @@ public class CustomerController {
     @FXML
     public void initialize() {
         // sütun–model bağları
-        idColumn.setCellValueFactory(new PropertyValueFactory<>("id"));
-        nameColumn.setCellValueFactory(new PropertyValueFactory<>("companyName"));
-        contactColumn.setCellValueFactory(new PropertyValueFactory<>("contactPerson"));
-        phoneColumn.setCellValueFactory(new PropertyValueFactory<>("phone"));
-        emailColumn.setCellValueFactory(new PropertyValueFactory<>("email"));
-        iskontoColumn.setCellValueFactory(new PropertyValueFactory<>("iskonto"));
-        balanceColumn.setCellValueFactory(new PropertyValueFactory<>("balance"));
+        idColumn.setCellValueFactory(c -> new ReadOnlyObjectWrapper<>(c.getValue().getId()));
+        nameColumn.setCellValueFactory(c -> new ReadOnlyObjectWrapper<>(c.getValue().getCompanyName()));
+        contactColumn.setCellValueFactory(c -> new ReadOnlyObjectWrapper<>(c.getValue().getContactPerson()));
+        phoneColumn.setCellValueFactory(c -> new ReadOnlyObjectWrapper<>(c.getValue().getPhone()));
+        emailColumn.setCellValueFactory(c -> new ReadOnlyObjectWrapper<>(c.getValue().getEmail()));
+        iskontoColumn.setCellValueFactory(c -> new ReadOnlyObjectWrapper<>(c.getValue().getIskonto()));
+        balanceColumn.setCellValueFactory(c -> new ReadOnlyObjectWrapper<>(c.getValue().getBalance()));
 
         // hizalama ve para biçimlendirme
         iskontoColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
@@ -281,43 +282,48 @@ public class CustomerController {
 
     @FXML
     private void handleDeleteButton() {
-        Customer selectedCustomer = customerTable.getSelectionModel().getSelectedItem();
-        if (selectedCustomer == null) return; // buton zaten disabled
+        Customer sel = customerTable.getSelectionModel().getSelectedItem();
+        if (sel == null) return;
 
-        // TR butonlu onay
         Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
         confirm.setHeaderText(null);
         confirm.setTitle("Onay");
         confirm.setContentText("Müşteriyi silmek istediğinizden emin misiniz?");
-        ButtonType evet = new ButtonType("Evet", ButtonBar.ButtonData.YES);
-        ButtonType hayir = new ButtonType("Hayır", ButtonBar.ButtonData.NO);
-        confirm.getButtonTypes().setAll(evet, hayir);
+        ButtonType EVET  = new ButtonType("Evet", ButtonBar.ButtonData.YES);
+        ButtonType HAYIR = new ButtonType("Hayır", ButtonBar.ButtonData.NO);
+        confirm.getButtonTypes().setAll(EVET, HAYIR);
         IconUtil.decorateAlert(confirm);
-        confirm.showAndWait();
 
-        if (confirm.getResult() == evet) {
-            setBusy(true);
-            Async.runVoid(
-                    () -> {
-                        try { CustomerDAO.deleteCustomer(selectedCustomer.getId()); }
-                        catch (SQLException e) { throw new RuntimeException(e); }
-                    },
-                    () -> {
-                        if (uiDead()) return;
-                        AppDialogs.info("Müşteri başarıyla silindi.");
-                        loadCustomers();
-                    },
-                    ex  -> {
-                        if (uiDead()) return;
-                        AppDialogs.dbError("Müşteri silme", toSql(ex));
-                    },
-                    ()  -> {
-                        if (uiDead()) return;
-                        setBusy(false);
-                    }
-            );
+        if (customerTable.getScene() != null && customerTable.getScene().getWindow() != null) {
+            confirm.initOwner(customerTable.getScene().getWindow());
         }
+
+        // Güvenli sonuç kontrolü (X/ESC durumunda boş Optional döner)
+        if (confirm.showAndWait().filter(btn -> btn == EVET).isEmpty()) return;
+
+        final int idToDelete = sel.getId(); // seçim sonradan değişse de güvenli
+        setBusy(true);
+        Async.runVoid(
+                () -> {
+                    try { CustomerDAO.deleteCustomer(idToDelete); }
+                    catch (SQLException e) { throw new RuntimeException(e); }
+                },
+                () -> {
+                    if (uiDead()) return;
+                    AppDialogs.info("Müşteri başarıyla silindi.");
+                    loadCustomers();
+                },
+                ex  -> {
+                    if (uiDead()) return;
+                    AppDialogs.dbError("Müşteri silme", toSql(ex));
+                },
+                ()  -> {
+                    if (uiDead()) return;
+                    setBusy(false);
+                }
+        );
     }
+
 
     // ---------- ÖDEME AL ----------
     @FXML

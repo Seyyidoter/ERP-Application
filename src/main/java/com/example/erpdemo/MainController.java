@@ -409,10 +409,7 @@ public class MainController {
             dlg.initOwner(contentRoot.getScene().getWindow()); // <-- EKLE (ÖNEMLİ)
         }
 
-        Stage stage = (Stage) dlg.getDialogPane().getScene().getWindow();
-        stage.getIcons().add(new Image(Objects.requireNonNull(
-                getClass().getResourceAsStream("assets/logo-32.png"))));
-
+        IconUtil.decorateDialog(dlg);
         PasswordField currentPwd = new PasswordField();
         PasswordField newPwd     = new PasswordField();
         PasswordField newPwd2    = new PasswordField();
@@ -468,11 +465,12 @@ public class MainController {
     private static void invokeIfExists(Object controller, String methodName) {
         if (controller == null) return;
         try {
-            var m = controller.getClass().getMethod(methodName);
+            var cls = controller.getClass();
+            var m = cls.getDeclaredMethod(methodName);
             m.setAccessible(true);
             m.invoke(controller);
         } catch (NoSuchMethodException ignore) {
-            // controller bu metodu tanımlamadıysa sessizce geç
+
         } catch (Exception e) {
             e.printStackTrace();
         }

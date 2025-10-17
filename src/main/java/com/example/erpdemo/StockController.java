@@ -1,5 +1,6 @@
 package com.example.erpdemo;
 
+import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
@@ -49,11 +50,11 @@ public class StockController {
     @FXML
     public void initialize() {
         // 1) Sütun–model bağları
-        idColumn.setCellValueFactory(new PropertyValueFactory<>("id"));
-        nameColumn.setCellValueFactory(new PropertyValueFactory<>("urunAdi"));
-        priceColumn.setCellValueFactory(new PropertyValueFactory<>("fiyat"));
-        stockColumn.setCellValueFactory(new PropertyValueFactory<>("stok"));
-        unitColumn.setCellValueFactory(new PropertyValueFactory<>("birim"));
+        idColumn.setCellValueFactory(c -> new ReadOnlyObjectWrapper<>(c.getValue().getId()));
+        nameColumn.setCellValueFactory(c -> new ReadOnlyObjectWrapper<>(c.getValue().getUrunAdi()));
+        priceColumn.setCellValueFactory(c -> new ReadOnlyObjectWrapper<>(c.getValue().getFiyat()));
+        stockColumn.setCellValueFactory(c -> new ReadOnlyObjectWrapper<>(c.getValue().getStok()));
+        unitColumn.setCellValueFactory(c -> new ReadOnlyObjectWrapper<>(c.getValue().getBirim()));
 
         // 2) Hücre hizalama/biçim
         stockColumn.setStyle("-fx-alignment: CENTER-RIGHT;");

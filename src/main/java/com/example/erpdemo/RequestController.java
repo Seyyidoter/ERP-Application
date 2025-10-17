@@ -3,6 +3,7 @@ package com.example.erpdemo;
 import javafx.beans.binding.Bindings;
 import javafx.beans.binding.BooleanBinding;
 import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -58,11 +59,12 @@ public class RequestController {
     @FXML
     public void initialize() {
         // 1) Sütun–model bağları
-        colId.setCellValueFactory(new PropertyValueFactory<>("id"));
-        colCustomer.setCellValueFactory(new PropertyValueFactory<>("customerId"));
-        colCustomerName.setCellValueFactory(new PropertyValueFactory<>("customerName"));
-        colDate.setCellValueFactory(new PropertyValueFactory<>("requestDate"));
-        colStatus.setCellValueFactory(new PropertyValueFactory<>("status"));
+        colId.setCellValueFactory(c -> new ReadOnlyObjectWrapper<>(c.getValue().getId()));
+        colCustomer.setCellValueFactory(c -> new ReadOnlyObjectWrapper<>(c.getValue().getCustomerId()));
+        colCustomerName.setCellValueFactory(c -> new ReadOnlyObjectWrapper<>(c.getValue().getCustomerName()));
+        colDate.setCellValueFactory(c -> new ReadOnlyObjectWrapper<>(c.getValue().getRequestDate()));
+        colStatus.setCellValueFactory(c -> new ReadOnlyObjectWrapper<>(c.getValue().getStatus()));
+
         try { DateUtil.setDateColumnDMY(colDate); } catch (Throwable ignore) {}
 
         // 2) Tablo: placeholder + veri listesi

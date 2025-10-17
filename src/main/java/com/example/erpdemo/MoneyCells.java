@@ -29,8 +29,7 @@ public final class MoneyCells {
 
     /** "1.234,56 TL" gibi metin döndürür (2 ondalık, binlik ayırıcılı). */
     public static String fmtTL(BigDecimal v) {
-        if (v == null) v = BigDecimal.ZERO;
-        return number2TR().format(v) + " TL";
+        return Money.fmtTRWithSymbol(v);
     }
 
     /**

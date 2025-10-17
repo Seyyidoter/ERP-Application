@@ -122,7 +122,7 @@ public class CustomerHistoryController {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         lblTotalQty.setText(String.valueOf(totalQty));
-        lblTotalAmount.setText(MoneyCells.fmtTL(totalAmount)); // TR, 2 ondalık
+        lblTotalAmount.setText(Money.fmtTRWithSymbol(totalAmount)); // TR yereli, ₺ sembollü
     }
 
     private void setBusy(boolean busy) {

@@ -1,0 +1,5 @@
+chcp 65001 > $null; $OutputEncoding = [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false); $root="."; Get-ChildItem $root -Recurs
+e -File -Include *.fxml | Where-Object { $_.FullName -notmatch '\\(target|build|out|\.idea)\\' } | ForEach-Object { "//// ===== BEGIN: $($_.FullName) ====="; Get-Content -Raw -Encoding UTF8 $_.FullName; "//// ===== END =====`n" } | Set-Content -Encoding UTF8 all-fxml.txt
+
+
+chcp 65001 > $null; $OutputEncoding = [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false); $root="."; Get-ChildItem $root -Recurse -File -Include *.java | Where-Object { $_.FullName -notmatch '\\(target|build|out|\.idea)\\' } | ForEach-Object { "//// ===== BEGIN: $($_.FullName) ====="; Get-Content -Raw -Encoding UTF8 $_.FullName; "//// ===== END =====`n" } | Set-Content -Encoding UTF8 all-java.txt

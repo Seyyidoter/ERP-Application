@@ -336,4 +336,9 @@ public class ApprovalController {
 
     /** (opsiyonel) dışarıdan çağırmak istersen */
     public void setCurrentUserId(int userId) { HelloApplication.setLoggedInUserId(userId); }
+
+    public void onResume() {
+        refresh();
+    }
+
 }
