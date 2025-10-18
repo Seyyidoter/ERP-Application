@@ -27,7 +27,7 @@
     </HBox>
 
     <!-- Tablo: ilk açılışta fokus almasın -->
-    <TableView fx:id="productTable" VBox.vgrow="ALWAYS" focusTraversable="false">
+    <TableView fx:id="productTable" VBox.vgrow="ALWAYS">
         <columns>
             <TableColumn fx:id="idColumn"    prefWidth="60.0"  text="ID"/>
             <TableColumn fx:id="nameColumn"  prefWidth="260.0" text="Ürün Adı"/>
