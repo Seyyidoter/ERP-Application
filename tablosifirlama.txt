@@ -1,0 +1,57 @@
+---------------3 tables--------------
+USE [SirketDB];
+SET XACT_ABORT ON;
+BEGIN TRAN;
+
+-- 1) Çocuk tablolardan başla
+DELETE FROM dbo.TalepKalemleri;
+
+-- 2) Ebeveyn talep tablosu
+DELETE FROM dbo.Talepler;
+
+-- 3) Ödemeler (Müşteriler'e bağlıdır, bu yüzden müşterileri SİLMEYİZ)
+DELETE FROM dbo.Odemeler;
+
+-- 4) IDENTITY sayaçlarını sıfırla (bir sonraki kayıt 1 olur)
+DBCC CHECKIDENT ('dbo.TalepKalemleri', RESEED, 0);
+DBCC CHECKIDENT ('dbo.Talepler',        RESEED, 0);
+DBCC CHECKIDENT ('dbo.Odemeler',        RESEED, 0);
+
+COMMIT;
+
+
+------------all tables-------------
+
+USE [SirketDB];
+SET NOCOUNT ON;
+SET XACT_ABORT ON;
+
+BEGIN TRAN;
+
+-- 1) TÜM tabloların dış anahtarlarını geçici kapat
+
+-- sp_msforeachtable bazı sistemlerde yoksa altındaki alternatif bloğu kullanın
+EXEC sys.sp_MSforeachtable 'ALTER TABLE ? NOCHECK CONSTRAINT ALL';
+
+-- 2) TÜM tablolardan veriyi sil
+
+EXEC sys.sp_MSforeachtable 'DELETE FROM ?';
+
+-- 3) IDENTITY kolonları 0'a reseed et (bir sonraki ekleme 1 olur)
+
+DECLARE @sql NVARCHAR(MAX) = N'';
+
+SELECT @sql = @sql +
+    N'DBCC CHECKIDENT (''' + QUOTENAME(s.name) + N'.' + QUOTENAME(t.name) + N''', RESEED, 0);' + CHAR(13)
+FROM sys.tables t
+JOIN sys.schemas s         ON s.schema_id  = t.schema_id
+JOIN sys.identity_columns i ON i.object_id = t.object_id
+WHERE t.is_ms_shipped = 0;      -- sistem tablolarını atla
+
+IF (@sql <> N'') EXEC sp_executesql @sql;
+
+-- 4) FK’leri tekrar etkinleştir ve mevcut veriyi doğrula
+EXEC sys.sp_MSforeachtable 'ALTER TABLE ? WITH CHECK CHECK CONSTRAINT ALL';
+
+COMMIT;
+
