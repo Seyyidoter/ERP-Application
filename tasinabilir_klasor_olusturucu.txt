@@ -1,0 +1,39 @@
+:: 0) Temiz derle
+mvn -DskipTests=true clean package
+
+:: 1) input klasörünü hazırlayıp jar + bağımlılıkları koy
+rmdir /s /q target\app 2>nul
+mkdir target\app
+copy /Y target\ERPDemo-1.0-SNAPSHOT.jar target\app\
+
+:: (Maven runtime bağımlılıklarını kopyala)
+mvn -DskipTests=true dependency:copy-dependencies -DincludeScope=runtime -DoutputDirectory=target\app
+
+:: (JavaFX’in Windows sınıflı JAR’larını da ekle – Maven bunları otomatik koymuyor)
+copy /Y "%USERPROFILE%\.m2\repository\org\openjfx\javafx-base\21\javafx-base-21-win.jar"       target\app\
+copy /Y "%USERPROFILE%\.m2\repository\org\openjfx\javafx-graphics\21\javafx-graphics-21-win.jar" target\app\
+copy /Y "%USERPROFILE%\.m2\repository\org\openjfx\javafx-controls\21\javafx-controls-21-win.jar" target\app\
+copy /Y "%USERPROFILE%\.m2\repository\org\openjfx\javafx-fxml\21\javafx-fxml-21-win.jar"         target\app\
+
+:: 2) Önceki app-image’ı sil
+rmdir /s /q target\jpackage\Omnis 2>nul
+
+:: 3) app-image (konsolsuz EXE’li klasör)
+jpackage ^
+  --type app-image ^
+  --name Omnis ^
+  --input target\app ^
+  --main-jar ERPDemo-1.0-SNAPSHOT.jar ^
+  --main-class com.example.erpdemo.HelloApplication ^
+  --icon src\main\resources\com\example\erpdemo\assets\logo.ico ^
+  --app-version 1.0.0 ^
+  --vendor "Omnis" ^
+  --copyright "© 2025 Omnis" ^
+  --java-options "--module-path $APPDIR" ^
+  --java-options "--add-modules=javafx.controls,javafx.fxml" ^
+  --java-options "-Dfile.encoding=UTF-8" ^
+  --java-options "-Dprism.maxvram=512m" ^
+  --dest target\jpackage
+
+:: 4) dış ayar dosyan varsa (ör: db.properties) exe’nin yanına koy
+copy /Y db.properties target\jpackage\Omnis\  2>nul
