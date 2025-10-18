@@ -103,20 +103,27 @@ public final class AppDialogs {
     private static void runFxAndWait(Runnable r) {
         if (Platform.isFxApplicationThread()) {
             r.run();
-        } else {
-            final java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
-            try {
-                Platform.runLater(() -> {
-                    try { r.run(); }
-                    finally { latch.countDown(); }
-                });
-                latch.await();
-            } catch (IllegalStateException fxClosed) {
-                // FX platformu kapalı olabilir (kapanış sırasında); üst kata fırlat ki show() yakalasın
-                throw fxClosed;
-            } catch (InterruptedException ie) {
-                Thread.currentThread().interrupt();
-            }
+            return;
+        }
+
+        final java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+
+        // FX kapalı/kapanıyorsa runLater burada IllegalStateException fırlatır
+        try {
+            Platform.runLater(() -> {
+                try { r.run(); }
+                finally { latch.countDown(); }
+            });
+        } catch (IllegalStateException fxClosed) {
+            throw fxClosed; // üst kat (show/confirm) güvenli biçimde ele alıyor
+        }
+
+        try {
+            // Kullanıcı diyalogu kapatana kadar bekle (timeout yok)
+            latch.await();
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while waiting for FX thread", ie);
         }
     }
 
@@ -142,39 +149,42 @@ public final class AppDialogs {
 
     public static boolean confirm(String title, String content, String yesText, String noText, Window owner) {
         if (SUPPRESS.get()) {
-            // Kapanış modunda otomatik hayır diyebilirsin (veya true döndür)
             System.out.println("[Dialog suppressed] " + title + ": " + content);
-            return false;
+            return false; // kapanış modunda otomatik hayır
         }
 
-        // null güvenliği + varsayılanlar
         final String safeTitle = (title == null || title.isBlank()) ? "Onay" : title;
         final String msg = "null".equals(String.valueOf(content)) ? "" : String.valueOf(content);
         final ButtonType yes = new ButtonType(yesText == null ? "Evet" : yesText, ButtonBar.ButtonData.YES);
         final ButtonType no  = new ButtonType(noText  == null ? "Hayır" : noText, ButtonBar.ButtonData.NO);
 
         final boolean[] resultHolder = new boolean[1];
+        resultHolder[0] = false; // varsayılan: hayır
 
-        runFxAndWait(() -> {
-            Alert a = new Alert(Alert.AlertType.CONFIRMATION, msg, yes, no);
-            a.setTitle(safeTitle);
-            a.setHeaderText(null);
-            try { IconUtil.decorateAlert(a); } catch (Throwable ignore) {}
+        try {
+            runFxAndWait(() -> {
+                Alert a = new Alert(Alert.AlertType.CONFIRMATION, msg, yes, no);
+                a.setTitle(safeTitle);
+                a.setHeaderText(null);
+                try { IconUtil.decorateAlert(a); } catch (Throwable ignore) {}
 
-            // OWNER + MODAL
-            if (owner != null) {
-                a.initOwner(owner);
-                a.initModality(Modality.WINDOW_MODAL);
-            } else {
-                // Yine de mevcut bir pencere bulup owner verelim (fallback)
-                attachOwnerIfPossible(a);
-            }
+                if (owner != null) {
+                    a.initOwner(owner);
+                    a.initModality(Modality.WINDOW_MODAL);
+                } else {
+                    attachOwnerIfPossible(a);
+                }
 
-            try { a.getDialogPane().setMinWidth(420); } catch (Throwable ignore) {}
+                try { a.getDialogPane().setMinWidth(420); } catch (Throwable ignore) {}
 
-            Optional<ButtonType> res = a.showAndWait();
-            resultHolder[0] = res.isPresent() && res.get() == yes;
-        });
+                Optional<ButtonType> res = a.showAndWait();
+                resultHolder[0] = res.isPresent() && res.get() == yes;
+            });
+        } catch (IllegalStateException fxClosed) {
+            // FX kapalı/kapanıyor → güvenli fallback
+            System.err.println("[Dialog skipped: FX not available] " + safeTitle + ": " + msg);
+            return false;
+        }
 
         return resultHolder[0];
     }

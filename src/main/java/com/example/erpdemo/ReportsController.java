@@ -270,12 +270,18 @@ public class ReportsController {
                                 row.createCell(c++).setCellValue(rq.getStatus());
                                 row.createCell(c++).setCellValue(it.productName);
 
-                                Cell qty = row.createCell(c++); qty.setCellValue(it.quantity); qty.setCellStyle(intCs);
-                                Cell lp  = row.createCell(c++); lp.setCellValue(Money.scale2(it.listPrice).doubleValue());      lp.setCellStyle(money);
-                                Cell dp  = row.createCell(c++); dp.setCellValue(Money.scale2(it.discountedPrice).doubleValue()); dp.setCellStyle(money);
-                                Cell sub = row.createCell(c++); sub.setCellValue(
-                                        Money.scale2(it.discountedPrice.multiply(BigDecimal.valueOf(it.quantity))).doubleValue()
-                                ); sub.setCellStyle(money);
+                                Cell qty = row.createCell(c++);
+                                qty.setCellValue(it.quantity);
+                                qty.setCellStyle(intCs);
+
+                                Cell lp  = row.createCell(c++);
+                                setMoneyNumeric(lp, it.listPrice, money);
+
+                                Cell dp  = row.createCell(c++);
+                                setMoneyNumeric(dp, it.discountedPrice, money);
+
+                                Cell sub = row.createCell(c++);
+                                setMoneyNumeric(sub, it.discountedPrice.multiply(BigDecimal.valueOf(it.quantity)), money);
                             }
                         }
                     }
@@ -304,7 +310,7 @@ public class ReportsController {
                     total.getCell(0).setCellStyle(totalLabel);
 
                     Cell totalCell = total.createCell(9);
-                    totalCell.setCellFormula(String.format("SUM(J%d:J%d)", excelFirstData, excelLastData));
+                    totalCell.setCellFormula(String.format("ROUND(SUM(J%d:J%d),2)", excelFirstData, excelLastData));
                     totalCell.setCellStyle(money);
                 }
 
@@ -702,6 +708,12 @@ public class ReportsController {
     /** Tek yerden yuvarlama + TR format (sembolsüz). */
     private static String fmtMoney(BigDecimal v) {
         return Money.fmtTR(Money.scale2(v));
+    }
+
+    private static void setMoneyNumeric(Cell cell, BigDecimal v, CellStyle money) {
+        double d = Money.scale2(v == null ? BigDecimal.ZERO : v).doubleValue(); // 2 ondalık
+        cell.setCellValue(d);
+        cell.setCellStyle(money);
     }
 
     /* Küçük yardımcı tipi */
